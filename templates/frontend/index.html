@@ -139,6 +139,8 @@ function updateNavigation() {
         document.querySelectorAll('.nav-btn')[1].classList.add('active');
     } else if (currentView === 'groups') {
         document.querySelectorAll('.nav-btn')[2].classList.add('active');
+    } else if (currentView === 'settings') {
+        document.querySelectorAll('.nav-btn')[3].classList.add('active');
     }
 }
 
@@ -181,8 +183,8 @@ function renderUserManagement(users) {
     const contentArea = document.getElementById('contentArea');
     
     let html = `
-        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 1rem;">
-            <h2>👥 Управление пользователями</h2>
+        <div style="margin-bottom: 2rem;">
+            <h2 style="margin-bottom: 0.5rem;">👥 Управление пользователями</h2>
             <button class="btn btn-primary" onclick="showCreateUserForm()">+ Создать пользователя</button>
         </div>
         <table class="data-table">
@@ -192,8 +194,10 @@ function renderUserManagement(users) {
                     <th>Логин</th>
                     <th>Имя</th>
                     <th>Фамилия</th>
+                    <th>Email</th>
                     <th>Роль</th>
                     <th>Активен</th>
+                    <th>Последний вход</th>
                     <th>Дата регистрации</th>
                     <th>Действия</th>
                 </tr>
@@ -203,18 +207,38 @@ function renderUserManagement(users) {
     
     users.forEach(user => {
         const roleBadge = user.role === 'admin' ? 'badge-admin' : 'badge-user';
+        const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString('ru-RU') : 'Никогда';
+        const isCurrentUser = user.id === {{ user.id }};
+        const activeBtn = user.is_active ? 
+            `<button class="btn btn-sm btn-danger" onclick="toggleUserActive(${user.id}, false)" ${isCurrentUser ? 'disabled title="Нельзя заблокировать себя"' : ''}>🚫 Заблокировать</button>` :
+            `<button class="btn btn-sm btn-primary" onclick="toggleUserActive(${user.id}, true)">✅ Разблокировать</button>`;
+        
         html += `
             <tr>
                 <td>${user.id}</td>
                 <td><strong>${user.username}</strong></td>
-                <td>${user.first_name || '-'}</td>
-                <td>${user.last_name || '-'}</td>
+                <td>
+                    <span id="firstName-${user.id}">${user.first_name || '-'}</span>
+                    <button class="btn btn-sm" onclick="editUserField(${user.id}, 'first_name', 'Имя')">✏️</button>
+                </td>
+                <td>
+                    <span id="lastName-${user.id}">${user.last_name || '-'}</span>
+                    <button class="btn btn-sm" onclick="editUserField(${user.id}, 'last_name', 'Фамилия')">✏️</button>
+                </td>
+                <td>
+                    <span id="email-${user.id}">${user.email || '-'}</span>
+                    <button class="btn btn-sm" onclick="editUserField(${user.id}, 'email', 'Email')">✏️</button>
+                </td>
                 <td><span class="badge ${roleBadge}">${user.role}</span></td>
                 <td>${user.is_active ? '✅ Да' : '❌ Нет'}</td>
+                <td>${lastLogin}</td>
                 <td>${new Date(user.date_joined).toLocaleDateString('ru-RU')}</td>
                 <td>
-                    <button class="btn btn-sm" onclick="manageUserGroups(${user.id}, '${user.username}')">👥 Группы</button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id}, '${user.username}')">🗑️ Удалить</button>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <button class="btn btn-sm" onclick="manageUserGroups(${user.id}, '${user.username}')">👥 Группы</button>
+                        <button class="btn btn-sm btn-secondary" onclick="showChangePasswordForm(${user.id}, '${user.username}')">🔑 Пароль</button>
+                        ${activeBtn}
+                    </div>
                 </td>
             </tr>
         `;
@@ -228,8 +252,8 @@ function renderGroupManagement(groups) {
     const contentArea = document.getElementById('contentArea');
     
     let html = `
-        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 1rem;">
-            <h2>📁 Управление группами</h2>
+        <div style="margin-bottom: 2rem;">
+            <h2 style="margin-bottom: 0.5rem;">📁 Управление группами</h2>
         </div>
         <table class="data-table">
             <thead>
@@ -249,7 +273,10 @@ function renderGroupManagement(groups) {
         html += `
             <tr>
                 <td>${group.id}</td>
-                <td><strong>${group.name}</strong></td>
+                <td>
+                    <span id="groupName-${group.id}"><strong>${group.name}</strong></span>
+                    <button class="btn btn-sm" onclick="editGroupName(${group.id}, '${group.name}')">✏️</button>
+                </td>
                 <td>${group.created_by}</td>
                 <td>${group.members_count}</td>
                 <td>${new Date(group.created_at).toLocaleDateString('ru-RU')}</td>
@@ -346,6 +373,130 @@ async function createNewUser() {
     }
 }
 
+// Новые функции для редактирования пользователей
+function editUserField(userId, field, fieldName) {
+    const currentValue = document.getElementById(`${field}-${userId}`).textContent;
+    const newValue = prompt(`Введите новое ${fieldName.toLowerCase()}:`, currentValue === '-' ? '' : currentValue);
+    
+    if (newValue !== null) {
+        fetch('/api/users/update/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                [field]: newValue
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                showNotification(`✅ ${fieldName} успешно обновлен`);
+                document.getElementById(`${field}-${userId}`).textContent = newValue || '-';
+            } else {
+                showNotification(`❌ Ошибка: ${result.error}`, true);
+            }
+        })
+        .catch(error => {
+            showNotification(`❌ Ошибка: ${error.message}`, true);
+        });
+    }
+}
+
+function showChangePasswordForm(userId, username) {
+    const newPassword = prompt(`Введите новый пароль для пользователя "${username}":`, '');
+    
+    if (newPassword) {
+        const requireChange = confirm('Требовать смену пароля при следующем входе?');
+        
+        fetch('/api/users/change-password/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                new_password: newPassword,
+                require_change: requireChange
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                showNotification('✅ Пароль успешно изменен');
+            } else {
+                showNotification(`❌ Ошибка: ${result.error}`, true);
+            }
+        })
+        .catch(error => {
+            showNotification(`❌ Ошибка: ${error.message}`, true);
+        });
+    }
+}
+
+function toggleUserActive(userId, isActive) {
+    const action = isActive ? 'разблокировать' : 'заблокировать';
+    
+    if (confirm(`Вы уверены, что хотите ${action} этого пользователя?`)) {
+        fetch('/api/users/toggle-active/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                is_active: isActive
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                showNotification(`✅ Пользователь ${action === 'разблокировать' ? 'разблокирован' : 'заблокирован'}`);
+                showUserManagement(); // Обновляем список
+            } else {
+                showNotification(`❌ Ошибка: ${result.error}`, true);
+            }
+        })
+        .catch(error => {
+            showNotification(`❌ Ошибка: ${error.message}`, true);
+        });
+    }
+}
+
+function editGroupName(groupId, currentName) {
+    const newName = prompt('Введите новое название группы:', currentName);
+    
+    if (newName && newName !== currentName) {
+        fetch('/api/users/groups/update/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                group_id: groupId,
+                new_name: newName
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                showNotification('✅ Название группы успешно изменено');
+                showGroupManagement(); // Обновляем список
+            } else {
+                showNotification(`❌ Ошибка: ${result.error}`, true);
+            }
+        })
+        .catch(error => {
+            showNotification(`❌ Ошибка: ${error.message}`, true);
+        });
+    }
+}
+
 // Функции удаления
 async function deleteUser(userId, username) {
     if (!confirm(`Вы уверены, что хотите удалить пользователя "${username}"?`)) {
@@ -353,7 +504,6 @@ async function deleteUser(userId, username) {
     }
     
     showNotification('Удаление пользователя...');
-    // Здесь нужно добавить endpoint для удаления пользователей
     showNotification('Функция удаления пользователей в разработке');
 }
 
@@ -362,9 +512,29 @@ async function deleteGroup(groupId, groupName) {
         return;
     }
     
-    showNotification('Удаление группы...');
-    // Здесь нужно добавить endpoint для удаления групп
-    showNotification('Функция удаления групп в разработке');
+    try {
+        const response = await fetch('/api/users/groups/delete/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                group_id: groupId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Группа успешно удалена');
+            showGroupManagement(); // Обновляем список
+        } else {
+            showNotification(`❌ Ошибка: ${result.error}`, true);
+        }
+    } catch (error) {
+        showNotification(`❌ Ошибка: ${error.message}`, true);
+    }
 }
 
 // Управление группами пользователя
@@ -597,6 +767,141 @@ async function loadStatistics() {
         }
     } catch (error) {
         console.error('Ошибка загрузки статистики:', error);
+    }
+}
+
+// Функции для настроек системы
+async function showSystemSettings() {
+    currentView = 'settings';
+    updateNavigation();
+    try {
+        const response = await fetch('/api/system/settings/');
+        const data = await response.json();
+        
+        if (data.success) {
+            renderSystemSettings(data.settings);
+        } else {
+            showNotification('Ошибка загрузки настроек: ' + data.error, true);
+        }
+    } catch (error) {
+        showNotification('Ошибка загрузки настроек: ' + error.message, true);
+    }
+}
+
+function renderSystemSettings(settings) {
+    const contentArea = document.getElementById('contentArea');
+    
+    let html = `
+        <div style="margin-bottom: 2rem;">
+            <h2 style="margin-bottom: 0.5rem;">⚙️ Настройки системы</h2>
+        </div>
+        
+        <div style="max-width: 600px;">
+            <div class="connection-form">
+                <h4>🔧 Основные настройки</h4>
+                
+                <div class="form-group">
+                    <label>Путь к утилите RAC:</label>
+                    <input type="text" id="rac_path" value="${settings.rac_path}" placeholder="/opt/1cv8/x86_64/8.3.27.1860/rac">
+                    <small style="color: #666;">Абсолютный путь к исполняемому файлу rac</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Таймаут сессии (секунды):</label>
+                    <input type="number" id="session_timeout" value="${settings.session_timeout}">
+                    <small style="color: #666;">Время ожидания ответа от RAC</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Максимум подключений:</label>
+                    <input type="number" id="max_connections" value="${settings.max_connections}">
+                    <small style="color: #666;">Максимальное количество одновременных подключений к серверам 1С</small>
+                </div>
+            </div>
+            
+            <div class="connection-form" style="margin-top: 1rem;">
+                <h4>📧 Настройки уведомлений</h4>
+                
+                <div class="form-group">
+                    <label>SMTP сервер:</label>
+                    <input type="text" id="smtp_server" value="${settings.smtp_server}" placeholder="smtp.example.com">
+                </div>
+                
+                <div class="form-group">
+                    <label>SMTP порт:</label>
+                    <input type="number" id="smtp_port" value="${settings.smtp_port}">
+                </div>
+                
+                <div class="form-group">
+                    <label>Email для уведомлений:</label>
+                    <input type="email" id="notification_email" value="${settings.notification_email}" placeholder="admin@example.com">
+                </div>
+            </div>
+            
+            <div class="connection-form" style="margin-top: 1rem;">
+                <h4>⚡ Прочие настройки</h4>
+                
+                <div class="form-group">
+                    <label>Уровень логирования:</label>
+                    <select id="log_level">
+                        <option value="DEBUG" ${settings.log_level === 'DEBUG' ? 'selected' : ''}>DEBUG</option>
+                        <option value="INFO" ${settings.log_level === 'INFO' ? 'selected' : ''}>INFO</option>
+                        <option value="WARNING" ${settings.log_level === 'WARNING' ? 'selected' : ''}>WARNING</option>
+                        <option value="ERROR" ${settings.log_level === 'ERROR' ? 'selected' : ''}>ERROR</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="backup_enabled" ${settings.backup_enabled === 'true' ? 'checked' : ''}>
+                        Резервное копирование настроек
+                    </label>
+                </div>
+            </div>
+            
+            <button class="btn btn-primary" onclick="saveSystemSettings()">💾 Сохранить настройки</button>
+            <button class="btn" onclick="showDashboard()">❌ Отмена</button>
+        </div>
+    `;
+    
+    contentArea.innerHTML = html;
+}
+
+async function saveSystemSettings() {
+    const settings = {
+        rac_path: document.getElementById('rac_path').value,
+        session_timeout: document.getElementById('session_timeout').value,
+        max_connections: document.getElementById('max_connections').value,
+        log_level: document.getElementById('log_level').value,
+        backup_enabled: document.getElementById('backup_enabled').checked ? 'true' : 'false',
+        smtp_server: document.getElementById('smtp_server').value,
+        smtp_port: document.getElementById('smtp_port').value,
+        notification_email: document.getElementById('notification_email').value,
+    };
+    
+    try {
+        // Сохраняем каждую настройку отдельно
+        const promises = Object.entries(settings).map(([key, value]) => 
+            fetch('/api/system/settings/update/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({ key, value })
+            })
+        );
+        
+        const results = await Promise.all(promises);
+        const allSuccess = results.every(response => response.ok);
+        
+        if (allSuccess) {
+            showNotification('✅ Настройки успешно сохранены');
+        } else {
+            showNotification('❌ Ошибка при сохранении некоторых настроек', true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка сохранения настроек: ' + error.message, true);
     }
 }
 

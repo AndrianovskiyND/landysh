@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.contrib.auth import update_session_auth_hash
 from core.models import Profile
 from .models import UserGroup
 
@@ -62,8 +63,10 @@ def user_list(request):
         try:
             user_profile = Profile.objects.get(user=user)
             role = user_profile.role
+            last_login_at = user_profile.last_login_at.isoformat() if user_profile.last_login_at else None
         except Profile.DoesNotExist:
             role = 'user'
+            last_login_at = None
         
         user_data.append({
             'id': user.id,
@@ -73,6 +76,8 @@ def user_list(request):
             'last_name': user.last_name,
             'is_active': user.is_active,
             'role': role,
+            'last_login': user.last_login.isoformat() if user.last_login else None,
+            'last_login_at': last_login_at,
             'date_joined': user.date_joined.isoformat(),
         })
     
@@ -167,6 +172,157 @@ def assign_user_to_group(request):
                 group.members.remove(user)
             
             return JsonResponse({'success': True})
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+@login_required
+@csrf_exempt
+def update_user(request):
+    """Обновляет данные пользователя"""
+    if request.method == 'POST':
+        try:
+            profile = Profile.objects.get(user=request.user)
+            if not profile.is_admin():
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+            
+            data = json.loads(request.body)
+            user_id = data.get('user_id')
+            first_name = data.get('first_name')
+            last_name = data.get('last_name')
+            email = data.get('email')
+            
+            user = User.objects.get(id=user_id)
+            
+            if first_name is not None:
+                user.first_name = first_name
+            if last_name is not None:
+                user.last_name = last_name
+            if email is not None:
+                user.email = email
+            
+            user.save()
+            
+            return JsonResponse({'success': True})
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+@login_required
+@csrf_exempt
+def change_password(request):
+    """Изменяет пароль пользователя"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            user_id = data.get('user_id')
+            new_password = data.get('new_password')
+            require_change = data.get('require_change', False)
+            
+            # Админ может менять пароль любому пользователю
+            profile = Profile.objects.get(user=request.user)
+            if not profile.is_admin():
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+            
+            user = User.objects.get(id=user_id)
+            user.set_password(new_password)
+            
+            # Здесь можно добавить логику для принудительной смены пароля
+            user_profile = Profile.objects.get(user=user)
+            user_profile.force_password_change = require_change
+            user_profile.save()
+            
+            user.save()
+            
+            # Если админ меняет свой пароль, обновляем сессию
+            if user.id == request.user.id:
+                update_session_auth_hash(request, user)
+            
+            return JsonResponse({'success': True})
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+@login_required
+@csrf_exempt
+def toggle_active(request):
+    """Блокирует/разблокирует пользователя"""
+    if request.method == 'POST':
+        try:
+            profile = Profile.objects.get(user=request.user)
+            if not profile.is_admin():
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+            
+            data = json.loads(request.body)
+            user_id = data.get('user_id')
+            is_active = data.get('is_active')
+            
+            user = User.objects.get(id=user_id)
+            
+            # Нельзя заблокировать себя
+            if user.id == request.user.id:
+                return JsonResponse({'success': False, 'error': 'Нельзя заблокировать себя'})
+            
+            user.is_active = is_active
+            user.save()
+            
+            action = "разблокирован" if is_active else "заблокирован"
+            return JsonResponse({'success': True, 'message': f'Пользователь {action}'})
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+@login_required
+@csrf_exempt
+def update_group(request):
+    """Изменяет название группы"""
+    if request.method == 'POST':
+        try:
+            profile = Profile.objects.get(user=request.user)
+            if not profile.is_admin():
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+            
+            data = json.loads(request.body)
+            group_id = data.get('group_id')
+            new_name = data.get('new_name')
+            
+            group = UserGroup.objects.get(id=group_id)
+            group.name = new_name
+            group.save()
+            
+            return JsonResponse({'success': True})
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+@login_required
+@csrf_exempt
+def delete_group(request):
+    """Удаляет группу"""
+    if request.method == 'POST':
+        try:
+            profile = Profile.objects.get(user=request.user)
+            if not profile.is_admin():
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+            
+            data = json.loads(request.body)
+            group_id = data.get('group_id')
+            
+            group = UserGroup.objects.get(id=group_id)
+            group_name = group.name
+            group.delete()
+            
+            return JsonResponse({'success': True, 'message': f'Группа "{group_name}" удалена'})
             
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})

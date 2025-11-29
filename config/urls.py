@@ -9,4 +9,5 @@ urlpatterns = [
     path('', include('frontend.urls')),
     path('api/users/', include('users.urls')),
     path('api/clusters/', include('clusters.urls')),
+    path('api/system/', include('core.urls')),  # Добавляем URLs для настроек
 ]

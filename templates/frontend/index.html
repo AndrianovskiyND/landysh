@@ -1,0 +1,610 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Панель управления - Ландыш{% endblock %}
+
+{% block content %}
+<div class="sidebar">
+    <div class="panel">
+        <h3>🔗 Подключения</h3>
+        <button class="btn btn-primary" onclick="showConnectionForm()" style="width: 100%; margin-bottom: 1rem;">
+            + Добавить подключение
+        </button>
+        
+        <div id="connectionForm" class="connection-form" style="display: none;">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>Отображаемое имя:</label>
+                <input type="text" id="displayName" placeholder="Первый сервер проекта...">
+            </div>
+            <div class="form-group">
+                <label>Сервер:</label>
+                <input type="text" id="serverHost" placeholder="server_ro01.com">
+            </div>
+            <div class="form-group">
+                <label>Порт RAS:</label>
+                <input type="number" id="rasPort" value="1545">
+            </div>
+            <div class="form-group">
+                <label>Логин кластера (необязательно):</label>
+                <input type="text" id="clusterAdmin">
+            </div>
+            <div class="form-group">
+                <label>Пароль кластера (необязательно):</label>
+                <input type="password" id="clusterPassword">
+            </div>
+            <button class="btn btn-primary" onclick="createConnection()">Создать</button>
+            <button class="btn" onclick="hideConnectionForm()">Отмена</button>
+        </div>
+        
+        <div id="connectionsTree"></div>
+    </div>
+</div>
+
+<div class="main-content">
+    <div class="panel">
+        <div id="contentArea">
+            <h2>Добро пожаловать в Ландыш! 🚂</h2>
+            <p>Выберите подключение слева для просмотра кластеров и управления серверами 1С.</p>
+            <div style="margin-top: 2rem;">
+                <h3>📊 Статистика системы</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; text-align: center;">
+                        <h4 id="connectionsCount">0</h4>
+                        <p>Подключений</p>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; text-align: center;">
+                        <h4 id="usersCount">0</h4>
+                        <p>Пользователей</p>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; text-align: center;">
+                        <h4 id="groupsCount">0</h4>
+                        <p>Групп</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Глобальные переменные
+let currentView = 'dashboard';
+
+// Базовые функции
+function showConnectionForm() {
+    document.getElementById('connectionForm').style.display = 'block';
+}
+
+function hideConnectionForm() {
+    document.getElementById('connectionForm').style.display = 'none';
+}
+
+function showNotification(message, isError = false) {
+    const notification = document.getElementById('notification');
+    const content = document.getElementById('notificationContent');
+    content.innerHTML = message;
+    notification.style.display = 'block';
+    if (isError) {
+        notification.style.borderLeft = '4px solid var(--primary-color)';
+    }
+}
+
+function hideNotification() {
+    document.getElementById('notification').style.display = 'none';
+}
+
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+// Навигация
+function showDashboard() {
+    currentView = 'dashboard';
+    updateNavigation();
+    document.getElementById('contentArea').innerHTML = `
+        <h2>Добро пожаловать в Ландыш! 🚂</h2>
+        <p>Выберите подключение слева для просмотра кластеров и управления серверами 1С.</p>
+        <div style="margin-top: 2rem;">
+            <h3>📊 Статистика системы</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; text-align: center;">
+                    <h4 id="connectionsCount">0</h4>
+                    <p>Подключений</p>
+                </div>
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; text-align: center;">
+                    <h4 id="usersCount">0</h4>
+                    <p>Пользователей</p>
+                </div>
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; text-align: center;">
+                    <h4 id="groupsCount">0</h4>
+                    <p>Групп</p>
+                </div>
+            </div>
+        </div>
+    `;
+    loadStatistics();
+}
+
+function updateNavigation() {
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    if (currentView === 'dashboard') {
+        document.querySelectorAll('.nav-btn')[0].classList.add('active');
+    } else if (currentView === 'users') {
+        document.querySelectorAll('.nav-btn')[1].classList.add('active');
+    } else if (currentView === 'groups') {
+        document.querySelectorAll('.nav-btn')[2].classList.add('active');
+    }
+}
+
+// Функции управления пользователями
+async function showUserManagement() {
+    currentView = 'users';
+    updateNavigation();
+    try {
+        const response = await fetch('/api/users/list/');
+        const data = await response.json();
+        
+        if (data.success) {
+            renderUserManagement(data.users);
+        } else {
+            showNotification('Ошибка загрузки пользователей: ' + data.error, true);
+        }
+    } catch (error) {
+        showNotification('Ошибка загрузки пользователей: ' + error.message, true);
+    }
+}
+
+async function showGroupManagement() {
+    currentView = 'groups';
+    updateNavigation();
+    try {
+        const response = await fetch('/api/users/groups/all/');
+        const data = await response.json();
+        
+        if (data.success) {
+            renderGroupManagement(data.groups);
+        } else {
+            showNotification('Ошибка загрузки групп: ' + data.error, true);
+        }
+    } catch (error) {
+        showNotification('Ошибка загрузки групп: ' + error.message, true);
+    }
+}
+
+function renderUserManagement(users) {
+    const contentArea = document.getElementById('contentArea');
+    
+    let html = `
+        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 1rem;">
+            <h2>👥 Управление пользователями</h2>
+            <button class="btn btn-primary" onclick="showCreateUserForm()">+ Создать пользователя</button>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Логин</th>
+                    <th>Имя</th>
+                    <th>Фамилия</th>
+                    <th>Роль</th>
+                    <th>Активен</th>
+                    <th>Дата регистрации</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    users.forEach(user => {
+        const roleBadge = user.role === 'admin' ? 'badge-admin' : 'badge-user';
+        html += `
+            <tr>
+                <td>${user.id}</td>
+                <td><strong>${user.username}</strong></td>
+                <td>${user.first_name || '-'}</td>
+                <td>${user.last_name || '-'}</td>
+                <td><span class="badge ${roleBadge}">${user.role}</span></td>
+                <td>${user.is_active ? '✅ Да' : '❌ Нет'}</td>
+                <td>${new Date(user.date_joined).toLocaleDateString('ru-RU')}</td>
+                <td>
+                    <button class="btn btn-sm" onclick="manageUserGroups(${user.id}, '${user.username}')">👥 Группы</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id}, '${user.username}')">🗑️ Удалить</button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    contentArea.innerHTML = html;
+}
+
+function renderGroupManagement(groups) {
+    const contentArea = document.getElementById('contentArea');
+    
+    let html = `
+        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 1rem;">
+            <h2>📁 Управление группами</h2>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Название</th>
+                    <th>Создатель</th>
+                    <th>Участников</th>
+                    <th>Дата создания</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    groups.forEach(group => {
+        html += `
+            <tr>
+                <td>${group.id}</td>
+                <td><strong>${group.name}</strong></td>
+                <td>${group.created_by}</td>
+                <td>${group.members_count}</td>
+                <td>${new Date(group.created_at).toLocaleDateString('ru-RU')}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="deleteGroup(${group.id}, '${group.name}')">🗑️ Удалить</button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    contentArea.innerHTML = html;
+}
+
+// Функции создания
+function showCreateUserForm() {
+    const contentArea = document.getElementById('contentArea');
+    
+    const formHtml = `
+        <div style="max-width: 500px;">
+            <h3>👤 Создание пользователя</h3>
+            <div class="connection-form">
+                <div class="form-group">
+                    <label>Логин:</label>
+                    <input type="text" id="newUsername" placeholder="Введите логин" required>
+                </div>
+                <div class="form-group">
+                    <label>Пароль:</label>
+                    <input type="password" id="newPassword" placeholder="Введите пароль" required>
+                </div>
+                <div class="form-group">
+                    <label>Роль:</label>
+                    <select id="newUserRole">
+                        <option value="user">👤 Пользователь</option>
+                        <option value="admin">⚙️ Администратор</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Email (необязательно):</label>
+                    <input type="email" id="newUserEmail" placeholder="email@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Имя (необязательно):</label>
+                    <input type="text" id="newUserFirstName" placeholder="Иван">
+                </div>
+                <div class="form-group">
+                    <label>Фамилия (необязательно):</label>
+                    <input type="text" id="newUserLastName" placeholder="Иванов">
+                </div>
+                <button class="btn btn-primary" onclick="createNewUser()">✅ Создать</button>
+                <button class="btn" onclick="showUserManagement()">❌ Отмена</button>
+            </div>
+        </div>
+    `;
+    
+    contentArea.innerHTML = formHtml;
+}
+
+async function createNewUser() {
+    const userData = {
+        username: document.getElementById('newUsername').value,
+        password: document.getElementById('newPassword').value,
+        role: document.getElementById('newUserRole').value,
+        email: document.getElementById('newUserEmail').value,
+        first_name: document.getElementById('newUserFirstName').value,
+        last_name: document.getElementById('newUserLastName').value
+    };
+    
+    if (!userData.username || !userData.password) {
+        showNotification('❌ Заполните логин и пароль', true);
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users/create/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify(userData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Пользователь успешно создан');
+            showUserManagement();
+        } else {
+            showNotification('❌ Ошибка создания пользователя: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка создания пользователя: ' + error.message, true);
+    }
+}
+
+// Функции удаления
+async function deleteUser(userId, username) {
+    if (!confirm(`Вы уверены, что хотите удалить пользователя "${username}"?`)) {
+        return;
+    }
+    
+    showNotification('Удаление пользователя...');
+    // Здесь нужно добавить endpoint для удаления пользователей
+    showNotification('Функция удаления пользователей в разработке');
+}
+
+async function deleteGroup(groupId, groupName) {
+    if (!confirm(`Вы уверены, что хотите удалить группу "${groupName}"?`)) {
+        return;
+    }
+    
+    showNotification('Удаление группы...');
+    // Здесь нужно добавить endpoint для удаления групп
+    showNotification('Функция удаления групп в разработке');
+}
+
+// Управление группами пользователя
+async function manageUserGroups(userId, username) {
+    try {
+        const [groupsResponse, userGroupsResponse] = await Promise.all([
+            fetch('/api/users/groups/all/'),
+            fetch('/api/users/groups/')
+        ]);
+        
+        const groupsData = await groupsResponse.json();
+        const userGroupsData = await userGroupsResponse.json();
+        
+        if (!groupsData.success) {
+            showNotification('Ошибка загрузки групп', true);
+            return;
+        }
+        
+        renderUserGroupsManagement(userId, username, groupsData.groups, userGroupsData.groups || []);
+    } catch (error) {
+        showNotification('Ошибка: ' + error.message, true);
+    }
+}
+
+function renderUserGroupsManagement(userId, username, allGroups, userGroups) {
+    const contentArea = document.getElementById('contentArea');
+    
+    const userGroupIds = userGroups.map(g => g.id);
+    
+    let html = `
+        <div style="margin-bottom: 1rem;">
+            <button class="btn" onclick="showUserManagement()">← Назад к пользователям</button>
+        </div>
+        <h2>👥 Группы пользователя: ${username}</h2>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
+            <div>
+                <h4>Доступные группы</h4>
+                <div style="max-height: 400px; overflow-y: auto;">
+    `;
+    
+    allGroups.forEach(group => {
+        if (!userGroupIds.includes(group.id)) {
+            html += `
+                <div class="tree-node" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>${group.name}</strong>
+                        <div style="font-size: 0.8rem; color: #666;">Участников: ${group.members_count}</div>
+                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="toggleGroupMembership(${userId}, ${group.id}, 'add')">✅ Добавить</button>
+                </div>
+            `;
+        }
+    });
+    
+    html += `
+                </div>
+            </div>
+            <div>
+                <h4>Группы пользователя</h4>
+                <div style="max-height: 400px; overflow-y: auto;">
+    `;
+    
+    allGroups.forEach(group => {
+        if (userGroupIds.includes(group.id)) {
+            html += `
+                <div class="tree-node" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>${group.name}</strong>
+                        <div style="font-size: 0.8rem; color: #666;">Участников: ${group.members_count}</div>
+                    </div>
+                    <button class="btn btn-sm btn-danger" onclick="toggleGroupMembership(${userId}, ${group.id}, 'remove')">❌ Удалить</button>
+                </div>
+            `;
+        }
+    });
+    
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+    
+    contentArea.innerHTML = html;
+}
+
+async function toggleGroupMembership(userId, groupId, action) {
+    try {
+        const response = await fetch('/api/users/groups/assign/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                group_id: groupId,
+                action: action
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`✅ Пользователь ${action === 'add' ? 'добавлен в' : 'удален из'} группу`);
+            const userResponse = await fetch('/api/users/list/');
+            const userData = await userResponse.json();
+            if (userData.success) {
+                const user = userData.users.find(u => u.id === userId);
+                if (user) {
+                    manageUserGroups(userId, user.username);
+                }
+            }
+        } else {
+            showNotification('❌ Ошибка: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+// Функции для работы с подключениями
+async function loadConnections() {
+    try {
+        const response = await fetch('/api/clusters/connections/');
+        const data = await response.json();
+        
+        if (data.connections) {
+            renderConnectionsTree(data.connections);
+        }
+    } catch (error) {
+        showNotification('Ошибка загрузки подключений: ' + error.message, true);
+    }
+}
+
+function renderConnectionsTree(connections) {
+    const treeContainer = document.getElementById('connectionsTree');
+    treeContainer.innerHTML = '';
+    
+    connections.forEach(conn => {
+        const node = document.createElement('div');
+        node.className = 'tree-node';
+        node.innerHTML = `
+            <div>
+                <strong>${conn.display_name}</strong>
+                <div style="font-size: 0.8rem; color: #666;">${conn.server_host}:${conn.ras_port}</div>
+            </div>
+        `;
+        node.onclick = () => loadConnectionData(conn.id);
+        treeContainer.appendChild(node);
+    });
+}
+
+async function createConnection() {
+    const displayName = document.getElementById('displayName')?.value;
+    const serverHost = document.getElementById('serverHost')?.value;
+    const rasPort = document.getElementById('rasPort')?.value;
+    const clusterAdmin = document.getElementById('clusterAdmin')?.value;
+    const clusterPassword = document.getElementById('clusterPassword')?.value;
+    
+    if (!displayName || !serverHost || !rasPort) {
+        showNotification('Заполните обязательные поля: Отображаемое имя, Сервер и Порт RAS', true);
+        return;
+    }
+    
+    const connectionData = {
+        display_name: displayName,
+        server_host: serverHost,
+        ras_port: parseInt(rasPort),
+        cluster_admin: clusterAdmin || '',
+        cluster_password: clusterPassword || ''
+    };
+    
+    try {
+        const response = await fetch('/api/clusters/connections/create/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify(connectionData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Подключение успешно создано');
+            hideConnectionForm();
+            loadConnections();
+            loadStatistics();
+            
+            document.getElementById('displayName').value = '';
+            document.getElementById('serverHost').value = '';
+            document.getElementById('rasPort').value = '1545';
+            document.getElementById('clusterAdmin').value = '';
+            document.getElementById('clusterPassword').value = '';
+        } else {
+            showNotification('❌ Ошибка создания подключения: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка создания подключения: ' + error.message, true);
+    }
+}
+
+function loadConnectionData(connectionId) {
+    showNotification('Загрузка данных подключения ' + connectionId);
+}
+
+// Статистика
+async function loadStatistics() {
+    try {
+        const [connResponse, usersResponse, groupsResponse] = await Promise.all([
+            fetch('/api/clusters/connections/'),
+            fetch('/api/users/list/'),
+            fetch('/api/users/groups/all/')
+        ]);
+        
+        const connData = await connResponse.json();
+        const usersData = await usersResponse.json();
+        const groupsData = await groupsResponse.json();
+        
+        if (connData.connections) {
+            document.getElementById('connectionsCount').textContent = connData.connections.length;
+        }
+        if (usersData.success) {
+            document.getElementById('usersCount').textContent = usersData.users.length;
+        }
+        if (groupsData.success) {
+            document.getElementById('groupsCount').textContent = groupsData.groups.length;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки статистики:', error);
+    }
+}
+
+// Инициализация
+document.addEventListener('DOMContentLoaded', function() {
+    loadConnections();
+    loadStatistics();
+    updateNavigation();
+});
+</script>
+{% endblock %}

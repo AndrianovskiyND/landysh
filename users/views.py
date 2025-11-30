@@ -328,3 +328,31 @@ def delete_group(request):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+
+@login_required
+@csrf_exempt
+def request_password_change(request):
+    """Отправляет запрос на смену пароля пользователю"""
+    if request.method == 'POST':
+        try:
+            profile = Profile.objects.get(user=request.user)
+            if not profile.is_admin():
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+            
+            data = json.loads(request.body)
+            user_id = data.get('user_id')
+            
+            user = User.objects.get(id=user_id)
+            user_profile = Profile.objects.get(user=user)
+            
+            # Устанавливаем флаг принудительной смены пароля
+            user_profile.force_password_change = True
+            user_profile.save()
+            
+            return JsonResponse({'success': True, 'message': f'Пользователю {user.username} отправлен запрос на смену пароля'})
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})

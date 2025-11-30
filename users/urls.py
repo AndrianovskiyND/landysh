@@ -14,4 +14,5 @@ urlpatterns = [
     path('toggle-active/', views.toggle_active, name='toggle_active'),
     path('groups/update/', views.update_group, name='update_group'),
     path('groups/delete/', views.delete_group, name='delete_group'),
+    path('request-password-change/', views.request_password_change, name='request_password_change'),
 ]

@@ -215,6 +215,8 @@
             color: white;
         }
     </style>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'frontend/css/main.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -242,10 +244,14 @@
         {% endblock %}
     </div>
     
+    <!-- Уведомления и модальные окна ВНЕ контейнера -->
     <div id="notification" class="notification" style="display: none;">
         <div id="notificationContent"></div>
         <button onclick="hideNotification()" style="margin-top: 0.5rem;">Закрыть</button>
     </div>
+    
+    <!-- Здесь будут создаваться модальные окна -->
+    <div id="modal-container"></div>
     
     {% block extra_js %}{% endblock %}
 </body>

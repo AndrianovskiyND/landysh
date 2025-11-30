@@ -190,15 +190,12 @@ function renderUserManagement(users) {
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>ID</th>
                     <th>Логин</th>
                     <th>Имя</th>
                     <th>Фамилия</th>
                     <th>Email</th>
                     <th>Роль</th>
                     <th>Активен</th>
-                    <th>Последний вход</th>
-                    <th>Дата регистрации</th>
                     <th>Действия</th>
                 </tr>
             </thead>
@@ -207,37 +204,20 @@ function renderUserManagement(users) {
     
     users.forEach(user => {
         const roleBadge = user.role === 'admin' ? 'badge-admin' : 'badge-user';
-        const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString('ru-RU') : 'Никогда';
-        const isCurrentUser = user.id === {{ user.id }};
-        const activeBtn = user.is_active ? 
-            `<button class="btn btn-sm btn-danger" onclick="toggleUserActive(${user.id}, false)" ${isCurrentUser ? 'disabled title="Нельзя заблокировать себя"' : ''}>🚫 Заблокировать</button>` :
-            `<button class="btn btn-sm btn-primary" onclick="toggleUserActive(${user.id}, true)">✅ Разблокировать</button>`;
+        const activeStatus = user.is_active ? '✅ Да' : '❌ Нет';
         
         html += `
             <tr>
-                <td>${user.id}</td>
                 <td><strong>${user.username}</strong></td>
+                <td>${user.first_name || '-'}</td>
+                <td>${user.last_name || '-'}</td>
+                <td>${user.email || '-'}</td>
+                <td><span class="badge ${roleBadge}">${user.role === 'admin' ? 'Администратор' : 'Пользователь'}</span></td>
+                <td>${activeStatus}</td>
                 <td>
-                    <span id="firstName-${user.id}">${user.first_name || '-'}</span>
-                    <button class="btn btn-sm" onclick="editUserField(${user.id}, 'first_name', 'Имя')">✏️</button>
-                </td>
-                <td>
-                    <span id="lastName-${user.id}">${user.last_name || '-'}</span>
-                    <button class="btn btn-sm" onclick="editUserField(${user.id}, 'last_name', 'Фамилия')">✏️</button>
-                </td>
-                <td>
-                    <span id="email-${user.id}">${user.email || '-'}</span>
-                    <button class="btn btn-sm" onclick="editUserField(${user.id}, 'email', 'Email')">✏️</button>
-                </td>
-                <td><span class="badge ${roleBadge}">${user.role}</span></td>
-                <td>${user.is_active ? '✅ Да' : '❌ Нет'}</td>
-                <td>${lastLogin}</td>
-                <td>${new Date(user.date_joined).toLocaleDateString('ru-RU')}</td>
-                <td>
-                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <div style="display: flex; gap: 0.25rem;">
+                        <button class="btn btn-sm btn-primary" onclick="showUserProperties(${user.id})">📋 Свойства</button>
                         <button class="btn btn-sm" onclick="manageUserGroups(${user.id}, '${user.username}')">👥 Группы</button>
-                        <button class="btn btn-sm btn-secondary" onclick="showChangePasswordForm(${user.id}, '${user.username}')">🔑 Пароль</button>
-                        ${activeBtn}
                     </div>
                 </td>
             </tr>
@@ -246,6 +226,201 @@ function renderUserManagement(users) {
     
     html += '</tbody></table>';
     contentArea.innerHTML = html;
+}
+
+// Новое окно свойств пользователя в стиле iOS
+function showUserProperties(userId) {
+    // Загружаем данные пользователя
+    fetch('/api/users/list/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const user = data.users.find(u => u.id === userId);
+                if (user) {
+                    renderUserPropertiesModal(user);
+                }
+            }
+        })
+        .catch(error => {
+            showNotification('Ошибка загрузки данных пользователя: ' + error.message, true);
+        });
+}
+
+function renderUserPropertiesModal(user) {
+    const modalHtml = `
+        <div class="modal-overlay" id="userPropertiesModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>👤 Свойства пользователя: ${user.username}</h3>
+                    <button class="btn btn-sm" onclick="closeUserProperties()" style="background: transparent; border: none; font-size: 1.5rem; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">×</button>
+                </div>
+                <div class="modal-body">
+                    <!-- остальной код модального окна без изменений -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem;">
+                        <div class="info-card">
+                            <h4>📊 Основная информация</h4>
+                            <div class="info-item">
+                                <label>Логин:</label>
+                                <span>${user.username}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Email:</label>
+                                <span>${user.email || '-'}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Роль:</label>
+                                <span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-user'}" style="font-size: 0.8rem; padding: 0.3rem 0.6rem;">
+                                    ${user.role === 'admin' ? '👑 Администратор' : '👤 Пользователь'}
+                                </span>
+                            </div>
+                            <div class="info-item">
+                                <label>Статус:</label>
+                                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                    ${user.is_active ? '🟢 Активен' : '🔴 Заблокирован'}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="info-card">
+                            <h4>📅 Даты и время</h4>
+                            <div class="info-item">
+                                <label>Дата регистрации:</label>
+                                <span>${new Date(user.date_joined).toLocaleString('ru-RU')}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Последний вход:</label>
+                                <span>${user.last_login ? new Date(user.last_login).toLocaleString('ru-RU') : 'Никогда'}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Последний вход (IP):</label>
+                                <span>${user.last_login_at ? new Date(user.last_login_at).toLocaleString('ru-RU') : 'Нет данных'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-section">
+                        <h4>⚡ Действия</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                            <button class="btn btn-primary" onclick="showChangePasswordForm(${user.id}, '${user.username}')"
+                                    style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+                                🔑 Сменить пароль
+                            </button>
+                            <button class="btn btn-secondary" onclick="requestPasswordChange(${user.id}, '${user.username}')"
+                                    style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+                                🔄 Запросить смену
+                            </button>
+                            ${user.id !== {{ user.id }} ? `
+                                <button class="btn ${user.is_active ? 'btn-danger' : 'btn-success'}" 
+                                        onclick="toggleUserActive(${user.id}, ${!user.is_active})"
+                                        style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+                                    ${user.is_active ? '🚫 Заблокировать' : '✅ Разблокировать'}
+                                </button>
+                            ` : '<div></div>'}
+                        </div>
+                    </div>
+                    
+                    <div class="form-section" style="margin-top: 2rem;">
+                        <h4>✏️ Редактирование данных</h4>
+                        <div class="connection-form">
+                            <div class="form-group">
+                                <label>Имя:</label>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <input type="text" id="editFirstName" value="${user.first_name || ''}" placeholder="Иван" style="flex: 1;">
+                                    <button class="btn btn-sm" onclick="updateUserField(${user.id}, 'first_name', document.getElementById('editFirstName').value)">Сохранить</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Фамилия:</label>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <input type="text" id="editLastName" value="${user.last_name || ''}" placeholder="Иванов" style="flex: 1;">
+                                    <button class="btn btn-sm" onclick="updateUserField(${user.id}, 'last_name', document.getElementById('editLastName').value)">Сохранить</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Email:</label>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <input type="email" id="editEmail" value="${user.email || ''}" placeholder="email@example.com" style="flex: 1;">
+                                    <button class="btn btn-sm" onclick="updateUserField(${user.id}, 'email', document.getElementById('editEmail').value)">Сохранить</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeUserProperties()" style="background: #6C757D; color: white;">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Добавляем модальное окно ВНЕ контейнера
+    const modalContainer = document.getElementById('modal-container');
+    modalContainer.innerHTML = modalHtml;
+}
+
+function closeUserProperties() {
+    const modal = document.getElementById('userPropertiesModal');
+    if (modal) {
+        modal.classList.add('modal-closing');
+        setTimeout(() => {
+            modal.remove();
+        }, 200);
+    }
+}
+
+// Новая функция для запроса смены пароля
+function requestPasswordChange(userId, username) {
+    if (confirm(`Отправить пользователю "${username}" запрос на смену пароля?`)) {
+        fetch('/api/users/request-password-change/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                user_id: userId
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                showNotification('✅ Запрос на смену пароля отправлен пользователю');
+            } else {
+                showNotification('❌ Ошибка: ' + result.error, true);
+            }
+        })
+        .catch(error => {
+            showNotification('❌ Ошибка: ' + error.message, true);
+        });
+    }
+}
+
+// Обновленная функция для обновления полей пользователя
+function updateUserField(userId, field, value) {
+    fetch('/api/users/update/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        },
+        body: JSON.stringify({
+            user_id: userId,
+            [field]: value
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showNotification('✅ Данные успешно обновлены');
+            // Обновляем таблицу пользователей
+            showUserManagement();
+        } else {
+            showNotification('❌ Ошибка: ' + result.error, true);
+        }
+    })
+    .catch(error => {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    });
 }
 
 function renderGroupManagement(groups) {

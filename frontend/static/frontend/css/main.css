@@ -26,3 +26,256 @@
     background: #fff3cd;
     color: #856404;
 }
+
+.badge-admin {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-user {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
+/* Модальное окно в стиле iOS/macOS */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    animation: modalFadeIn 0.3s ease forwards;
+    backdrop-filter: blur(4px);
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.modal {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 600px;
+    width: 90%;
+    max-height: 85vh;
+    overflow: hidden;
+    transform: scale(0.9);
+    animation: modalScaleIn 0.3s ease forwards;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@keyframes modalScaleIn {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e5e5e7;
+    background: #fafafa;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1d1d1f;
+}
+
+.modal-body {
+    padding: 1.5rem;
+    max-height: calc(85vh - 120px);
+    overflow-y: auto;
+}
+
+.modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e5e5e7;
+    background: #fafafa;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    position: sticky;
+    bottom: 0;
+}
+
+/* Карточки информации в стиле iOS */
+.info-card {
+    background: #ffffff;
+    padding: 1.25rem;
+    border-radius: 10px;
+    border: 1px solid #e5e5e7;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.info-card h4 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1d1d1f;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.info-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.info-item label {
+    font-weight: 500;
+    color: #6d6d6f;
+    font-size: 0.9rem;
+}
+
+.info-item span {
+    color: #1d1d1f;
+    font-weight: 500;
+    text-align: right;
+}
+
+/* Секция действий */
+.action-section {
+    background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+    padding: 1.25rem;
+    border-radius: 10px;
+    border: 1px solid #e0e7ff;
+    margin: 1.5rem 0;
+}
+
+.action-section h4 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1d1d1f;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Секция формы */
+.form-section {
+    background: #f8f9fa;
+    padding: 1.25rem;
+    border-radius: 10px;
+    border: 1px solid #e5e5e7;
+}
+
+.form-section h4 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1d1d1f;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Кнопки в модальном окне */
+.modal .btn {
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.modal .btn-primary {
+    background: linear-gradient(135deg, #007AFF 0%, #0056CC 100%);
+    color: white;
+}
+
+.modal .btn-primary:hover {
+    background: linear-gradient(135deg, #0056CC 0%, #0040A3 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+}
+
+.modal .btn-secondary {
+    background: linear-gradient(135deg, #6C757D 0%, #545B62 100%);
+    color: white;
+}
+
+.modal .btn-danger {
+    background: linear-gradient(135deg, #DC3545 0%, #C82333 100%);
+    color: white;
+}
+
+.modal .btn-success {
+    background: linear-gradient(135deg, #28A745 0%, #1E7E34 100%);
+    color: white;
+}
+
+.modal .btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+/* Анимация закрытия */
+.modal-closing {
+    animation: modalFadeOut 0.2s ease forwards;
+}
+
+@keyframes modalFadeOut {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+}

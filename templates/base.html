@@ -13,6 +13,10 @@
             --border-color: #ddd;
         }
         
+        * {
+            box-sizing: border-box;
+        }
+        
         body {
             margin: 0;
             font-family: 'Arial', sans-serif;
@@ -75,6 +79,7 @@
         .container {
             display: flex;
             height: calc(100vh - 120px);
+            overflow: hidden;
         }
         
         .sidebar {
@@ -82,17 +87,37 @@
             background: white;
             border-right: 1px solid var(--border-color);
             overflow-y: auto;
+            overflow-x: hidden;
         }
         
         .main-content {
             flex: 1;
             background: white;
             overflow-y: auto;
+            overflow-x: hidden;
         }
         
         .panel {
             padding: 1rem;
-            height: 100%;
+            box-sizing: border-box;
+        }
+        
+        .panel h1,
+        .panel h2,
+        .panel h3,
+        .panel h4 {
+            margin-top: 0;
+        }
+        
+        .panel h1:first-child,
+        .panel h2:first-child,
+        .panel h3:first-child,
+        .panel h4:first-child {
+            margin-top: 0;
+        }
+        
+        .panel > *:last-child {
+            margin-bottom: 0;
         }
         
         .tree-node {

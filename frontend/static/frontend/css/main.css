@@ -133,9 +133,23 @@
     width: 6px;
 }
 
+.modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
 .modal-body::-webkit-scrollbar-thumb {
-    background: #ccc;
+    background: rgba(0, 0, 0, 0.2);
     border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(213, 43, 30, 0.6);
+}
+
+.modal-body {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
 .modal-footer {
@@ -455,4 +469,51 @@ input, textarea {
 
 input, select, button, .btn {
     transition: all 0.2s ease;
+}
+
+/* =============================================
+   Кастомные скроллбары
+   Тонкие, минималистичные, в корпоративном стиле
+   Показываются ТОЛЬКО при необходимости (overflow-y: auto)
+   ============================================= */
+
+/* Стили для WebKit браузеров (Chrome, Safari, Edge) */
+.sidebar::-webkit-scrollbar,
+.main-content::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track,
+.main-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.main-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover,
+.main-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(213, 43, 30, 0.5);
+}
+
+.sidebar::-webkit-scrollbar-thumb:active,
+.main-content::-webkit-scrollbar-thumb:active {
+    background: rgba(213, 43, 30, 0.7);
+}
+
+/* Стили для Firefox */
+.sidebar,
+.main-content {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.sidebar:hover,
+.main-content:hover {
+    scrollbar-color: rgba(213, 43, 30, 0.5) transparent;
 }

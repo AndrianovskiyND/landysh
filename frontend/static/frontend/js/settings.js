@@ -12,6 +12,9 @@
  */
 async function showSystemSettings() {
     currentView = 'settings';
+    if (typeof saveCurrentView === 'function') {
+        saveCurrentView('settings');
+    }
     updateNavigation();
     
     try {
@@ -36,75 +39,91 @@ function renderSystemSettings(settings) {
     const contentArea = document.getElementById('contentArea');
     
     let html = `
-        <div style="margin-bottom: 2rem;">
-            <h2 style="margin-bottom: 0.5rem;">⚙️ Настройки системы</h2>
+        <div style="margin-bottom: 1.5rem;">
+            <h2>⚙️ Настройки системы</h2>
         </div>
         
-        <div style="max-width: 600px;">
-            <div class="connection-form">
+        <div style="max-width: 700px;">
+            <!-- Основные настройки -->
+            <div class="info-card" style="margin-bottom: 1rem;">
                 <h4>🔧 Основные настройки</h4>
-                
-                <div class="form-group">
-                    <label>Путь к утилите RAC:</label>
-                    <input type="text" id="rac_path" value="${settings.rac_path}" placeholder="/opt/1cv8/x86_64/8.3.27.1860/rac">
-                    <small style="color: #666;">Абсолютный путь к исполняемому файлу rac</small>
-                </div>
-                
-                <div class="form-group">
-                    <label>Таймаут сессии (секунды):</label>
-                    <input type="number" id="session_timeout" value="${settings.session_timeout}">
-                    <small style="color: #666;">Время ожидания ответа от RAC</small>
-                </div>
-                
-                <div class="form-group">
-                    <label>Максимум подключений:</label>
-                    <input type="number" id="max_connections" value="${settings.max_connections}">
-                    <small style="color: #666;">Максимальное количество одновременных подключений к серверам 1С</small>
-                </div>
-            </div>
-            
-            <div class="connection-form" style="margin-top: 1rem;">
-                <h4>📧 Настройки уведомлений</h4>
-                
-                <div class="form-group">
-                    <label>SMTP сервер:</label>
-                    <input type="text" id="smtp_server" value="${settings.smtp_server}" placeholder="smtp.example.com">
-                </div>
-                
-                <div class="form-group">
-                    <label>SMTP порт:</label>
-                    <input type="number" id="smtp_port" value="${settings.smtp_port}">
-                </div>
-                
-                <div class="form-group">
-                    <label>Email для уведомлений:</label>
-                    <input type="email" id="notification_email" value="${settings.notification_email}" placeholder="admin@example.com">
+                <div class="edit-form">
+                    <div class="form-row">
+                        <label>Путь к утилите RAC</label>
+                        <input type="text" id="rac_path" value="${settings.rac_path}" placeholder="/opt/1cv8/x86_64/8.3.27.1860/rac">
+                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Абсолютный путь к исполняемому файлу rac</small>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div class="form-row">
+                            <label>Таймаут сессии (сек)</label>
+                            <input type="number" id="session_timeout" value="${settings.session_timeout}">
+                        </div>
+                        <div class="form-row">
+                            <label>Макс. подключений</label>
+                            <input type="number" id="max_connections" value="${settings.max_connections}">
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <div class="connection-form" style="margin-top: 1rem;">
-                <h4>⚡ Прочие настройки</h4>
-                
-                <div class="form-group">
-                    <label>Уровень логирования:</label>
-                    <select id="log_level">
-                        <option value="DEBUG" ${settings.log_level === 'DEBUG' ? 'selected' : ''}>DEBUG</option>
-                        <option value="INFO" ${settings.log_level === 'INFO' ? 'selected' : ''}>INFO</option>
-                        <option value="WARNING" ${settings.log_level === 'WARNING' ? 'selected' : ''}>WARNING</option>
-                        <option value="ERROR" ${settings.log_level === 'ERROR' ? 'selected' : ''}>ERROR</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="backup_enabled" ${settings.backup_enabled === 'true' ? 'checked' : ''}>
-                        Резервное копирование настроек
-                    </label>
+            <!-- Настройки уведомлений -->
+            <div class="info-card" style="margin-bottom: 1rem;">
+                <h4 style="border-bottom-color: var(--secondary-color);">📧 Настройки уведомлений</h4>
+                <div class="edit-form">
+                    <div class="form-row">
+                        <label>SMTP сервер</label>
+                        <input type="text" id="smtp_server" value="${settings.smtp_server}" placeholder="smtp.example.com">
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div class="form-row">
+                            <label>SMTP порт</label>
+                            <input type="number" id="smtp_port" value="${settings.smtp_port}">
+                        </div>
+                        <div class="form-row">
+                            <label>Email для уведомлений</label>
+                            <input type="email" id="notification_email" value="${settings.notification_email}" placeholder="admin@example.com">
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <button class="btn btn-primary" onclick="saveSystemSettings()">💾 Сохранить настройки</button>
-            <button class="btn" onclick="showDashboard()">❌ Отмена</button>
+            <!-- Прочие настройки -->
+            <div class="info-card" style="margin-bottom: 1rem;">
+                <h4 style="border-bottom-color: #6366f1;">⚡ Прочие настройки</h4>
+                <div class="edit-form">
+                    <div class="form-row">
+                        <label>Уровень логирования</label>
+                        <select id="log_level">
+                            <option value="DEBUG" ${settings.log_level === 'DEBUG' ? 'selected' : ''}>DEBUG</option>
+                            <option value="INFO" ${settings.log_level === 'INFO' ? 'selected' : ''}>INFO</option>
+                            <option value="WARNING" ${settings.log_level === 'WARNING' ? 'selected' : ''}>WARNING</option>
+                            <option value="ERROR" ${settings.log_level === 'ERROR' ? 'selected' : ''}>ERROR</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; text-transform: none; letter-spacing: normal;">
+                            <input type="checkbox" id="backup_enabled" ${settings.backup_enabled === 'true' ? 'checked' : ''} style="width: 18px; height: 18px;">
+                            <span style="font-weight: 500; color: #333;">Резервное копирование настроек</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Кнопки действий -->
+            <div class="info-card">
+                <h4>💾 Сохранение</h4>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-primary" onclick="saveSystemSettings()" style="flex: 1;">
+                        💾 Сохранить настройки
+                    </button>
+                    <button class="btn" onclick="showDashboard()" style="background: #6c757d; color: white;">
+                        Отмена
+                    </button>
+                </div>
+            </div>
         </div>
     `;
     

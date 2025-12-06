@@ -12,6 +12,9 @@
  */
 async function showUserManagement() {
     currentView = 'users';
+    if (typeof saveCurrentView === 'function') {
+        saveCurrentView('users');
+    }
     updateNavigation();
     
     try {
@@ -48,7 +51,7 @@ function renderUserManagement(users) {
                     <th>Фамилия</th>
                     <th>Email</th>
                     <th>Роль</th>
-                    <th>Активен</th>
+                    <th>Статус</th>
                     <th>Действия</th>
                 </tr>
             </thead>
@@ -57,21 +60,19 @@ function renderUserManagement(users) {
     
     users.forEach(user => {
         const roleBadge = user.role === 'admin' ? 'badge-admin' : 'badge-user';
-        const activeStatus = user.is_active ? '✅ Да' : '❌ Нет';
+        const statusBadge = user.is_active ? 'badge-success' : 'badge-danger';
+        const statusText = user.is_active ? 'Активен' : 'Заблокирован';
         
         html += `
             <tr>
                 <td><strong>${user.username}</strong></td>
-                <td>${user.first_name || '-'}</td>
-                <td>${user.last_name || '-'}</td>
-                <td>${user.email || '-'}</td>
+                <td>${user.first_name || '—'}</td>
+                <td>${user.last_name || '—'}</td>
+                <td>${user.email || '—'}</td>
                 <td><span class="badge ${roleBadge}">${user.role === 'admin' ? 'Администратор' : 'Пользователь'}</span></td>
-                <td>${activeStatus}</td>
+                <td><span class="badge ${statusBadge}">${statusText}</span></td>
                 <td>
-                    <div style="display: flex; gap: 0.25rem;">
-                        <button class="btn btn-sm btn-primary" onclick="showUserProperties(${user.id})">📋 Свойства</button>
-                        <button class="btn btn-sm" onclick="manageUserGroups(${user.id}, '${user.username}')">👥 Группы</button>
-                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="showUserProperties(${user.id})">Свойства</button>
                 </td>
             </tr>
         `;
@@ -89,137 +90,259 @@ function renderUserManagement(users) {
  * Показать свойства пользователя
  * @param {number} userId - ID пользователя
  */
-function showUserProperties(userId) {
-    fetch('/api/users/list/')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const user = data.users.find(u => u.id === userId);
-                if (user) {
-                    renderUserPropertiesModal(user);
-                }
+async function showUserProperties(userId) {
+    try {
+        const [usersResponse, groupsResponse] = await Promise.all([
+            fetch('/api/users/list/'),
+            fetch('/api/users/groups/all/')
+        ]);
+        
+        const usersData = await usersResponse.json();
+        const groupsData = await groupsResponse.json();
+        
+        if (usersData.success) {
+            const user = usersData.users.find(u => u.id === userId);
+            if (user) {
+                const allGroups = groupsData.success ? groupsData.groups : [];
+                renderUserPropertiesModal(user, allGroups);
             }
-        })
-        .catch(error => {
-            showNotification('Ошибка загрузки данных пользователя: ' + error.message, true);
-        });
+        }
+    } catch (error) {
+        showNotification('Ошибка загрузки данных пользователя: ' + error.message, true);
+    }
 }
 
 /**
  * Отрисовать модальное окно свойств пользователя
  * @param {Object} user - Данные пользователя
+ * @param {Array} allGroups - Все группы системы
  */
-function renderUserPropertiesModal(user) {
-    // Получаем ID текущего пользователя из глобальной переменной
+function renderUserPropertiesModal(user, allGroups = []) {
     const currentUserId = window.CURRENT_USER_ID || 0;
+    const isOtherUser = user.id !== currentUserId;
+    
+    // Определяем текущую группу пользователя
+    const userGroup = allGroups.find(g => g.members && g.members.some(m => m.id === user.id));
+    const userGroupId = userGroup ? userGroup.id : '';
+    
+    // Сохраняем данные для сохранения
+    window._editUserData = {
+        userId: user.id,
+        originalGroupId: userGroupId
+    };
+    
+    // Генерируем опции для select группы
+    const groupOptions = allGroups.map(g => 
+        `<option value="${g.id}" ${g.id === userGroupId ? 'selected' : ''}>${g.name}</option>`
+    ).join('');
+    
+    // Иконки и статусы
+    const roleIcon = user.role === 'admin' ? '👑' : '👤';
+    const statusIcon = user.is_active ? '🟢' : '🔴';
+    const statusClass = user.is_active ? 'active' : 'blocked';
     
     const modalHtml = `
-        <div class="modal-overlay" id="userPropertiesModal">
-            <div class="modal">
+        <div class="modal-overlay" id="userPropertiesModal" onclick="closeModalOnOverlay(event)">
+            <div class="modal" style="max-width: 620px;">
                 <div class="modal-header">
-                    <h3>👤 Свойства пользователя: ${user.username}</h3>
-                    <button class="btn btn-sm" onclick="closeUserProperties()" style="background: transparent; border: none; font-size: 1.5rem; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">×</button>
+                    <h3>👤 ${user.username}</h3>
+                    <button class="modal-close-btn" onclick="closeUserProperties()">×</button>
                 </div>
                 <div class="modal-body">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem;">
+                    <!-- Информационные карточки -->
+                    <div class="info-cards-grid">
                         <div class="info-card">
                             <h4>📊 Основная информация</h4>
-                            <div class="info-item">
-                                <label>Логин:</label>
-                                <span>${user.username}</span>
+                            <div class="info-row">
+                                <span class="info-label">Логин</span>
+                                <span class="info-value"><strong>${user.username}</strong></span>
                             </div>
-                            <div class="info-item">
-                                <label>Email:</label>
-                                <span>${user.email || '-'}</span>
-                            </div>
-                            <div class="info-item">
-                                <label>Роль:</label>
-                                <span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-user'}" style="font-size: 0.8rem; padding: 0.3rem 0.6rem;">
-                                    ${user.role === 'admin' ? '👑 Администратор' : '👤 Пользователь'}
+                            <div class="info-row">
+                                <span class="info-label">Роль</span>
+                                <span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-user'}">
+                                    ${roleIcon} ${user.role === 'admin' ? 'Администратор' : 'Пользователь'}
                                 </span>
                             </div>
-                            <div class="info-item">
-                                <label>Статус:</label>
-                                <span style="display: flex; align-items: center; gap: 0.5rem;">
-                                    ${user.is_active ? '🟢 Активен' : '🔴 Заблокирован'}
+                            <div class="info-row">
+                                <span class="info-label">Статус</span>
+                                <span class="status-icon ${statusClass}">
+                                    <span class="badge ${user.is_active ? 'badge-success' : 'badge-danger'}">
+                                        ${user.is_active ? 'Активен' : 'Заблокирован'}
+                                    </span>
                                 </span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Группа</span>
+                                <span class="info-value">${userGroup ? userGroup.name : '—'}</span>
                             </div>
                         </div>
                         
                         <div class="info-card">
-                            <h4>📅 Даты и время</h4>
-                            <div class="info-item">
-                                <label>Дата регистрации:</label>
-                                <span>${new Date(user.date_joined).toLocaleString('ru-RU')}</span>
+                            <h4>📅 Даты и активность</h4>
+                            <div class="info-row">
+                                <span class="info-label">Регистрация</span>
+                                <span class="info-value">${new Date(user.date_joined).toLocaleDateString('ru-RU')}</span>
                             </div>
-                            <div class="info-item">
-                                <label>Последний вход:</label>
-                                <span>${user.last_login ? new Date(user.last_login).toLocaleString('ru-RU') : 'Никогда'}</span>
+                            <div class="info-row">
+                                <span class="info-label">Последний вход</span>
+                                <span class="info-value">${user.last_login ? new Date(user.last_login).toLocaleString('ru-RU') : '—'}</span>
                             </div>
-                            <div class="info-item">
-                                <label>Последний вход (IP):</label>
-                                <span>${user.last_login_at ? new Date(user.last_login_at).toLocaleString('ru-RU') : 'Нет данных'}</span>
+                            <div class="info-row">
+                                <span class="info-label">Email</span>
+                                <span class="info-value">${user.email || '—'}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Полное имя</span>
+                                <span class="info-value">${user.first_name || user.last_name ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : '—'}</span>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="action-section">
+                    <!-- Блок редактирования -->
+                    <div class="info-card" style="margin-bottom: 1rem;">
+                        <h4 style="border-bottom-color: var(--secondary-color);">✏️ Редактирование данных</h4>
+                        <div class="edit-form">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                <div class="form-row">
+                                    <label for="editFirstName">Имя</label>
+                                    <input type="text" id="editFirstName" value="${user.first_name || ''}" placeholder="Иван">
+                                </div>
+                                <div class="form-row">
+                                    <label for="editLastName">Фамилия</label>
+                                    <input type="text" id="editLastName" value="${user.last_name || ''}" placeholder="Иванов">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <label for="editEmail">Email</label>
+                                <input type="email" id="editEmail" value="${user.email || ''}" placeholder="email@example.com">
+                            </div>
+                            <div class="form-row">
+                                <label for="editGroup">Группа доступа</label>
+                                <select id="editGroup">
+                                    <option value="">— Без группы —</option>
+                                    ${groupOptions}
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveUserChanges(${user.id})" style="margin-top: 1.25rem; width: 100%;">
+                            💾 Сохранить изменения
+                        </button>
+                    </div>
+                    
+                    <!-- Блок действий -->
+                    <div class="info-card">
                         <h4>⚡ Действия</h4>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                            <button class="btn btn-primary" onclick="showChangePasswordForm(${user.id}, '${user.username}')"
-                                    style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+                        <div class="actions-grid">
+                            <button class="btn btn-secondary" onclick="openChangePasswordModal(${user.id}, '${user.username}')">
                                 🔑 Сменить пароль
                             </button>
-                            <button class="btn btn-secondary" onclick="requestPasswordChange(${user.id}, '${user.username}')"
-                                    style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
-                                🔄 Запросить смену
-                            </button>
-                            ${user.id !== currentUserId ? `
+                            ${isOtherUser ? `
+                                <button class="btn btn-warning" onclick="requirePasswordChange(${user.id}, '${user.username}')">
+                                    🔄 Требовать смену
+                                </button>
                                 <button class="btn ${user.is_active ? 'btn-danger' : 'btn-success'}" 
-                                        onclick="toggleUserActive(${user.id}, ${!user.is_active})"
-                                        style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+                                        onclick="toggleUserActive(${user.id}, ${!user.is_active})">
                                     ${user.is_active ? '🚫 Заблокировать' : '✅ Разблокировать'}
                                 </button>
-                            ` : '<div></div>'}
-                        </div>
-                    </div>
-                    
-                    <div class="form-section" style="margin-top: 2rem;">
-                        <h4>✏️ Редактирование данных</h4>
-                        <div class="connection-form">
-                            <div class="form-group">
-                                <label>Имя:</label>
-                                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                    <input type="text" id="editFirstName" value="${user.first_name || ''}" placeholder="Иван" style="flex: 1;">
-                                    <button class="btn btn-sm" onclick="updateUserField(${user.id}, 'first_name', document.getElementById('editFirstName').value)">Сохранить</button>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Фамилия:</label>
-                                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                    <input type="text" id="editLastName" value="${user.last_name || ''}" placeholder="Иванов" style="flex: 1;">
-                                    <button class="btn btn-sm" onclick="updateUserField(${user.id}, 'last_name', document.getElementById('editLastName').value)">Сохранить</button>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Email:</label>
-                                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                    <input type="email" id="editEmail" value="${user.email || ''}" placeholder="email@example.com" style="flex: 1;">
-                                    <button class="btn btn-sm" onclick="updateUserField(${user.id}, 'email', document.getElementById('editEmail').value)">Сохранить</button>
-                                </div>
-                            </div>
+                            ` : ''}
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn" onclick="closeUserProperties()" style="background: #6C757D; color: white;">Закрыть</button>
+                    <button class="btn" onclick="closeUserProperties()" style="background: #6c757d; color: white;">Закрыть</button>
                 </div>
             </div>
         </div>
     `;
     
-    const modalContainer = document.getElementById('modal-container');
-    modalContainer.innerHTML = modalHtml;
+    document.getElementById('modal-container').innerHTML = modalHtml;
+}
+
+/**
+ * Сохранить изменения пользователя
+ */
+async function saveUserChanges(userId) {
+    const firstName = document.getElementById('editFirstName').value;
+    const lastName = document.getElementById('editLastName').value;
+    const email = document.getElementById('editEmail').value;
+    const groupId = document.getElementById('editGroup').value;
+    
+    const originalGroupId = window._editUserData?.originalGroupId || '';
+    
+    try {
+        // Сохраняем основные данные
+        const updateResponse = await fetch('/api/users/update/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                first_name: firstName,
+                last_name: lastName,
+                email: email
+            })
+        });
+        
+        const updateResult = await updateResponse.json();
+        
+        if (!updateResult.success) {
+            showNotification('❌ Ошибка сохранения: ' + updateResult.error, true);
+            return;
+        }
+        
+        // Обновляем группу если изменилась
+        if (groupId !== String(originalGroupId)) {
+            // Удаляем из старой группы
+            if (originalGroupId) {
+                await fetch('/api/users/groups/assign/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        group_id: parseInt(originalGroupId),
+                        action: 'remove'
+                    })
+                });
+            }
+            
+            // Добавляем в новую группу
+            if (groupId) {
+                await fetch('/api/users/groups/assign/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        group_id: parseInt(groupId),
+                        action: 'add'
+                    })
+                });
+            }
+        }
+        
+        showNotification('✅ Изменения сохранены');
+        closeUserProperties();
+        showUserManagement();
+        
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+/**
+ * Закрыть модальное окно при клике на overlay
+ */
+function closeModalOnOverlay(event) {
+    if (event.target.classList.contains('modal-overlay')) {
+        closeUserProperties();
+    }
 }
 
 /**
@@ -229,9 +352,176 @@ function closeUserProperties() {
     const modal = document.getElementById('userPropertiesModal');
     if (modal) {
         modal.classList.add('modal-closing');
-        setTimeout(() => {
-            modal.remove();
-        }, 200);
+        setTimeout(() => modal.remove(), 200);
+    }
+}
+
+// ============================================
+// Модальное окно смены пароля
+// ============================================
+
+/**
+ * Открыть модальное окно смены пароля
+ */
+function openChangePasswordModal(userId, username) {
+    const modalHtml = `
+        <div class="modal-overlay" id="passwordModal" onclick="closePasswordModalOnOverlay(event)">
+            <div class="modal" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h3>Смена пароля: ${username}</h3>
+                    <button class="modal-close-btn" onclick="closePasswordModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="edit-form">
+                        <div class="form-row">
+                            <label for="newPassword">Новый пароль</label>
+                            <input type="password" id="newPassword" placeholder="Введите новый пароль">
+                        </div>
+                        <div class="form-row">
+                            <label for="confirmPassword">Подтверждение</label>
+                            <input type="password" id="confirmPassword" placeholder="Повторите пароль">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closePasswordModal()">Отмена</button>
+                    <button class="btn btn-primary" onclick="saveNewPassword(${userId})">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Добавляем поверх существующего модального окна
+    const container = document.getElementById('modal-container');
+    container.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+/**
+ * Сохранить новый пароль
+ */
+async function saveNewPassword(userId) {
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    if (!newPassword) {
+        showNotification('❌ Введите пароль', true);
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        showNotification('❌ Пароли не совпадают', true);
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users/change-password/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                new_password: newPassword,
+                require_change: false
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Пароль успешно изменён');
+            closePasswordModal();
+        } else {
+            showNotification('❌ Ошибка: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+function closePasswordModalOnOverlay(event) {
+    if (event.target.id === 'passwordModal') {
+        closePasswordModal();
+    }
+}
+
+function closePasswordModal() {
+    const modal = document.getElementById('passwordModal');
+    if (modal) {
+        modal.classList.add('modal-closing');
+        setTimeout(() => modal.remove(), 200);
+    }
+}
+
+/**
+ * Требовать смену пароля при следующем входе
+ */
+async function requirePasswordChange(userId, username) {
+    if (!confirm(`Пользователь "${username}" будет обязан сменить пароль при следующем входе. Продолжить?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users/request-password-change/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ user_id: userId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Требование смены пароля установлено');
+        } else {
+            showNotification('❌ Ошибка: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+// ============================================
+// Блокировка/разблокировка пользователя
+// ============================================
+
+/**
+ * Переключить активность пользователя
+ */
+async function toggleUserActive(userId, isActive) {
+    const action = isActive ? 'разблокировать' : 'заблокировать';
+    
+    if (!confirm(`Вы уверены, что хотите ${action} этого пользователя?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users/toggle-active/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                is_active: isActive
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`✅ Пользователь ${isActive ? 'разблокирован' : 'заблокирован'}`);
+            closeUserProperties();
+            showUserManagement();
+        } else {
+            showNotification('❌ Ошибка: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
     }
 }
 
@@ -239,55 +529,49 @@ function closeUserProperties() {
 // Создание пользователя
 // ============================================
 
-/**
- * Показать форму создания пользователя
- */
 function showCreateUserForm() {
     const contentArea = document.getElementById('contentArea');
     
-    const formHtml = `
+    contentArea.innerHTML = `
         <div style="max-width: 500px;">
-            <h3>👤 Создание пользователя</h3>
-            <div class="connection-form">
-                <div class="form-group">
-                    <label>Логин:</label>
+            <h3>Создание пользователя</h3>
+            <div class="edit-form" style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid #e5e5e7;">
+                <div class="form-row">
+                    <label for="newUsername">Логин *</label>
                     <input type="text" id="newUsername" placeholder="Введите логин" required>
                 </div>
-                <div class="form-group">
-                    <label>Пароль:</label>
+                <div class="form-row">
+                    <label for="newPassword">Пароль *</label>
                     <input type="password" id="newPassword" placeholder="Введите пароль" required>
                 </div>
-                <div class="form-group">
-                    <label>Роль:</label>
+                <div class="form-row">
+                    <label for="newUserRole">Роль</label>
                     <select id="newUserRole">
-                        <option value="user">👤 Пользователь</option>
-                        <option value="admin">⚙️ Администратор</option>
+                        <option value="user">Пользователь</option>
+                        <option value="admin">Администратор</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>Email (необязательно):</label>
+                <div class="form-row">
+                    <label for="newUserEmail">Email</label>
                     <input type="email" id="newUserEmail" placeholder="email@example.com">
                 </div>
-                <div class="form-group">
-                    <label>Имя (необязательно):</label>
+                <div class="form-row">
+                    <label for="newUserFirstName">Имя</label>
                     <input type="text" id="newUserFirstName" placeholder="Иван">
                 </div>
-                <div class="form-group">
-                    <label>Фамилия (необязательно):</label>
+                <div class="form-row">
+                    <label for="newUserLastName">Фамилия</label>
                     <input type="text" id="newUserLastName" placeholder="Иванов">
                 </div>
-                <button class="btn btn-primary" onclick="createNewUser()">✅ Создать</button>
-                <button class="btn" onclick="showUserManagement()">❌ Отмена</button>
+                <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+                    <button class="btn btn-primary" onclick="createNewUser()">Создать</button>
+                    <button class="btn" onclick="showUserManagement()">Отмена</button>
+                </div>
             </div>
         </div>
     `;
-    
-    contentArea.innerHTML = formHtml;
 }
 
-/**
- * Создать нового пользователя
- */
 async function createNewUser() {
     const userData = {
         username: document.getElementById('newUsername').value,
@@ -319,212 +603,9 @@ async function createNewUser() {
             showNotification('✅ Пользователь успешно создан');
             showUserManagement();
         } else {
-            showNotification('❌ Ошибка создания пользователя: ' + result.error, true);
-        }
-    } catch (error) {
-        showNotification('❌ Ошибка создания пользователя: ' + error.message, true);
-    }
-}
-
-// ============================================
-// Редактирование пользователя
-// ============================================
-
-/**
- * Редактировать поле пользователя (inline)
- * @param {number} userId - ID пользователя
- * @param {string} field - Название поля
- * @param {string} fieldName - Отображаемое название поля
- */
-function editUserField(userId, field, fieldName) {
-    const currentValue = document.getElementById(`${field}-${userId}`).textContent;
-    const newValue = prompt(`Введите новое ${fieldName.toLowerCase()}:`, currentValue === '-' ? '' : currentValue);
-    
-    if (newValue !== null) {
-        fetch('/api/users/update/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({
-                user_id: userId,
-                [field]: newValue
-            })
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                showNotification(`✅ ${fieldName} успешно обновлен`);
-                document.getElementById(`${field}-${userId}`).textContent = newValue || '-';
-            } else {
-                showNotification(`❌ Ошибка: ${result.error}`, true);
-            }
-        })
-        .catch(error => {
-            showNotification(`❌ Ошибка: ${error.message}`, true);
-        });
-    }
-}
-
-/**
- * Обновить поле пользователя
- * @param {number} userId - ID пользователя
- * @param {string} field - Название поля
- * @param {string} value - Новое значение
- */
-function updateUserField(userId, field, value) {
-    fetch('/api/users/update/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-        },
-        body: JSON.stringify({
-            user_id: userId,
-            [field]: value
-        })
-    })
-    .then(response => response.json())
-    .then(result => {
-        if (result.success) {
-            showNotification('✅ Данные успешно обновлены');
-            showUserManagement();
-        } else {
             showNotification('❌ Ошибка: ' + result.error, true);
         }
-    })
-    .catch(error => {
+    } catch (error) {
         showNotification('❌ Ошибка: ' + error.message, true);
-    });
-}
-
-// ============================================
-// Управление паролем
-// ============================================
-
-/**
- * Показать форму смены пароля
- * @param {number} userId - ID пользователя
- * @param {string} username - Логин пользователя
- */
-function showChangePasswordForm(userId, username) {
-    const newPassword = prompt(`Введите новый пароль для пользователя "${username}":`, '');
-    
-    if (newPassword) {
-        const requireChange = confirm('Требовать смену пароля при следующем входе?');
-        
-        fetch('/api/users/change-password/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({
-                user_id: userId,
-                new_password: newPassword,
-                require_change: requireChange
-            })
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                showNotification('✅ Пароль успешно изменен');
-            } else {
-                showNotification(`❌ Ошибка: ${result.error}`, true);
-            }
-        })
-        .catch(error => {
-            showNotification(`❌ Ошибка: ${error.message}`, true);
-        });
     }
 }
-
-/**
- * Запросить смену пароля у пользователя
- * @param {number} userId - ID пользователя
- * @param {string} username - Логин пользователя
- */
-function requestPasswordChange(userId, username) {
-    if (confirm(`Отправить пользователю "${username}" запрос на смену пароля?`)) {
-        fetch('/api/users/request-password-change/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({
-                user_id: userId
-            })
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                showNotification('✅ Запрос на смену пароля отправлен пользователю');
-            } else {
-                showNotification('❌ Ошибка: ' + result.error, true);
-            }
-        })
-        .catch(error => {
-            showNotification('❌ Ошибка: ' + error.message, true);
-        });
-    }
-}
-
-// ============================================
-// Блокировка/разблокировка пользователя
-// ============================================
-
-/**
- * Переключить активность пользователя
- * @param {number} userId - ID пользователя
- * @param {boolean} isActive - Новый статус активности
- */
-function toggleUserActive(userId, isActive) {
-    const action = isActive ? 'разблокировать' : 'заблокировать';
-    
-    if (confirm(`Вы уверены, что хотите ${action} этого пользователя?`)) {
-        fetch('/api/users/toggle-active/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({
-                user_id: userId,
-                is_active: isActive
-            })
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                showNotification(`✅ Пользователь ${action === 'разблокировать' ? 'разблокирован' : 'заблокирован'}`);
-                showUserManagement();
-            } else {
-                showNotification(`❌ Ошибка: ${result.error}`, true);
-            }
-        })
-        .catch(error => {
-            showNotification(`❌ Ошибка: ${error.message}`, true);
-        });
-    }
-}
-
-// ============================================
-// Удаление пользователя
-// ============================================
-
-/**
- * Удалить пользователя
- * @param {number} userId - ID пользователя
- * @param {string} username - Логин пользователя
- */
-async function deleteUser(userId, username) {
-    if (!confirm(`Вы уверены, что хотите удалить пользователя "${username}"?`)) {
-        return;
-    }
-    
-    showNotification('Удаление пользователя...');
-    showNotification('Функция удаления пользователей в разработке');
-}
-

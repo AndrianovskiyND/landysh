@@ -73,3 +73,36 @@ function hideConnectionForm() {
     document.getElementById('connectionForm').style.display = 'none';
 }
 
+// ============================================
+// Сохранение состояния навигации
+// ============================================
+
+/**
+ * Сохранить текущий раздел в localStorage
+ * @param {string} view - Название текущего раздела
+ */
+function saveCurrentView(view) {
+    try {
+        if (typeof(Storage) !== "undefined") {
+            localStorage.setItem('landysh_current_view', view);
+        }
+    } catch (e) {
+        console.warn('Не удалось сохранить состояние навигации:', e);
+    }
+}
+
+/**
+ * Получить сохранённый раздел
+ * @returns {string|null} - Название сохранённого раздела
+ */
+function getSavedView() {
+    try {
+        if (typeof(Storage) !== "undefined") {
+            return localStorage.getItem('landysh_current_view');
+        }
+    } catch (e) {
+        console.warn('Не удалось прочитать состояние навигации:', e);
+    }
+    return null;
+}
+

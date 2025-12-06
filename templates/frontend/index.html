@@ -18,9 +18,10 @@
 {% endblock %}
 
 {% block extra_js %}
-{# Передаём ID текущего пользователя в JavaScript #}
+{# Передаём данные текущего пользователя в JavaScript #}
 <script>
     window.CURRENT_USER_ID = {{ user.id }};
+    window.IS_ADMIN = {{ is_admin|yesno:"true,false" }};
 </script>
 
 {# Подключаем модульные JS файлы #}

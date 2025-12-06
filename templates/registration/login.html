@@ -1,28 +1,48 @@
 {% extends "base.html" %}
 
+{% block title %}Вход - Ландыш{% endblock %}
+
 {% block content %}
-<div style="max-width: 400px; margin: 2rem auto; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-    <h2 style="text-align: center; color: var(--primary-color);">Вход в систему</h2>
+<div style="max-width: 400px; margin: 3rem auto; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+    <div style="text-align: center; margin-bottom: 1.5rem;">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🚂</div>
+        <h2 style="color: var(--primary-color); margin: 0;">Вход в систему</h2>
+    </div>
     
     {% if form.errors %}
-    <div style="color: var(--primary-color); margin-bottom: 1rem;">
-        Неверное имя пользователя или пароль.
+    <div style="background: #f8d7da; color: #721c24; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem;">
+        {% for error in form.non_field_errors %}
+            {{ error }}
+        {% endfor %}
     </div>
     {% endif %}
     
     <form method="post">
         {% csrf_token %}
         <div style="margin-bottom: 1rem;">
-            <label for="id_username" style="display: block; margin-bottom: 0.5rem;">Имя пользователя:</label>
-            <input type="text" name="username" id="id_username" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+            <label for="id_username" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #333;">
+                Имя пользователя
+            </label>
+            <input type="text" 
+                   name="username" 
+                   id="id_username" 
+                   required 
+                   autofocus
+                   style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; box-sizing: border-box;">
         </div>
         
-        <div style="margin-bottom: 1rem;">
-            <label for="id_password" style="display: block; margin-bottom: 0.5rem;">Пароль:</label>
-            <input type="password" name="password" id="id_password" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+        <div style="margin-bottom: 1.5rem;">
+            <label for="id_password" style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #333;">
+                Пароль
+            </label>
+            <input type="password" 
+                   name="password" 
+                   id="id_password" 
+                   required 
+                   style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; box-sizing: border-box;">
         </div>
         
-        <button type="submit" style="width: 100%; padding: 0.75rem; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer;">
+        <button type="submit" style="width: 100%; padding: 0.85rem; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; font-weight: 500; transition: opacity 0.2s;">
             Войти
         </button>
     </form>

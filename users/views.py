@@ -356,3 +356,165 @@ def request_password_change(request):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+
+@login_required
+@csrf_exempt
+def copy_group(request):
+    """Копирует группу с подключениями (без пользователей)"""
+    if request.method == 'POST':
+        try:
+            profile = Profile.objects.get(user=request.user)
+            if not profile.is_admin():
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+            
+            data = json.loads(request.body)
+            group_id = data.get('group_id')
+            
+            from datetime import datetime
+            from clusters.models import ServerConnection
+            
+            original_group = UserGroup.objects.get(id=group_id)
+            
+            # Создаём копию с новым названием
+            date_str = datetime.now().strftime('%d.%m.%Y')
+            new_name = f"{original_group.name} (копия {date_str})"
+            
+            new_group = UserGroup.objects.create(
+                name=new_name,
+                created_by=request.user
+            )
+            
+            # Копируем все подключения к серверам 1С
+            connections_copied = 0
+            connections = ServerConnection.objects.filter(user_group=original_group)
+            for conn in connections:
+                ServerConnection.objects.create(
+                    user_group=new_group,
+                    display_name=conn.display_name,
+                    server_host=conn.server_host,
+                    ras_port=conn.ras_port,
+                    cluster_admin=conn.cluster_admin,
+                    cluster_password=conn.cluster_password
+                )
+                connections_copied += 1
+            
+            # Пользователей НЕ копируем согласно ТЗ
+            
+            message = f'Группа скопирована как "{new_name}"'
+            if connections_copied > 0:
+                message += f' ({connections_copied} подключений)'
+            
+            return JsonResponse({
+                'success': True, 
+                'group_id': new_group.id,
+                'message': message
+            })
+            
+        except UserGroup.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Группа не найдена'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+
+@login_required
+@csrf_exempt
+def merge_groups(request):
+    """Объединяет несколько групп в одну с сохранением подключений"""
+    if request.method == 'POST':
+        try:
+            profile = Profile.objects.get(user=request.user)
+            if not profile.is_admin():
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+            
+            data = json.loads(request.body)
+            group_ids = data.get('group_ids', [])
+            new_name = data.get('new_name')
+            transfer_users = data.get('transfer_users', True)
+            delete_old_groups = data.get('delete_old_groups', False)
+            
+            if len(group_ids) < 2:
+                return JsonResponse({'success': False, 'error': 'Выберите минимум 2 группы для объединения'})
+            
+            if not new_name:
+                return JsonResponse({'success': False, 'error': 'Введите название новой группы'})
+            
+            # Импортируем модель подключений
+            from clusters.models import ServerConnection
+            
+            # Получаем группы
+            groups = UserGroup.objects.filter(id__in=group_ids)
+            
+            if groups.count() != len(group_ids):
+                return JsonResponse({'success': False, 'error': 'Некоторые группы не найдены'})
+            
+            # Создаём новую группу
+            new_group = UserGroup.objects.create(
+                name=new_name,
+                created_by=request.user
+            )
+            
+            # Переносим/копируем подключения к серверам 1С
+            connections_copied = 0
+            existing_connections = set()  # Для избежания дубликатов
+            
+            for group in groups:
+                connections = ServerConnection.objects.filter(user_group=group)
+                for conn in connections:
+                    # Проверяем на дубликаты по host:port
+                    conn_key = f"{conn.server_host}:{conn.ras_port}"
+                    if conn_key not in existing_connections:
+                        existing_connections.add(conn_key)
+                        
+                        if delete_old_groups:
+                            # Переносим подключение (меняем группу)
+                            conn.user_group = new_group
+                            conn.save()
+                        else:
+                            # Копируем подключение
+                            ServerConnection.objects.create(
+                                user_group=new_group,
+                                display_name=conn.display_name,
+                                server_host=conn.server_host,
+                                ras_port=conn.ras_port,
+                                cluster_admin=conn.cluster_admin,
+                                cluster_password=conn.cluster_password
+                            )
+                        connections_copied += 1
+            
+            # Переносим пользователей если нужно
+            users_count = 0
+            if transfer_users:
+                all_users = set()
+                for group in groups:
+                    all_users.update(group.members.all())
+                
+                for user in all_users:
+                    new_group.members.add(user)
+                users_count = len(all_users)
+            
+            # Удаляем старые группы если нужно
+            if delete_old_groups:
+                for group in groups:
+                    group.delete()
+            
+            message_parts = [f'Создана группа "{new_name}"']
+            if connections_copied > 0:
+                message_parts.append(f'{connections_copied} подключений')
+            if users_count > 0:
+                message_parts.append(f'{users_count} участников')
+            if delete_old_groups:
+                message_parts.append('старые группы удалены')
+            
+            return JsonResponse({
+                'success': True,
+                'group_id': new_group.id,
+                'message': ' | '.join(message_parts)
+            })
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})

@@ -3,6 +3,9 @@
  * CRUD операции для групп пользователей
  */
 
+// Хранилище выбранных групп для объединения
+let selectedGroupsForMerge = [];
+
 // ============================================
 // Отображение списка групп
 // ============================================
@@ -12,7 +15,11 @@
  */
 async function showGroupManagement() {
     currentView = 'groups';
+    if (typeof saveCurrentView === 'function') {
+        saveCurrentView('groups');
+    }
     updateNavigation();
+    selectedGroupsForMerge = [];
     
     try {
         const response = await fetch('/api/users/groups/all/');
@@ -35,14 +42,31 @@ async function showGroupManagement() {
 function renderGroupManagement(groups) {
     const contentArea = document.getElementById('contentArea');
     
+    // Сохраняем группы глобально для модального окна
+    window._allGroups = groups;
+    
     let html = `
-        <div style="margin-bottom: 2rem;">
-            <h2 style="margin-bottom: 0.5rem;">📁 Управление группами</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h2 style="margin: 0;">Управление группами</h2>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="btn btn-primary" onclick="showCreateGroupForm()">+ Создать группу</button>
+                <button class="btn btn-secondary" onclick="openMergeGroupsModal()" id="mergeBtn" disabled>
+                    Объединить группы
+                </button>
+            </div>
         </div>
+        
+        <div id="selectedGroupsInfo" style="display: none; margin-bottom: 1rem; padding: 0.75rem; background: #e8f4ff; border-radius: 6px; border: 1px solid #b8daff;">
+            <span>Выбрано групп: <strong id="selectedCount">0</strong></span>
+            <button class="btn btn-sm" onclick="clearGroupSelection()" style="margin-left: 1rem;">Сбросить выбор</button>
+        </div>
+        
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>ID</th>
+                    <th style="width: 40px;">
+                        <input type="checkbox" id="selectAllGroups" onchange="toggleSelectAllGroups(this.checked)" title="Выбрать все">
+                    </th>
                     <th>Название</th>
                     <th>Создатель</th>
                     <th>Участников</th>
@@ -53,42 +77,213 @@ function renderGroupManagement(groups) {
             <tbody>
     `;
     
-    groups.forEach(group => {
+    if (groups.length === 0) {
         html += `
             <tr>
-                <td>${group.id}</td>
-                <td>
-                    <span id="groupName-${group.id}"><strong>${group.name}</strong></span>
-                    <button class="btn btn-sm" onclick="editGroupName(${group.id}, '${group.name}')">✏️</button>
-                </td>
-                <td>${group.created_by}</td>
-                <td>${group.members_count}</td>
-                <td>${new Date(group.created_at).toLocaleDateString('ru-RU')}</td>
-                <td>
-                    <button class="btn btn-sm btn-danger" onclick="deleteGroup(${group.id}, '${group.name}')">🗑️ Удалить</button>
+                <td colspan="6" style="text-align: center; color: #666; padding: 2rem;">
+                    Нет созданных групп
                 </td>
             </tr>
         `;
-    });
+    } else {
+        groups.forEach(group => {
+            const escapedName = group.name.replace(/'/g, "\\'");
+            html += `
+                <tr>
+                    <td>
+                        <input type="checkbox" 
+                               class="group-checkbox" 
+                               data-group-id="${group.id}"
+                               data-group-name="${escapedName}"
+                               onchange="toggleGroupSelection(${group.id}, '${escapedName}')">
+                    </td>
+                    <td>
+                        <strong>${group.name}</strong>
+                    </td>
+                    <td>${group.created_by}</td>
+                    <td>${group.members_count}</td>
+                    <td>${new Date(group.created_at).toLocaleDateString('ru-RU')}</td>
+                    <td>
+                        <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                            <button class="btn btn-sm" onclick="editGroupName(${group.id}, '${escapedName}')">Изменить</button>
+                            <button class="btn btn-sm btn-secondary" onclick="copyGroup(${group.id})">Копировать</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteGroup(${group.id}, '${escapedName}')">Удалить</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+    }
     
     html += '</tbody></table>';
     contentArea.innerHTML = html;
 }
 
 // ============================================
+// Выбор групп для объединения
+// ============================================
+
+function toggleGroupSelection(groupId, groupName) {
+    const index = selectedGroupsForMerge.findIndex(g => g.id === groupId);
+    
+    if (index === -1) {
+        selectedGroupsForMerge.push({ id: groupId, name: groupName });
+    } else {
+        selectedGroupsForMerge.splice(index, 1);
+    }
+    
+    updateMergeButtonState();
+}
+
+function toggleSelectAllGroups(checked) {
+    const checkboxes = document.querySelectorAll('.group-checkbox');
+    selectedGroupsForMerge = [];
+    
+    checkboxes.forEach(cb => {
+        cb.checked = checked;
+        if (checked) {
+            selectedGroupsForMerge.push({
+                id: parseInt(cb.dataset.groupId),
+                name: cb.dataset.groupName
+            });
+        }
+    });
+    
+    updateMergeButtonState();
+}
+
+function clearGroupSelection() {
+    selectedGroupsForMerge = [];
+    document.querySelectorAll('.group-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('selectAllGroups').checked = false;
+    updateMergeButtonState();
+}
+
+function updateMergeButtonState() {
+    const mergeBtn = document.getElementById('mergeBtn');
+    const infoBlock = document.getElementById('selectedGroupsInfo');
+    const countEl = document.getElementById('selectedCount');
+    
+    if (mergeBtn) {
+        mergeBtn.disabled = selectedGroupsForMerge.length < 2;
+    }
+    
+    if (infoBlock && countEl) {
+        if (selectedGroupsForMerge.length > 0) {
+            infoBlock.style.display = 'block';
+            countEl.textContent = selectedGroupsForMerge.length;
+        } else {
+            infoBlock.style.display = 'none';
+        }
+    }
+}
+
+// ============================================
+// Создание группы
+// ============================================
+
+function showCreateGroupForm() {
+    const modalHtml = `
+        <div class="modal-overlay" id="createGroupModal" onclick="closeModalOnOverlay(event, 'createGroupModal')">
+            <div class="modal" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h3>Создание группы</h3>
+                    <button class="modal-close-btn" onclick="closeModal('createGroupModal')">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="edit-form">
+                        <div class="form-row">
+                            <label for="newGroupName">Название группы</label>
+                            <input type="text" id="newGroupName" placeholder="Введите название">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeModal('createGroupModal')">Отмена</button>
+                    <button class="btn btn-primary" onclick="createGroup()">Создать</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modal-container').innerHTML = modalHtml;
+    document.getElementById('newGroupName').focus();
+}
+
+async function createGroup() {
+    const name = document.getElementById('newGroupName').value.trim();
+    
+    if (!name) {
+        showNotification('❌ Введите название группы', true);
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users/groups/create/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ name })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Группа создана');
+            closeModal('createGroupModal');
+            showGroupManagement();
+        } else {
+            showNotification('❌ Ошибка: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+// ============================================
 // Редактирование группы
 // ============================================
 
-/**
- * Редактировать название группы
- * @param {number} groupId - ID группы
- * @param {string} currentName - Текущее название группы
- */
 function editGroupName(groupId, currentName) {
-    const newName = prompt('Введите новое название группы:', currentName);
+    const modalHtml = `
+        <div class="modal-overlay" id="editGroupModal" onclick="closeModalOnOverlay(event, 'editGroupModal')">
+            <div class="modal" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h3>Изменение группы</h3>
+                    <button class="modal-close-btn" onclick="closeModal('editGroupModal')">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="edit-form">
+                        <div class="form-row">
+                            <label for="editGroupName">Название группы</label>
+                            <input type="text" id="editGroupName" value="${currentName}">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeModal('editGroupModal')">Отмена</button>
+                    <button class="btn btn-primary" onclick="saveGroupName(${groupId})">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    `;
     
-    if (newName && newName !== currentName) {
-        fetch('/api/users/groups/update/', {
+    document.getElementById('modal-container').innerHTML = modalHtml;
+    document.getElementById('editGroupName').focus();
+}
+
+async function saveGroupName(groupId) {
+    const newName = document.getElementById('editGroupName').value.trim();
+    
+    if (!newName) {
+        showNotification('❌ Введите название группы', true);
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users/groups/update/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -98,19 +293,157 @@ function editGroupName(groupId, currentName) {
                 group_id: groupId,
                 new_name: newName
             })
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                showNotification('✅ Название группы успешно изменено');
-                showGroupManagement();
-            } else {
-                showNotification(`❌ Ошибка: ${result.error}`, true);
-            }
-        })
-        .catch(error => {
-            showNotification(`❌ Ошибка: ${error.message}`, true);
         });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Группа обновлена');
+            closeModal('editGroupModal');
+            showGroupManagement();
+        } else {
+            showNotification('❌ Ошибка: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+// ============================================
+// Копирование группы
+// ============================================
+
+async function copyGroup(groupId) {
+    if (!confirm('Создать копию этой группы?\n\nБудут скопированы настройки, но не пользователи.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users/groups/copy/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ group_id: groupId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ ' + result.message);
+            showGroupManagement();
+        } else {
+            showNotification('❌ Ошибка: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+// ============================================
+// Объединение групп
+// ============================================
+
+function openMergeGroupsModal() {
+    if (selectedGroupsForMerge.length < 2) {
+        showNotification('❌ Выберите минимум 2 группы для объединения', true);
+        return;
+    }
+    
+    const groupsList = selectedGroupsForMerge.map(g => `• ${g.name}`).join('\n');
+    
+    const modalHtml = `
+        <div class="modal-overlay" id="mergeGroupsModal" onclick="closeModalOnOverlay(event, 'mergeGroupsModal')">
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>Объединение групп</h3>
+                    <button class="modal-close-btn" onclick="closeModal('mergeGroupsModal')">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card" style="margin-bottom: 1rem;">
+                        <h4>Выбранные группы (${selectedGroupsForMerge.length})</h4>
+                        <div style="max-height: 120px; overflow-y: auto; font-size: 0.9rem;">
+                            ${selectedGroupsForMerge.map(g => `<div style="padding: 0.25rem 0;">• ${g.name}</div>`).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="edit-form">
+                        <div class="form-row">
+                            <label for="mergeGroupName">Название новой группы *</label>
+                            <input type="text" id="mergeGroupName" placeholder="Введите название объединённой группы">
+                        </div>
+                        
+                        <div class="form-row" style="margin-top: 1rem;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="transferUsers" checked style="width: 18px; height: 18px;">
+                                <span>Перенести пользователей в новую группу</span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-row" style="margin-top: 0.75rem;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="deleteOldGroups" style="width: 18px; height: 18px;">
+                                <span>Удалить старые группы после объединения</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeModal('mergeGroupsModal')">Отмена</button>
+                    <button class="btn btn-primary" onclick="mergeGroups()">Объединить</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modal-container').insertAdjacentHTML('beforeend', modalHtml);
+    document.getElementById('mergeGroupName').focus();
+}
+
+async function mergeGroups() {
+    const newName = document.getElementById('mergeGroupName').value.trim();
+    const transferUsers = document.getElementById('transferUsers').checked;
+    const deleteOldGroups = document.getElementById('deleteOldGroups').checked;
+    
+    if (!newName) {
+        showNotification('❌ Введите название новой группы', true);
+        return;
+    }
+    
+    // Подтверждение при удалении
+    if (deleteOldGroups) {
+        if (!confirm('Внимание! Старые группы будут удалены безвозвратно. Продолжить?')) {
+            return;
+        }
+    }
+    
+    try {
+        const response = await fetch('/api/users/groups/merge/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                group_ids: selectedGroupsForMerge.map(g => g.id),
+                new_name: newName,
+                transfer_users: transferUsers,
+                delete_old_groups: deleteOldGroups
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ ' + result.message);
+            closeModal('mergeGroupsModal');
+            showGroupManagement();
+        } else {
+            showNotification('❌ Ошибка: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
     }
 }
 
@@ -118,13 +451,8 @@ function editGroupName(groupId, currentName) {
 // Удаление группы
 // ============================================
 
-/**
- * Удалить группу
- * @param {number} groupId - ID группы
- * @param {string} groupName - Название группы
- */
 async function deleteGroup(groupId, groupName) {
-    if (!confirm(`Вы уверены, что хотите удалить группу "${groupName}"?`)) {
+    if (!confirm(`Удалить группу "${groupName}"?\n\nЭто действие нельзя отменить.`)) {
         return;
     }
     
@@ -135,159 +463,14 @@ async function deleteGroup(groupId, groupName) {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
             },
-            body: JSON.stringify({
-                group_id: groupId
-            })
+            body: JSON.stringify({ group_id: groupId })
         });
         
         const result = await response.json();
         
         if (result.success) {
-            showNotification('✅ Группа успешно удалена');
+            showNotification('✅ Группа удалена');
             showGroupManagement();
-        } else {
-            showNotification(`❌ Ошибка: ${result.error}`, true);
-        }
-    } catch (error) {
-        showNotification(`❌ Ошибка: ${error.message}`, true);
-    }
-}
-
-// ============================================
-// Управление членством в группах
-// ============================================
-
-/**
- * Управление группами пользователя
- * @param {number} userId - ID пользователя
- * @param {string} username - Логин пользователя
- */
-async function manageUserGroups(userId, username) {
-    try {
-        const [groupsResponse, userGroupsResponse] = await Promise.all([
-            fetch('/api/users/groups/all/'),
-            fetch('/api/users/groups/')
-        ]);
-        
-        const groupsData = await groupsResponse.json();
-        const userGroupsData = await userGroupsResponse.json();
-        
-        if (!groupsData.success) {
-            showNotification('Ошибка загрузки групп', true);
-            return;
-        }
-        
-        renderUserGroupsManagement(userId, username, groupsData.groups, userGroupsData.groups || []);
-    } catch (error) {
-        showNotification('Ошибка: ' + error.message, true);
-    }
-}
-
-/**
- * Отрисовать интерфейс управления группами пользователя
- * @param {number} userId - ID пользователя
- * @param {string} username - Логин пользователя
- * @param {Array} allGroups - Все группы
- * @param {Array} userGroups - Группы пользователя
- */
-function renderUserGroupsManagement(userId, username, allGroups, userGroups) {
-    const contentArea = document.getElementById('contentArea');
-    
-    const userGroupIds = userGroups.map(g => g.id);
-    
-    let html = `
-        <div style="margin-bottom: 1rem;">
-            <button class="btn" onclick="showUserManagement()">← Назад к пользователям</button>
-        </div>
-        <h2>👥 Группы пользователя: ${username}</h2>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
-            <div>
-                <h4>Доступные группы</h4>
-                <div style="max-height: 400px; overflow-y: auto;">
-    `;
-    
-    allGroups.forEach(group => {
-        if (!userGroupIds.includes(group.id)) {
-            html += `
-                <div class="tree-node" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong>${group.name}</strong>
-                        <div style="font-size: 0.8rem; color: #666;">Участников: ${group.members_count}</div>
-                    </div>
-                    <button class="btn btn-sm btn-primary" onclick="toggleGroupMembership(${userId}, ${group.id}, 'add')">✅ Добавить</button>
-                </div>
-            `;
-        }
-    });
-    
-    html += `
-                </div>
-            </div>
-            <div>
-                <h4>Группы пользователя</h4>
-                <div style="max-height: 400px; overflow-y: auto;">
-    `;
-    
-    allGroups.forEach(group => {
-        if (userGroupIds.includes(group.id)) {
-            html += `
-                <div class="tree-node" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong>${group.name}</strong>
-                        <div style="font-size: 0.8rem; color: #666;">Участников: ${group.members_count}</div>
-                    </div>
-                    <button class="btn btn-sm btn-danger" onclick="toggleGroupMembership(${userId}, ${group.id}, 'remove')">❌ Удалить</button>
-                </div>
-            `;
-        }
-    });
-    
-    html += `
-                </div>
-            </div>
-        </div>
-    `;
-    
-    contentArea.innerHTML = html;
-}
-
-/**
- * Переключить членство в группе
- * @param {number} userId - ID пользователя
- * @param {number} groupId - ID группы
- * @param {string} action - Действие ('add' или 'remove')
- */
-async function toggleGroupMembership(userId, groupId, action) {
-    try {
-        const response = await fetch('/api/users/groups/assign/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify({
-                user_id: userId,
-                group_id: groupId,
-                action: action
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification(`✅ Пользователь ${action === 'add' ? 'добавлен в' : 'удален из'} группу`);
-            
-            // Обновляем интерфейс
-            const userResponse = await fetch('/api/users/list/');
-            const userData = await userResponse.json();
-            
-            if (userData.success) {
-                const user = userData.users.find(u => u.id === userId);
-                if (user) {
-                    manageUserGroups(userId, user.username);
-                }
-            }
         } else {
             showNotification('❌ Ошибка: ' + result.error, true);
         }
@@ -296,3 +479,20 @@ async function toggleGroupMembership(userId, groupId, action) {
     }
 }
 
+// ============================================
+// Утилиты для модальных окон
+// ============================================
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('modal-closing');
+        setTimeout(() => modal.remove(), 200);
+    }
+}
+
+function closeModalOnOverlay(event, modalId) {
+    if (event.target.id === modalId) {
+        closeModal(modalId);
+    }
+}

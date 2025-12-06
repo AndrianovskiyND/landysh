@@ -206,7 +206,7 @@ def get_clusters(request, connection_id):
                 'success': True, 
                 'output': result['output'],
                 'rac_path': rac_client.rac_path
-            })
+            }, json_dumps_params={'ensure_ascii': False})
         else:
             # Обработка ошибок
             error = result.get('error', 'Неизвестная ошибка')
@@ -220,7 +220,7 @@ def get_clusters(request, connection_id):
                 'success': False, 
                 'error': error,
                 'rac_path': rac_client.rac_path
-            })
+            }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'})

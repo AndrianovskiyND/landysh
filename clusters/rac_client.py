@@ -1,6 +1,7 @@
 import subprocess
 import json
 import os
+import sys
 from django.conf import settings
 from core.models import SystemSettings
 import logging
@@ -40,18 +41,71 @@ class RACClient:
         logger.info(f"Executing RAC command: {masked_cmd}")
         
         try:
+            # Определяем кодировку в зависимости от ОС
+            # В Windows консоль обычно использует cp866 (DOS кодировка), RAC может использовать cp1251
+            # Пробуем сначала cp866, так как это стандартная кодировка консоли Windows
+            if sys.platform == 'win32':
+                # Пробуем разные кодировки для Windows
+                encodings_to_try = ['cp866', 'cp1251', 'utf-8']
+            else:
+                encodings_to_try = ['utf-8']
+            
+            # Запускаем команду без text=True, чтобы получить байты
             result = subprocess.run(
                 cmd_args,
                 capture_output=True,
-                text=True,
                 timeout=30  # 30 секунд таймаут
             )
             
-            if result.returncode != 0:
-                logger.error(f"RAC command failed: {result.stderr}")
-                return {'success': False, 'error': result.stderr}
+            def decode_text(data_bytes):
+                """Пробует декодировать текст с разными кодировками"""
+                if not data_bytes:
+                    return ''
+                if isinstance(data_bytes, str):
+                    return data_bytes
                 
-            return {'success': True, 'output': result.stdout}
+                # Все возможные кодировки для Windows
+                all_encodings = ['cp866', 'cp1251', 'utf-8', 'latin1']
+                best_decoded = None
+                best_score = 0
+                
+                # Пробуем каждую кодировку
+                for encoding in all_encodings:
+                    try:
+                        decoded = data_bytes.decode(encoding, errors='replace')
+                        # Подсчитываем количество кириллических символов
+                        cyrillic_count = sum(1 for char in decoded if '\u0400' <= char <= '\u04FF')
+                        
+                        # Если есть кириллица, это хороший признак
+                        if cyrillic_count > best_score:
+                            best_decoded = decoded
+                            best_score = cyrillic_count
+                        elif best_decoded is None:
+                            # Если кириллицы нет, но декодирование прошло - сохраняем как запасной вариант
+                            best_decoded = decoded
+                    except (UnicodeDecodeError, LookupError):
+                        continue
+                
+                # Если нашли вариант с кириллицей - возвращаем его
+                if best_decoded and best_score > 0:
+                    logger.debug(f"Decoded with {best_score} cyrillic characters")
+                    return best_decoded
+                
+                # Возвращаем лучший вариант или строковое представление
+                return best_decoded if best_decoded else str(data_bytes)
+            
+            if result.returncode != 0:
+                # Декодируем ошибку с правильной кодировкой
+                # Сначала пробуем stderr, если пусто - пробуем stdout
+                error_bytes = result.stderr if result.stderr else result.stdout
+                error_text = decode_text(error_bytes)
+                # Логируем с правильной кодировкой
+                logger.error(f"RAC command failed: {error_text}")
+                return {'success': False, 'error': error_text}
+            
+            # Декодируем вывод с правильной кодировкой
+            output_text = decode_text(result.stdout)
+            return {'success': True, 'output': output_text}
             
         except subprocess.TimeoutExpired:
             logger.error("RAC command timeout")

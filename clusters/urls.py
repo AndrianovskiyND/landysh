@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path('connections/', views.server_connections, name='server_connections'),
     path('connections/create/', views.create_connection, name='create_connection'),
+    path('connections/update/<int:connection_id>/', views.update_connection, name='update_connection'),
     path('clusters/<int:connection_id>/', views.get_clusters, name='get_clusters'),
     path('sessions/<int:connection_id>/', views.get_sessions, name='get_sessions'),
     path('sessions/terminate/', views.terminate_sessions, name='terminate_sessions'),

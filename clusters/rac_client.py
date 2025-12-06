@@ -2,6 +2,7 @@ import subprocess
 import json
 import os
 from django.conf import settings
+from core.models import SystemSettings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -9,7 +10,8 @@ logger = logging.getLogger(__name__)
 class RACClient:
     def __init__(self, server_connection):
         self.server_connection = server_connection
-        self.rac_path = settings.RAC_PATH
+        # Получаем путь к RAC из системных настроек
+        self.rac_path = SystemSettings.get_setting('rac_path', settings.RAC_PATH)
         
     def _mask_sensitive_data(self, command):
         """Маскирует чувствительные данные в команде для логирования"""

@@ -2,35 +2,9 @@
 <div class="sidebar">
     <div class="panel">
         <h3>🔗 Подключения</h3>
-        <button class="btn btn-primary" onclick="showConnectionForm()" style="width: 100%; margin-bottom: 1rem;">
+        <button class="btn btn-primary" onclick="openConnectionModal()" style="width: 100%; margin-bottom: 1rem;">
             + Добавить подключение
         </button>
-        
-        <div id="connectionForm" class="connection-form" style="display: none;">
-            {% csrf_token %}
-            <div class="form-group">
-                <label>Отображаемое имя:</label>
-                <input type="text" id="displayName" placeholder="Первый сервер проекта...">
-            </div>
-            <div class="form-group">
-                <label>Сервер:</label>
-                <input type="text" id="serverHost" placeholder="server_ro01.com">
-            </div>
-            <div class="form-group">
-                <label>Порт RAS:</label>
-                <input type="number" id="rasPort" value="1545">
-            </div>
-            <div class="form-group">
-                <label>Логин кластера (необязательно):</label>
-                <input type="text" id="clusterAdmin">
-            </div>
-            <div class="form-group">
-                <label>Пароль кластера (необязательно):</label>
-                <input type="password" id="clusterPassword">
-            </div>
-            <button class="btn btn-primary" onclick="createConnection()">Создать</button>
-            <button class="btn" onclick="hideConnectionForm()">Отмена</button>
-        </div>
         
         <div id="connectionsTree"></div>
     </div>

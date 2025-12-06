@@ -60,17 +60,23 @@ function hideNotification() {
 // ============================================
 
 /**
- * Показать форму добавления подключения
+ * Показать форму добавления подключения (устаревшая функция)
  */
 function showConnectionForm() {
-    document.getElementById('connectionForm').style.display = 'block';
+    // Перенаправляем на модальное окно
+    if (typeof openConnectionModal === 'function') {
+        openConnectionModal();
+    }
 }
 
 /**
- * Скрыть форму добавления подключения
+ * Скрыть форму добавления подключения (устаревшая функция)
  */
 function hideConnectionForm() {
-    document.getElementById('connectionForm').style.display = 'none';
+    // Перенаправляем на закрытие модального окна
+    if (typeof closeConnectionModal === 'function') {
+        closeConnectionModal();
+    }
 }
 
 // ============================================

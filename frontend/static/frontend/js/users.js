@@ -128,7 +128,8 @@ function renderUserPropertiesModal(user, allGroups = []) {
     // Сохраняем данные для сохранения
     window._editUserData = {
         userId: user.id,
-        originalGroupId: userGroupId
+        originalGroupId: userGroupId,
+        originalRole: user.role
     };
     
     // Генерируем опции для select группы
@@ -216,6 +217,15 @@ function renderUserPropertiesModal(user, allGroups = []) {
                                 <label for="editEmail">Email</label>
                                 <input type="email" id="editEmail" value="${user.email || ''}" placeholder="email@example.com">
                             </div>
+                            ${isOtherUser ? `
+                                <div class="form-row">
+                                    <label for="editRole">Роль</label>
+                                    <select id="editRole">
+                                        <option value="user" ${user.role === 'user' ? 'selected' : ''}>👤 Пользователь</option>
+                                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>👑 Администратор</option>
+                                    </select>
+                                </div>
+                            ` : ''}
                             <div class="form-row">
                                 <label for="editGroup">Группа доступа</label>
                                 <select id="editGroup">
@@ -269,8 +279,11 @@ async function saveUserChanges(userId) {
     const lastName = document.getElementById('editLastName').value;
     const email = document.getElementById('editEmail').value;
     const groupId = document.getElementById('editGroup').value;
+    const editRoleElement = document.getElementById('editRole');
+    const newRole = editRoleElement ? editRoleElement.value : null;
     
     const originalGroupId = window._editUserData?.originalGroupId || '';
+    const originalRole = window._editUserData?.originalRole || '';
     
     try {
         // Сохраняем основные данные
@@ -293,6 +306,28 @@ async function saveUserChanges(userId) {
         if (!updateResult.success) {
             showNotification('❌ Ошибка сохранения: ' + updateResult.error, true);
             return;
+        }
+        
+        // Обновляем роль если изменилась
+        if (newRole && newRole !== originalRole) {
+            const roleResponse = await fetch('/api/users/change-role/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    role: newRole
+                })
+            });
+            
+            const roleResult = await roleResponse.json();
+            
+            if (!roleResult.success) {
+                showNotification('❌ Ошибка смены роли: ' + roleResult.error, true);
+                return;
+            }
         }
         
         // Обновляем группу если изменилась

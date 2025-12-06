@@ -7,6 +7,51 @@ from django.contrib.auth import update_session_auth_hash
 from core.models import Profile
 from .models import UserGroup
 
+# ============================================
+# Вспомогательные функции
+# ============================================
+
+def check_last_admin_protection(user_to_modify, exclude_user=None):
+    """
+    Проверяет, останется ли хотя бы один активный администратор после операции.
+    
+    Args:
+        user_to_modify: Пользователь, которого планируется удалить/заблокировать/изменить роль
+        exclude_user: Пользователь, которого нужно исключить из проверки (опционально)
+    
+    Returns:
+        tuple: (is_protected, message)
+        - is_protected: True если операция заблокирована (последний админ)
+        - message: Сообщение об ошибке или None
+    """
+    try:
+        user_profile = Profile.objects.get(user=user_to_modify)
+        
+        # Если пользователь не администратор, защита не нужна
+        if not user_profile.is_admin():
+            return (False, None)
+        
+        # Подсчитываем активных администраторов
+        admin_profiles = Profile.objects.filter(role='admin')
+        active_admins = [p for p in admin_profiles if p.user.is_active]
+        
+        # Исключаем пользователя, которого планируется изменить
+        active_admins = [p for p in active_admins if p.user.id != user_to_modify.id]
+        
+        # Исключаем дополнительного пользователя, если указан
+        if exclude_user:
+            active_admins = [p for p in active_admins if p.user.id != exclude_user.id]
+        
+        # Если не осталось активных администраторов - блокируем операцию
+        if len(active_admins) == 0:
+            return (True, 'Невозможно выполнить операцию: в системе должен остаться хотя бы один активный администратор.')
+        
+        return (False, None)
+        
+    except Profile.DoesNotExist:
+        # Если профиля нет, пользователь не администратор
+        return (False, None)
+
 @login_required
 def user_groups(request):
     """Возвращает список групп пользователя"""
@@ -271,6 +316,12 @@ def toggle_active(request):
             if user.id == request.user.id:
                 return JsonResponse({'success': False, 'error': 'Нельзя заблокировать себя'})
             
+            # Если блокируем администратора, проверяем защиту последнего админа
+            if not is_active:
+                is_protected, error_message = check_last_admin_protection(user)
+                if is_protected:
+                    return JsonResponse({'success': False, 'error': error_message})
+            
             user.is_active = is_active
             user.save()
             
@@ -301,6 +352,11 @@ def delete_user(request):
             
             user = User.objects.get(id=user_id)
             username = user.username
+            
+            # Проверяем защиту последнего администратора
+            is_protected, error_message = check_last_admin_protection(user)
+            if is_protected:
+                return JsonResponse({'success': False, 'error': error_message})
             
             # Получаем все группы пользователя
             user_groups = user.user_groups.all()
@@ -390,6 +446,56 @@ def delete_group(request):
     
     return JsonResponse({'success': False, 'error': 'Only POST allowed'})
 
+
+@login_required
+@csrf_exempt
+def change_user_role(request):
+    """Изменяет роль пользователя (Администратор ↔ Пользователь)"""
+    if request.method == 'POST':
+        try:
+            profile = Profile.objects.get(user=request.user)
+            if not profile.is_admin():
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+            
+            data = json.loads(request.body)
+            user_id = data.get('user_id')
+            new_role = data.get('role')
+            
+            if new_role not in ['admin', 'user']:
+                return JsonResponse({'success': False, 'error': 'Неверная роль'})
+            
+            user = User.objects.get(id=user_id)
+            user_profile = Profile.objects.get(user=user)
+            old_role = user_profile.role
+            
+            # Нельзя изменить роль себе
+            if user.id == request.user.id:
+                return JsonResponse({'success': False, 'error': 'Нельзя изменить свою роль'})
+            
+            # Если меняем роль с администратора на пользователя, проверяем защиту
+            if old_role == 'admin' and new_role == 'user':
+                is_protected, error_message = check_last_admin_protection(user)
+                if is_protected:
+                    return JsonResponse({'success': False, 'error': error_message})
+            
+            # Меняем роль
+            user_profile.role = new_role
+            user_profile.save()
+            
+            role_display = 'Администратор' if new_role == 'admin' else 'Пользователь'
+            return JsonResponse({
+                'success': True, 
+                'message': f'Роль пользователя изменена на "{role_display}"'
+            })
+            
+        except User.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Пользователь не найден'})
+        except Profile.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Профиль пользователя не найден'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
 
 @login_required
 @csrf_exempt

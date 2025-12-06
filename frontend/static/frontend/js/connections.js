@@ -583,12 +583,88 @@ async function deleteSelectedConnections(connections) {
         return;
     }
     
-    // Удаляем подключения последовательно
+    // Проверяем, есть ли группы, где удаляются все подключения с 2+ участниками
+    // В таких случаях нужно использовать специальную логику
+    const groupsToProtect = [];
+    const protectedConnectionIds = new Set(); // ID подключений, которые НЕ нужно удалять
+    
+    Object.values(groupsInfo).forEach(groupInfo => {
+        const groupId = groupInfo.connections[0].group_id;
+        const totalConnectionsInGroup = connections.filter(c => c.group_id === groupId).length;
+        const selectedInGroup = groupInfo.connections.length;
+        
+        // Если удаляются все подключения группы и в группе 2+ участников
+        if (selectedInGroup === totalConnectionsInGroup && groupInfo.members_count > 1) {
+            const connectionIds = groupInfo.connections.map(c => c.id);
+            groupsToProtect.push({
+                groupId: groupId,
+                groupName: groupInfo.name,
+                connectionIds: connectionIds,
+                remainingMembers: groupInfo.members_count - 1
+            });
+            // Добавляем ID подключений в защищённый список
+            connectionIds.forEach(id => protectedConnectionIds.add(id));
+        }
+    });
+    
+    // Если есть защищённые группы, обрабатываем их отдельно ПЕРЕД удалением
+    if (groupsToProtect.length > 0) {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден. Обновите страницу.', true);
+            return;
+        }
+        
+        // Для защищённых групп: не удаляем подключения, только исключаем пользователя
+        for (const protectedGroup of groupsToProtect) {
+            try {
+                // Исключаем пользователя из группы через API назначения
+                const removeResponse = await fetch('/api/users/groups/assign/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        user_id: window.CURRENT_USER_ID,
+                        group_id: protectedGroup.groupId,
+                        action: 'remove'
+                    })
+                });
+                
+                if (removeResponse.ok) {
+                    const removeResult = await removeResponse.json();
+                    if (removeResult.success) {
+                        showNotification(`✅ Вы исключены из группы "${protectedGroup.groupName}". Подключения сохранены для ${protectedGroup.remainingMembers} участников.`);
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка исключения из группы:', error);
+                errors.push(`Ошибка исключения из группы "${protectedGroup.groupName}": ${error.message}`);
+            }
+        }
+    }
+    
+    // Удаляем только те подключения, которые НЕ в защищённых группах
+    const connectionsToDelete = selectedIds.filter(id => !protectedConnectionIds.has(id));
+    
+    // Если все подключения были защищены, просто обновляем список
+    if (connectionsToDelete.length === 0 && groupsToProtect.length > 0) {
+        showNotification('✅ Операция завершена. Вы исключены из групп, подключения сохранены для других участников.');
+        connectionSelectionMode = false;
+        selectedConnections.clear();
+        loadConnections();
+        if (window.loadStatistics) {
+            loadStatistics();
+        }
+        return;
+    }
+    
     let successCount = 0;
     let errorCount = 0;
     const errors = [];
     
-    for (const connectionId of selectedIds) {
+    for (const connectionId of connectionsToDelete) {
         try {
             const csrfToken = getCSRFToken();
             if (!csrfToken) {

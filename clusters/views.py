@@ -104,7 +104,23 @@ def update_connection(request, connection_id):
 @login_required
 @csrf_exempt
 def delete_connection(request, connection_id):
-    """Удаляет подключение с проверкой количества пользователей в группе"""
+    """
+    Удаляет подключение из группы.
+    
+    Важно: Подключения принадлежат группе, а не отдельным пользователям.
+    При удалении подключения оно удаляется для ВСЕХ участников группы.
+    
+    ЗАЩИТА ОТ САБОТАЖА:
+    Если пользователь пытается удалить последнее подключение в группе с 2+ участниками:
+    - Подключение НЕ удаляется (остаётся для других участников)
+    - Пользователь исключается из группы
+    
+    Логика:
+    - Если это НЕ последнее подключение → удалить подключение
+    - Если это последнее подключение:
+      - Если в группе 1 участник → удалить подключение и группу
+      - Если в группе 2+ участников → НЕ удалять подключение, только исключить пользователя
+    """
     if request.method == 'POST':
         try:
             # Проверяем доступ к подключению
@@ -112,58 +128,62 @@ def delete_connection(request, connection_id):
             group = connection.user_group
             group_name = group.name
             
-            # Подсчитываем количество пользователей в группе
+            # Подсчитываем количество пользователей в группе ДО удаления
             members_count = group.members.count()
             
-            # Подсчитываем количество подключений пользователя в этой группе
-            # (до удаления текущего подключения)
-            # Все подключения в группе доступны всем участникам группы, поэтому
-            # считаем все подключения группы, которые принадлежат этой группе
-            user_connections_in_group = ServerConnection.objects.filter(
+            # Подсчитываем количество подключений в группе ДО удаления
+            connections_count_before = ServerConnection.objects.filter(
                 user_group=group
             ).count()
             
             # Сохраняем имя подключения для сообщения
             connection_display_name = connection.display_name
             
-            # Удаляем подключение
-            connection.delete()
-            
-            # Проверяем, остались ли подключения в группе после удаления
-            remaining_connections_in_group = ServerConnection.objects.filter(
-                user_group=group
-            ).count()
-            
-            # Проверяем, остались ли у пользователя подключения в этой группе
-            # (пользователь имеет доступ ко всем подключениям группы, если он в группе)
-            remaining_user_connections = remaining_connections_in_group
-            
             result_message = f'Подключение "{connection_display_name}" удалено.'
             group_action = None
+            connection_deleted = False
             
-            # Сценарий 1: Группа из 1 пользователя и удалены все подключения → удалить группу
-            if members_count == 1 and remaining_connections_in_group == 0:
+            # Сценарий 1: Группа из 1 пользователя → удалить подключение и группу
+            if members_count == 1:
+                # Удаляем подключение
+                connection.delete()
+                connection_deleted = True
+                # Удаляем группу (каскадно удалятся все подключения, но их уже нет)
                 group.delete()
                 group_action = 'deleted'
                 result_message = f'Подключение "{connection_display_name}" удалено. Группа "{group_name}" удалена, так как вы были единственным участником.'
             
-            # Сценарий 2: Группа из 2+ пользователей и удалены все подключения → исключить пользователя из группы
-            elif members_count > 1 and remaining_connections_in_group == 0:
+            # Сценарий 2: Группа из 2+ пользователей и это последнее подключение → НЕ удалять подключение, только исключить пользователя
+            elif members_count > 1 and connections_count_before == 1:
+                # НЕ удаляем подключение - оно остаётся для других участников
+                # Только исключаем пользователя из группы
                 group.members.remove(request.user)
                 group_action = 'removed'
                 remaining_members = members_count - 1
-                result_message = f'Подключение "{connection_display_name}" удалено. Вы удаляете все подключения и будете исключены из группы "{group_name}", в которой останется {remaining_members} участников.'
+                result_message = f'Вы пытаетесь удалить последнее подключение группы "{group_name}". Подключение сохранено для других участников. Вы исключены из группы. В группе останется {remaining_members} участников.'
             
-            # Сценарий 3: В группе остались подключения → ничего не делать с группой
+            # Сценарий 3: В группе есть другие подключения → удалить подключение как обычно
             else:
+                # Удаляем подключение (оно удалится для ВСЕХ участников группы)
+                connection.delete()
+                connection_deleted = True
                 group_action = 'kept'
+                
+                # Проверяем, сколько подключений осталось
+                remaining_connections_in_group = ServerConnection.objects.filter(
+                    user_group=group
+                ).count()
+                
+                if remaining_connections_in_group > 0:
+                    result_message = f'Подключение "{connection_display_name}" удалено. В группе "{group_name}" осталось {remaining_connections_in_group} подключений.'
             
             return JsonResponse({
                 'success': True,
                 'message': result_message,
                 'group_action': group_action,
                 'group_name': group_name if group_action != 'deleted' else None,
-                'remaining_members': members_count - 1 if group_action == 'removed' else None
+                'remaining_members': members_count - 1 if group_action == 'removed' else members_count,
+                'connection_deleted': connection_deleted
             })
             
         except ServerConnection.DoesNotExist:

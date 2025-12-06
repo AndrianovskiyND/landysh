@@ -215,13 +215,17 @@ def update_user(request):
 @login_required
 @csrf_exempt
 def change_password(request):
-    """Изменяет пароль пользователя"""
+    """Изменяет пароль пользователя
+    
+    ВАЖНО: При смене пароля администратором флаг force_password_change НЕ сбрасывается.
+    Флаг сбрасывается только когда пользователь сам меняет пароль через страницу
+    принудительной смены пароля.
+    """
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
             user_id = data.get('user_id')
             new_password = data.get('new_password')
-            require_change = data.get('require_change', False)
             
             # Админ может менять пароль любому пользователю
             profile = Profile.objects.get(user=request.user)
@@ -230,13 +234,11 @@ def change_password(request):
             
             user = User.objects.get(id=user_id)
             user.set_password(new_password)
-            
-            # Здесь можно добавить логику для принудительной смены пароля
-            user_profile = Profile.objects.get(user=user)
-            user_profile.force_password_change = require_change
-            user_profile.save()
-            
             user.save()
+            
+            # НЕ изменяем force_password_change - флаг должен оставаться как был
+            # Флаг сбрасывается только когда пользователь сам меняет пароль
+            # через страницу принудительной смены пароля (core/views.py:force_password_change)
             
             # Если админ меняет свой пароль, обновляем сессию
             if user.id == request.user.id:
@@ -275,6 +277,65 @@ def toggle_active(request):
             action = "разблокирован" if is_active else "заблокирован"
             return JsonResponse({'success': True, 'message': f'Пользователь {action}'})
             
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+@login_required
+@csrf_exempt
+def delete_user(request):
+    """Удаляет пользователя, сохраняя его группу и подключения"""
+    if request.method == 'POST':
+        try:
+            profile = Profile.objects.get(user=request.user)
+            if not profile.is_admin():
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+            
+            data = json.loads(request.body)
+            user_id = data.get('user_id')
+            
+            # Нельзя удалить себя
+            if user_id == request.user.id:
+                return JsonResponse({'success': False, 'error': 'Нельзя удалить себя'})
+            
+            user = User.objects.get(id=user_id)
+            username = user.username
+            
+            # Получаем все группы пользователя
+            user_groups = user.user_groups.all()
+            
+            # Получаем все группы, созданные этим пользователем
+            created_groups = UserGroup.objects.filter(created_by=user)
+            
+            # Если пользователь был создателем группы, передаём создателя текущему админу
+            # Это предотвратит удаление группы при удалении пользователя
+            for group in created_groups:
+                group.created_by = request.user
+                group.save()
+            
+            # Удаляем пользователя из всех групп (ManyToMany связь)
+            # Это не удалит сами группы, так как это ManyToMany
+            for group in user_groups:
+                group.members.remove(user)
+            
+            # Удаляем Profile пользователя
+            try:
+                user_profile = Profile.objects.get(user=user)
+                user_profile.delete()
+            except Profile.DoesNotExist:
+                pass
+            
+            # Удаляем самого пользователя
+            user.delete()
+            
+            return JsonResponse({
+                'success': True, 
+                'message': f'Пользователь {username} удалён. Группы и подключения сохранены.'
+            })
+            
+        except User.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Пользователь не найден'})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
     

@@ -244,6 +244,9 @@ function renderUserPropertiesModal(user, allGroups = []) {
                                         onclick="toggleUserActive(${user.id}, ${!user.is_active})">
                                     ${user.is_active ? '🚫 Заблокировать' : '✅ Разблокировать'}
                                 </button>
+                                <button class="btn btn-danger" onclick="deleteUser(${user.id}, '${user.username}')">
+                                    🗑️ Удалить пользователя
+                                </button>
                             ` : ''}
                         </div>
                     </div>
@@ -515,6 +518,44 @@ async function toggleUserActive(userId, isActive) {
         
         if (result.success) {
             showNotification(`✅ Пользователь ${isActive ? 'разблокирован' : 'заблокирован'}`);
+            closeUserProperties();
+            showUserManagement();
+        } else {
+            showNotification('❌ Ошибка: ' + result.error, true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+/**
+ * Удалить пользователя
+ */
+async function deleteUser(userId, username) {
+    const message = `Вы уверены, что хотите удалить пользователя "${username}"?\n\n` +
+                   `⚠️ Все личные данные пользователя будут удалены.\n` +
+                   `✅ Его группа и подключения сохранятся.`;
+    
+    if (!confirm(message)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users/delete/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                user_id: userId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ ' + result.message);
             closeUserProperties();
             showUserManagement();
         } else {

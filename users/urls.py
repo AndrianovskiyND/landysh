@@ -14,6 +14,7 @@ urlpatterns = [
     path('groups/update/', views.update_group, name='update_group'),
     path('groups/delete/', views.delete_group, name='delete_group'),
     path('request-password-change/', views.request_password_change, name='request_password_change'),
+    path('delete/', views.delete_user, name='delete_user'),
     # Новые endpoints для групп
     path('groups/copy/', views.copy_group, name='copy_group'),
     path('groups/merge/', views.merge_groups, name='merge_groups'),

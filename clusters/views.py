@@ -14,6 +14,13 @@ def server_connections(request):
     
     data = []
     for conn in connections:
+        group = conn.user_group
+        members_count = group.members.count()
+        # Подсчитываем все подключения в группе (все участники имеют доступ ко всем подключениям)
+        connections_in_group = ServerConnection.objects.filter(
+            user_group=group
+        ).count()
+        
         data.append({
             'id': conn.id,
             'display_name': conn.display_name,
@@ -21,6 +28,10 @@ def server_connections(request):
             'ras_port': conn.ras_port,
             'cluster_admin': conn.cluster_admin or '',
             'created_at': conn.created_at.isoformat(),
+            'group_id': group.id,
+            'group_name': group.name,
+            'group_members_count': members_count,
+            'user_connections_in_group': connections_in_group,  # Все подключения в группе
         })
     
     return JsonResponse({'connections': data})
@@ -82,6 +93,78 @@ def update_connection(request, connection_id):
             connection.save()
             
             return JsonResponse({'success': True, 'connection_id': connection.id})
+            
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Подключение не найдено или нет доступа'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+@login_required
+@csrf_exempt
+def delete_connection(request, connection_id):
+    """Удаляет подключение с проверкой количества пользователей в группе"""
+    if request.method == 'POST':
+        try:
+            # Проверяем доступ к подключению
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            group = connection.user_group
+            group_name = group.name
+            
+            # Подсчитываем количество пользователей в группе
+            members_count = group.members.count()
+            
+            # Подсчитываем количество подключений пользователя в этой группе
+            # (до удаления текущего подключения)
+            # Все подключения в группе доступны всем участникам группы, поэтому
+            # считаем все подключения группы, которые принадлежат этой группе
+            user_connections_in_group = ServerConnection.objects.filter(
+                user_group=group
+            ).count()
+            
+            # Сохраняем имя подключения для сообщения
+            connection_display_name = connection.display_name
+            
+            # Удаляем подключение
+            connection.delete()
+            
+            # Проверяем, остались ли подключения в группе после удаления
+            remaining_connections_in_group = ServerConnection.objects.filter(
+                user_group=group
+            ).count()
+            
+            # Проверяем, остались ли у пользователя подключения в этой группе
+            # (пользователь имеет доступ ко всем подключениям группы, если он в группе)
+            remaining_user_connections = remaining_connections_in_group
+            
+            result_message = f'Подключение "{connection_display_name}" удалено.'
+            group_action = None
+            
+            # Сценарий 1: Группа из 1 пользователя и удалены все подключения → удалить группу
+            if members_count == 1 and remaining_connections_in_group == 0:
+                group.delete()
+                group_action = 'deleted'
+                result_message = f'Подключение "{connection_display_name}" удалено. Группа "{group_name}" удалена, так как вы были единственным участником.'
+            
+            # Сценарий 2: Группа из 2+ пользователей и удалены все подключения → исключить пользователя из группы
+            elif members_count > 1 and remaining_connections_in_group == 0:
+                group.members.remove(request.user)
+                group_action = 'removed'
+                remaining_members = members_count - 1
+                result_message = f'Подключение "{connection_display_name}" удалено. Вы удаляете все подключения и будете исключены из группы "{group_name}", в которой останется {remaining_members} участников.'
+            
+            # Сценарий 3: В группе остались подключения → ничего не делать с группой
+            else:
+                group_action = 'kept'
+            
+            return JsonResponse({
+                'success': True,
+                'message': result_message,
+                'group_action': group_action,
+                'group_name': group_name if group_action != 'deleted' else None,
+                'remaining_members': members_count - 1 if group_action == 'removed' else None
+            })
             
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Подключение не найдено или нет доступа'})

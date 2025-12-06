@@ -12,7 +12,20 @@
  * @returns {string} CSRF токен
  */
 function getCSRFToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const tokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!tokenElement) {
+        console.error('CSRF token not found');
+        // Пытаемся получить из cookie как fallback
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'csrftoken') {
+                return value;
+            }
+        }
+        return '';
+    }
+    return tokenElement.value;
 }
 
 // ============================================
@@ -33,16 +46,21 @@ function showNotification(message, isError = false) {
     content.innerHTML = message;
     notification.style.display = 'block';
     
+    // Устанавливаем высокий z-index чтобы уведомление было поверх модальных окон
+    notification.style.zIndex = '10000';
+    
     if (isError) {
         notification.style.borderLeft = '4px solid var(--primary-color)';
+        // Для ошибок увеличиваем время отображения
+        setTimeout(() => {
+            hideNotification();
+        }, 8000);
     } else {
         notification.style.borderLeft = '4px solid #28a745';
+        setTimeout(() => {
+            hideNotification();
+        }, 5000);
     }
-    
-    // Автоматически скрыть через 5 секунд
-    setTimeout(() => {
-        hideNotification();
-    }, 5000);
 }
 
 /**

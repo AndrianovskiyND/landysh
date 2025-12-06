@@ -184,7 +184,7 @@ function updateMergeButtonState() {
 
 function showCreateGroupForm() {
     const modalHtml = `
-        <div class="modal-overlay" id="createGroupModal" onclick="closeModalOnOverlay(event, 'createGroupModal')">
+        <div class="modal-overlay" id="createGroupModal">
             <div class="modal" style="max-width: 400px;">
                 <div class="modal-header">
                     <h3>Создание группы</h3>
@@ -248,7 +248,7 @@ async function createGroup() {
 
 function editGroupName(groupId, currentName) {
     const modalHtml = `
-        <div class="modal-overlay" id="editGroupModal" onclick="closeModalOnOverlay(event, 'editGroupModal')">
+        <div class="modal-overlay" id="editGroupModal">
             <div class="modal" style="max-width: 400px;">
                 <div class="modal-header">
                     <h3>Изменение группы</h3>
@@ -264,7 +264,7 @@ function editGroupName(groupId, currentName) {
                 </div>
                 <div class="modal-footer">
                     <button class="btn" onclick="closeModal('editGroupModal')">Отмена</button>
-                    <button class="btn btn-primary" onclick="saveGroupName(${groupId})">Сохранить</button>
+                    <button class="btn btn-primary" onclick="saveGroupName(${groupId}, ${JSON.stringify(currentName)})">Сохранить</button>
                 </div>
             </div>
         </div>
@@ -274,11 +274,17 @@ function editGroupName(groupId, currentName) {
     document.getElementById('editGroupName').focus();
 }
 
-async function saveGroupName(groupId) {
+async function saveGroupName(groupId, originalName) {
     const newName = document.getElementById('editGroupName').value.trim();
     
     if (!newName) {
         showNotification('❌ Введите название группы', true);
+        return;
+    }
+    
+    // Если имя не изменилось - просто закрываем окно
+    if (newName === originalName) {
+        closeModal('editGroupModal');
         return;
     }
     
@@ -354,7 +360,7 @@ function openMergeGroupsModal() {
     const groupsList = selectedGroupsForMerge.map(g => `• ${g.name}`).join('\n');
     
     const modalHtml = `
-        <div class="modal-overlay" id="mergeGroupsModal" onclick="closeModalOnOverlay(event, 'mergeGroupsModal')">
+        <div class="modal-overlay" id="mergeGroupsModal">
             <div class="modal" style="max-width: 500px;">
                 <div class="modal-header">
                     <h3>Объединение групп</h3>
@@ -491,8 +497,3 @@ function closeModal(modalId) {
     }
 }
 
-function closeModalOnOverlay(event, modalId) {
-    if (event.target.id === modalId) {
-        closeModal(modalId);
-    }
-}

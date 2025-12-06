@@ -143,7 +143,7 @@ function renderUserPropertiesModal(user, allGroups = []) {
     const statusClass = user.is_active ? 'active' : 'blocked';
     
     const modalHtml = `
-        <div class="modal-overlay" id="userPropertiesModal" onclick="closeModalOnOverlay(event)">
+        <div class="modal-overlay" id="userPropertiesModal">
             <div class="modal" style="max-width: 620px;">
                 <div class="modal-header">
                     <h3>👤 ${user.username}</h3>
@@ -275,23 +275,39 @@ function renderUserPropertiesModal(user, allGroups = []) {
  * Сохранить изменения пользователя
  */
 async function saveUserChanges(userId) {
-    const firstName = document.getElementById('editFirstName').value;
-    const lastName = document.getElementById('editLastName').value;
-    const email = document.getElementById('editEmail').value;
-    const groupId = document.getElementById('editGroup').value;
-    const editRoleElement = document.getElementById('editRole');
-    const newRole = editRoleElement ? editRoleElement.value : null;
-    
-    const originalGroupId = window._editUserData?.originalGroupId || '';
-    const originalRole = window._editUserData?.originalRole || '';
-    
     try {
+        const firstNameEl = document.getElementById('editFirstName');
+        const lastNameEl = document.getElementById('editLastName');
+        const emailEl = document.getElementById('editEmail');
+        const editGroupElement = document.getElementById('editGroup');
+        const editRoleElement = document.getElementById('editRole');
+        
+        if (!firstNameEl || !lastNameEl || !emailEl || !editGroupElement) {
+            showNotification('❌ Ошибка: Не найдены элементы формы. Попробуйте обновить страницу.', true);
+            return;
+        }
+        
+        const firstName = firstNameEl.value || '';
+        const lastName = lastNameEl.value || '';
+        const email = emailEl.value || '';
+        const groupId = editGroupElement.value || '';
+        const newRole = editRoleElement ? editRoleElement.value : null;
+    
+        const originalGroupId = window._editUserData?.originalGroupId || '';
+        const originalRole = window._editUserData?.originalRole || '';
+        
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден. Обновите страницу.', true);
+            return;
+        }
+        
         // Сохраняем основные данные
         const updateResponse = await fetch('/api/users/update/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({
                 user_id: userId,
@@ -314,7 +330,7 @@ async function saveUserChanges(userId) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCSRFToken()
+                    'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify({
                     user_id: userId,
@@ -332,13 +348,19 @@ async function saveUserChanges(userId) {
         
         // Обновляем группу если изменилась
         if (groupId !== String(originalGroupId)) {
+            const csrfToken = getCSRFToken();
+            if (!csrfToken) {
+                showNotification('❌ Ошибка: CSRF токен не найден. Обновите страницу.', true);
+                return;
+            }
+            
             // Удаляем из старой группы
             if (originalGroupId) {
-                await fetch('/api/users/groups/assign/', {
+                const removeResponse = await fetch('/api/users/groups/assign/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': getCSRFToken()
+                        'X-CSRFToken': csrfToken
                     },
                     body: JSON.stringify({
                         user_id: userId,
@@ -346,15 +368,24 @@ async function saveUserChanges(userId) {
                         action: 'remove'
                     })
                 });
+                
+                if (!removeResponse.ok) {
+                    throw new Error(`Ошибка удаления из группы: ${removeResponse.status}`);
+                }
+                
+                const removeResult = await removeResponse.json();
+                if (!removeResult.success) {
+                    throw new Error(removeResult.error || 'Ошибка удаления из группы');
+                }
             }
             
             // Добавляем в новую группу
             if (groupId) {
-                await fetch('/api/users/groups/assign/', {
+                const addResponse = await fetch('/api/users/groups/assign/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': getCSRFToken()
+                        'X-CSRFToken': csrfToken
                     },
                     body: JSON.stringify({
                         user_id: userId,
@@ -362,6 +393,15 @@ async function saveUserChanges(userId) {
                         action: 'add'
                     })
                 });
+                
+                if (!addResponse.ok) {
+                    throw new Error(`Ошибка добавления в группу: ${addResponse.status}`);
+                }
+                
+                const addResult = await addResponse.json();
+                if (!addResult.success) {
+                    throw new Error(addResult.error || 'Ошибка добавления в группу');
+                }
             }
         }
         
@@ -377,12 +417,6 @@ async function saveUserChanges(userId) {
 /**
  * Закрыть модальное окно при клике на overlay
  */
-function closeModalOnOverlay(event) {
-    if (event.target.classList.contains('modal-overlay')) {
-        closeUserProperties();
-    }
-}
-
 /**
  * Закрыть модальное окно свойств пользователя
  */
@@ -403,7 +437,7 @@ function closeUserProperties() {
  */
 function openChangePasswordModal(userId, username) {
     const modalHtml = `
-        <div class="modal-overlay" id="passwordModal" onclick="closePasswordModalOnOverlay(event)">
+        <div class="modal-overlay" id="passwordModal">
             <div class="modal" style="max-width: 400px;">
                 <div class="modal-header">
                     <h3>Смена пароля: ${username}</h3>
@@ -475,12 +509,6 @@ async function saveNewPassword(userId) {
         }
     } catch (error) {
         showNotification('❌ Ошибка: ' + error.message, true);
-    }
-}
-
-function closePasswordModalOnOverlay(event) {
-    if (event.target.id === 'passwordModal') {
-        closePasswordModal();
     }
 }
 

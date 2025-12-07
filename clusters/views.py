@@ -315,12 +315,16 @@ def _parse_server_list(output):
                 current_server = {
                     'uuid': value,
                     'name': '',
+                    'host': '',
                     'data': {}
                 }
             elif current_server:
                 current_server['data'][key] = value
                 if key == 'name':
                     current_server['name'] = value.strip('"')
+                elif key == 'host' or key == 'agent-host':
+                    # Сохраняем host для отображения
+                    current_server['host'] = value.strip('"')
     
     if current_server:
         servers.append(current_server)

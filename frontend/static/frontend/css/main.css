@@ -627,6 +627,41 @@ input, select, button, .btn {
     padding-left: 1rem;
 }
 
+.tree-item-section {
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.25rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    user-select: none;
+    font-weight: 500;
+}
+
+.tree-item-section:hover {
+    background: #f8f9fa;
+    padding-left: 1rem;
+}
+
+.tree-toggle-section {
+    font-size: 0.8rem;
+    color: #666;
+    transition: transform 0.2s ease;
+    user-select: none;
+    width: 1rem;
+    text-align: center;
+    cursor: pointer;
+}
+
+.tree-section-children {
+    margin-left: 1.5rem;
+    margin-top: 0.25rem;
+    padding-left: 1rem;
+    border-left: 2px solid #dee2e6;
+}
+
 .tree-icon {
     font-size: 1rem;
     width: 1.2rem;

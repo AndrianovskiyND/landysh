@@ -534,13 +534,21 @@ async function loadConnectionData(connectionId, connectionName = null) {
                             </button>
                         </div>
                         <div class="cluster-children" id="${clusterId}-children" style="display: none;">
-                            <div class="tree-item" data-section="infobases" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                            <div class="tree-item-section" data-section="infobases" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-toggle-section" data-section-id="infobases-${clusterId}">▶</span>
                                 <span class="tree-icon">📁</span>
                                 <span>Информационные базы</span>
                             </div>
-                            <div class="tree-item" data-section="servers" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                            <div class="tree-section-children" id="infobases-${clusterId}-children" style="display: none; margin-left: 1.5rem;">
+                                <div style="padding: 0.5rem; color: #666; font-style: italic;">Загрузка...</div>
+                            </div>
+                            <div class="tree-item-section" data-section="servers" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-toggle-section" data-section-id="servers-${clusterId}">▶</span>
                                 <span class="tree-icon">⚙️</span>
                                 <span>Рабочие серверы</span>
+                            </div>
+                            <div class="tree-section-children" id="servers-${clusterId}-children" style="display: none; margin-left: 1.5rem;">
+                                <div style="padding: 0.5rem; color: #666; font-style: italic;">Загрузка...</div>
                             </div>
                             <div class="tree-item" data-section="admins" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
                                 <span class="tree-icon">👥</span>
@@ -916,25 +924,38 @@ function setupClusterEventHandlers() {
         }
         
         // Обработчик контекстного меню для секций "Информационные базы" и "Рабочие серверы"
-        const treeItem = e.target.closest('.tree-item[data-section]');
-        if (treeItem) {
-            const section = treeItem.dataset.section;
-            const connectionId = treeItem.dataset.connectionId;
-            const clusterUuid = treeItem.dataset.clusterUuid;
+        const treeItemSection = e.target.closest('.tree-item-section');
+        if (treeItemSection) {
+            const section = treeItemSection.dataset.section;
+            const connectionId = treeItemSection.dataset.connectionId;
+            const clusterUuid = treeItemSection.dataset.clusterUuid;
             
-            if (section === 'infobases') {
+            if (section === 'infobases' || section === 'servers') {
                 e.preventDefault();
-                showSectionContextMenu(e, connectionId, clusterUuid, 'infobases');
-            } else if (section === 'servers') {
-                e.preventDefault();
-                showSectionContextMenu(e, connectionId, clusterUuid, 'servers');
+                showSectionContextMenu(e, connectionId, clusterUuid, section);
             }
         }
     });
     
-    // Обработчик клика по подразделам
+    // Обработчик клика по секциям (Информационные базы, Рабочие серверы)
     document.addEventListener('click', (e) => {
-        const treeItem = e.target.closest('.tree-item');
+        const treeItemSection = e.target.closest('.tree-item-section');
+        if (treeItemSection) {
+            const section = treeItemSection.dataset.section;
+            const connectionId = treeItemSection.dataset.connectionId;
+            const clusterUuid = treeItemSection.dataset.clusterUuid;
+            const clusterId = `cluster-${connectionId}-${clusterUuid}`;
+            const sectionId = `${section}-${clusterId}`;
+            
+            // Переключаем раскрытие секции
+            toggleSectionNode(sectionId);
+            
+            // Загружаем данные для секции
+            loadSectionData(section, connectionId, clusterUuid, sectionId);
+        }
+        
+        // Обработчик для других разделов (переход на другую страницу)
+        const treeItem = e.target.closest('.tree-item:not(.tree-item-section)');
         if (treeItem && treeItem.dataset.section) {
             const section = treeItem.dataset.section;
             const connectionId = treeItem.dataset.connectionId;
@@ -959,6 +980,46 @@ function toggleClusterNode(clusterId) {
             children.style.display = 'none';
             if (toggle) toggle.textContent = '▶';
         }
+    }
+}
+
+/**
+ * Переключает раскрытие/сворачивание секции (Информационные базы, Рабочие серверы)
+ */
+function toggleSectionNode(sectionId) {
+    const children = document.getElementById(`${sectionId}-children`);
+    const toggle = document.querySelector(`.tree-toggle-section[data-section-id="${sectionId}"]`);
+    
+    if (children) {
+        if (children.style.display === 'none') {
+            children.style.display = 'block';
+            if (toggle) toggle.textContent = '▼';
+        } else {
+            children.style.display = 'none';
+            if (toggle) toggle.textContent = '▶';
+        }
+    }
+}
+
+/**
+ * Загружает данные для секции и отображает их в дереве
+ */
+async function loadSectionData(section, connectionId, clusterUuid, sectionId) {
+    const childrenContainer = document.getElementById(`${sectionId}-children`);
+    if (!childrenContainer) return;
+    
+    try {
+        if (section === 'infobases') {
+            await loadInfobasesIntoTree(connectionId, clusterUuid, sectionId);
+        } else if (section === 'servers') {
+            await loadServersIntoTree(connectionId, clusterUuid, sectionId);
+        }
+    } catch (error) {
+        childrenContainer.innerHTML = `
+            <div style="padding: 0.5rem; color: #d52b1e;">
+                ❌ Ошибка загрузки: ${error.message}
+            </div>
+        `;
     }
 }
 
@@ -994,6 +1055,143 @@ async function loadClusterSection(section, connectionId, clusterUuid) {
             <div class="info-card" style="border-left: 4px solid var(--primary-color);">
                 <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
                 <p style="color: #721c24; margin: 0;">Ошибка загрузки: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Загружает информационные базы в дерево
+ */
+async function loadInfobasesIntoTree(connectionId, clusterUuid, sectionId) {
+    const childrenContainer = document.getElementById(`${sectionId}-children`);
+    if (!childrenContainer) return;
+    
+    childrenContainer.innerHTML = '<div style="padding: 0.5rem; color: #666; font-style: italic;">⏳ Загрузка...</div>';
+    
+    try {
+        const response = await fetch(`/api/clusters/infobases/${connectionId}/?cluster=${clusterUuid}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const infobases = data.infobases || [];
+            
+            if (infobases.length === 0) {
+                childrenContainer.innerHTML = `
+                    <div style="padding: 0.5rem; color: #666; font-style: italic;">
+                        Информационные базы не найдены
+                    </div>
+                `;
+            } else {
+                let html = '';
+                infobases.forEach((infobase) => {
+                    const infobaseName = infobase.name || `Информационная база ${infobase.uuid.substring(0, 8)}`;
+                    html += `
+                        <div class="tree-item" 
+                             data-infobase-uuid="${infobase.uuid}"
+                             data-connection-id="${connectionId}"
+                             data-cluster-uuid="${clusterUuid}"
+                             style="cursor: pointer; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0; display: flex; align-items: center; gap: 0.5rem;"
+                             oncontextmenu="showInfobaseContextMenu(event, ${connectionId}, '${clusterUuid}', '${infobase.uuid}', '${escapeHtml(infobaseName).replace(/'/g, "\\'")}'); return false;">
+                            <span class="tree-icon">📁</span>
+                            <span>${escapeHtml(infobaseName)}</span>
+                        </div>
+                    `;
+                });
+                childrenContainer.innerHTML = html;
+                
+                // Добавляем обработчики кликов
+                childrenContainer.querySelectorAll('[data-infobase-uuid]').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        if (e.button === 0) {
+                            const uuid = item.getAttribute('data-infobase-uuid');
+                            const connId = item.getAttribute('data-connection-id');
+                            const clustUuid = item.getAttribute('data-cluster-uuid');
+                            openInfobaseProperties(connId, clustUuid, uuid);
+                        }
+                    });
+                });
+            }
+        } else {
+            childrenContainer.innerHTML = `
+                <div style="padding: 0.5rem; color: #d52b1e;">
+                    ❌ Ошибка: ${data.error || 'Неизвестная ошибка'}
+                </div>
+            `;
+        }
+    } catch (error) {
+        childrenContainer.innerHTML = `
+            <div style="padding: 0.5rem; color: #d52b1e;">
+                ❌ Ошибка загрузки: ${error.message}
+            </div>
+        `;
+    }
+}
+
+/**
+ * Загружает рабочие серверы в дерево
+ */
+async function loadServersIntoTree(connectionId, clusterUuid, sectionId) {
+    const childrenContainer = document.getElementById(`${sectionId}-children`);
+    if (!childrenContainer) return;
+    
+    childrenContainer.innerHTML = '<div style="padding: 0.5rem; color: #666; font-style: italic;">⏳ Загрузка...</div>';
+    
+    try {
+        const response = await fetch(`/api/clusters/servers/${connectionId}/?cluster=${clusterUuid}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const servers = data.servers || [];
+            
+            if (servers.length === 0) {
+                childrenContainer.innerHTML = `
+                    <div style="padding: 0.5rem; color: #666; font-style: italic;">
+                        Рабочие серверы не найдены
+                    </div>
+                `;
+            } else {
+                let html = '';
+                servers.forEach((server) => {
+                    // Используем host из server, если нет - из data, если нет - name, если нет - uuid
+                    const serverHost = server.host || server.data?.host || server.data?.['agent-host'] || server.name || `Сервер ${server.uuid.substring(0, 8)}`;
+                    html += `
+                        <div class="tree-item" 
+                             data-server-uuid="${server.uuid}"
+                             data-connection-id="${connectionId}"
+                             data-cluster-uuid="${clusterUuid}"
+                             style="cursor: pointer; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0; display: flex; align-items: center; gap: 0.5rem;"
+                             oncontextmenu="showServerContextMenu(event, ${connectionId}, '${clusterUuid}', '${server.uuid}', '${escapeHtml(serverHost).replace(/'/g, "\\'")}'); return false;">
+                            <span class="tree-icon">⚙️</span>
+                            <span>${escapeHtml(serverHost)}</span>
+                        </div>
+                    `;
+                });
+                childrenContainer.innerHTML = html;
+                
+                // Добавляем обработчики кликов
+                childrenContainer.querySelectorAll('[data-server-uuid]').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        if (e.button === 0) {
+                            const uuid = item.getAttribute('data-server-uuid');
+                            const connId = item.getAttribute('data-connection-id');
+                            const clustUuid = item.getAttribute('data-cluster-uuid');
+                            openServerProperties(connId, clustUuid, uuid);
+                        }
+                    });
+                });
+            }
+        } else {
+            childrenContainer.innerHTML = `
+                <div style="padding: 0.5rem; color: #d52b1e;">
+                    ❌ Ошибка: ${data.error || 'Неизвестная ошибка'}
+                </div>
+            `;
+        }
+    } catch (error) {
+        childrenContainer.innerHTML = `
+            <div style="padding: 0.5rem; color: #d52b1e;">
+                ❌ Ошибка загрузки: ${error.message}
             </div>
         `;
     }
@@ -1786,8 +1984,169 @@ function closeContextMenu() {
 function openCreateInfobaseModal(connectionId, clusterUuid) {
     closeContextMenu();
     
-    // TODO: Реализовать модальное окно создания информационной базы
-    showNotification('Функция создания информационной базы в разработке', false);
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('createInfobaseModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'createInfobaseModal';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>➕ Создание информационной базы</h3>
+                <button class="modal-close-btn" onclick="closeCreateInfobaseModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="createInfobaseForm">
+                    <div class="info-card">
+                        <h4>📊 Основная информация</h4>
+                        <div class="form-row">
+                            <label>Имя информационной базы (обязательно):</label>
+                            <input type="text" id="infobaseName" name="name" required placeholder="Название базы">
+                        </div>
+                        <div class="form-row">
+                            <label>Тип СУБД (обязательно):</label>
+                            <select id="infobaseDbms" name="dbms" required>
+                                <option value="">Выберите СУБД</option>
+                                <option value="MSSQLServer">MS SQL Server</option>
+                                <option value="PostgreSQL">PostgreSQL</option>
+                                <option value="IBMDB2">IBM DB2</option>
+                                <option value="OracleDatabase">Oracle Database</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Сервер баз данных (обязательно):</label>
+                            <input type="text" id="infobaseDbServer" name="db_server" required placeholder="localhost или IP-адрес">
+                        </div>
+                        <div class="form-row">
+                            <label>Имя базы данных (обязательно):</label>
+                            <input type="text" id="infobaseDbName" name="db_name" required placeholder="Имя БД">
+                        </div>
+                        <div class="form-row">
+                            <label>Идентификатор национальных настроек (обязательно):</label>
+                            <input type="text" id="infobaseLocale" name="locale" required placeholder="ru_RU" value="ru_RU">
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <h4>⚙️ Дополнительные параметры</h4>
+                        <div class="form-row">
+                            <label>Создать базу данных:</label>
+                            <select id="infobaseCreateDatabase" name="create_database">
+                                <option value="false">Нет</option>
+                                <option value="true">Да</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Имя администратора БД:</label>
+                            <input type="text" id="infobaseDbUser" name="db_user" placeholder="sa">
+                        </div>
+                        <div class="form-row">
+                            <label>Пароль администратора БД:</label>
+                            <input type="password" id="infobaseDbPwd" name="db_pwd" placeholder="Пароль">
+                        </div>
+                        <div class="form-row">
+                            <label>Описание:</label>
+                            <textarea id="infobaseDescr" name="descr" rows="3" placeholder="Описание информационной базы"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <label>Уровень безопасности:</label>
+                            <input type="number" id="infobaseSecurityLevel" name="security_level" value="0" min="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Блокировка регламентных заданий:</label>
+                            <select id="infobaseScheduledJobsDeny" name="scheduled_jobs_deny">
+                                <option value="off">Разрешено</option>
+                                <option value="on">Запрещено</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Выдача лицензий:</label>
+                            <select id="infobaseLicenseDistribution" name="license_distribution">
+                                <option value="allow">Разрешена</option>
+                                <option value="deny">Запрещена</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions" style="margin-top: 1.5rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeCreateInfobaseModal()">Отмена</button>
+                        <button type="button" class="btn btn-primary" onclick="saveCreateInfobase(${connectionId}, '${clusterUuid}')">Создать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+/**
+ * Закрывает модальное окно создания информационной базы
+ */
+function closeCreateInfobaseModal() {
+    const modal = document.getElementById('createInfobaseModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Сохраняет создание информационной базы
+ */
+async function saveCreateInfobase(connectionId, clusterUuid) {
+    const form = document.getElementById('createInfobaseForm');
+    if (!form) return;
+    
+    const formData = new FormData(form);
+    const data = {};
+    
+    for (let [key, value] of formData.entries()) {
+        if (key === 'create_database') {
+            data[key] = value === 'true';
+        } else {
+            data[key] = value;
+        }
+    }
+    
+    // Проверяем обязательные поля
+    if (!data.name || !data.dbms || !data.db_server || !data.db_name || !data.locale) {
+        showNotification('❌ Ошибка: Заполните все обязательные поля', true);
+        return;
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch(`/api/clusters/infobases/${connectionId}/${clusterUuid}/create/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Информационная база успешно создана', false);
+            closeCreateInfobaseModal();
+            // Обновляем дерево
+            const clusterId = `cluster-${connectionId}-${clusterUuid}`;
+            const sectionId = `infobases-${clusterId}`;
+            await loadInfobasesIntoTree(connectionId, clusterUuid, sectionId);
+        } else {
+            showNotification('❌ Ошибка создания информационной базы: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка сохранения: ' + error.message, true);
+    }
 }
 
 /**
@@ -1796,8 +2155,56 @@ function openCreateInfobaseModal(connectionId, clusterUuid) {
 async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
     closeContextMenu();
     
-    // TODO: Реализовать модальное окно свойств информационной базы
-    showNotification('Функция свойств информационной базы в разработке', false);
+    try {
+        const response = await fetch(`/api/clusters/infobases/${connectionId}/${clusterUuid}/info/?infobase=${infobaseUuid}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            showNotification('❌ Ошибка загрузки свойств информационной базы: ' + (data.error || 'Неизвестная ошибка'), true);
+            return;
+        }
+        
+        // Удаляем предыдущее модальное окно если есть
+        const existingModal = document.getElementById('infobasePropertiesModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'infobasePropertiesModal';
+        modal.innerHTML = `
+            <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <div class="modal-header">
+                    <h3>📋 Свойства информационной базы</h3>
+                    <button class="modal-close-btn" onclick="closeInfobasePropertiesModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card">
+                        <h4>📊 Информация</h4>
+                        <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(data.output || 'Нет данных')}</pre>
+                    </div>
+                    <div class="form-actions" style="margin-top: 1.5rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeInfobasePropertiesModal()">Закрыть</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    } catch (error) {
+        showNotification('❌ Ошибка загрузки свойств информационной базы: ' + error.message, true);
+    }
+}
+
+/**
+ * Закрывает модальное окно свойств информационной базы
+ */
+function closeInfobasePropertiesModal() {
+    const modal = document.getElementById('infobasePropertiesModal');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 /**
@@ -1852,8 +2259,151 @@ async function deleteInfobase(connectionId, clusterUuid, infobaseUuid, infobaseN
 function openCreateServerModal(connectionId, clusterUuid) {
     closeContextMenu();
     
-    // TODO: Реализовать модальное окно создания рабочего сервера
-    showNotification('Функция создания рабочего сервера в разработке', false);
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('createServerModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'createServerModal';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>➕ Регистрация рабочего сервера</h3>
+                <button class="modal-close-btn" onclick="closeCreateServerModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="createServerForm">
+                    <div class="info-card">
+                        <h4>📊 Основная информация</h4>
+                        <div class="form-row">
+                            <label>Имя хоста агента сервера (обязательно):</label>
+                            <input type="text" id="serverAgentHost" name="agent_host" required placeholder="localhost или IP-адрес">
+                        </div>
+                        <div class="form-row">
+                            <label>Основной порт агента сервера (обязательно):</label>
+                            <input type="number" id="serverAgentPort" name="agent_port" required placeholder="1540" value="1540">
+                        </div>
+                        <div class="form-row">
+                            <label>Диапазон портов (обязательно):</label>
+                            <input type="text" id="serverPortRange" name="port_range" required placeholder="1560:1591" value="1560:1591">
+                            <small style="color: #666; font-size: 0.85rem;">Формат: min:max (например, 1560:1591)</small>
+                        </div>
+                        <div class="form-row">
+                            <label>Наименование рабочего сервера:</label>
+                            <input type="text" id="serverName" name="name" placeholder="Название сервера">
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <h4>⚙️ Параметры сервера</h4>
+                        <div class="form-row">
+                            <label>Вариант использования:</label>
+                            <select id="serverUsing" name="using">
+                                <option value="normal">Обычный сервер</option>
+                                <option value="main">Центральный сервер</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Максимальное количество информационных баз на рабочий процесс:</label>
+                            <input type="number" id="serverInfobasesLimit" name="infobases_limit" value="0" min="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Предел использования памяти (КБ):</label>
+                            <input type="number" id="serverMemoryLimit" name="memory_limit" value="0" min="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Максимальное количество соединений на рабочий процесс:</label>
+                            <input type="number" id="serverConnectionsLimit" name="connections_limit" value="0" min="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Номер порта главного менеджера кластера:</label>
+                            <input type="number" id="serverClusterPort" name="cluster_port" value="1541" min="1" max="65535">
+                        </div>
+                        <div class="form-row">
+                            <label>Вариант размещения менеджеров сервисов:</label>
+                            <select id="serverDedicateManagers" name="dedicate_managers">
+                                <option value="none">В одном менеджере</option>
+                                <option value="all">В отдельных менеджерах</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions" style="margin-top: 1.5rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeCreateServerModal()">Отмена</button>
+                        <button type="button" class="btn btn-primary" onclick="saveCreateServer(${connectionId}, '${clusterUuid}')">Зарегистрировать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+/**
+ * Закрывает модальное окно создания рабочего сервера
+ */
+function closeCreateServerModal() {
+    const modal = document.getElementById('createServerModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Сохраняет создание рабочего сервера
+ */
+async function saveCreateServer(connectionId, clusterUuid) {
+    const form = document.getElementById('createServerForm');
+    if (!form) return;
+    
+    const formData = new FormData(form);
+    const data = {};
+    
+    for (let [key, value] of formData.entries()) {
+        if (value) {
+            data[key] = value;
+        }
+    }
+    
+    // Проверяем обязательные поля
+    if (!data.agent_host || !data.agent_port || !data.port_range) {
+        showNotification('❌ Ошибка: Заполните все обязательные поля', true);
+        return;
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch(`/api/clusters/servers/${connectionId}/${clusterUuid}/insert/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Рабочий сервер успешно зарегистрирован', false);
+            closeCreateServerModal();
+            // Обновляем дерево
+            const clusterId = `cluster-${connectionId}-${clusterUuid}`;
+            const sectionId = `servers-${clusterId}`;
+            await loadServersIntoTree(connectionId, clusterUuid, sectionId);
+        } else {
+            showNotification('❌ Ошибка регистрации рабочего сервера: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка сохранения: ' + error.message, true);
+    }
 }
 
 /**
@@ -1862,8 +2412,56 @@ function openCreateServerModal(connectionId, clusterUuid) {
 async function openServerProperties(connectionId, clusterUuid, serverUuid) {
     closeContextMenu();
     
-    // TODO: Реализовать модальное окно свойств рабочего сервера
-    showNotification('Функция свойств рабочего сервера в разработке', false);
+    try {
+        const response = await fetch(`/api/clusters/servers/${connectionId}/${clusterUuid}/${serverUuid}/info/`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            showNotification('❌ Ошибка загрузки свойств рабочего сервера: ' + (data.error || 'Неизвестная ошибка'), true);
+            return;
+        }
+        
+        // Удаляем предыдущее модальное окно если есть
+        const existingModal = document.getElementById('serverPropertiesModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'serverPropertiesModal';
+        modal.innerHTML = `
+            <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <div class="modal-header">
+                    <h3>📋 Свойства рабочего сервера</h3>
+                    <button class="modal-close-btn" onclick="closeServerPropertiesModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card">
+                        <h4>📊 Информация</h4>
+                        <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(data.output || 'Нет данных')}</pre>
+                    </div>
+                    <div class="form-actions" style="margin-top: 1.5rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeServerPropertiesModal()">Закрыть</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    } catch (error) {
+        showNotification('❌ Ошибка загрузки свойств рабочего сервера: ' + error.message, true);
+    }
+}
+
+/**
+ * Закрывает модальное окно свойств рабочего сервера
+ */
+function closeServerPropertiesModal() {
+    const modal = document.getElementById('serverPropertiesModal');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 /**

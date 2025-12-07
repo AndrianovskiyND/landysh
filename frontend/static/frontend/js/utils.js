@@ -38,16 +38,53 @@ function getCSRFToken() {
  * @param {boolean} isError - Является ли сообщение ошибкой
  */
 function showNotification(message, isError = false) {
-    const notification = document.getElementById('notification');
-    const content = document.getElementById('notificationContent');
+    let notification = document.getElementById('notification');
+    let content = document.getElementById('notificationContent');
+    
+    // Если уведомление не существует, создаём его
+    if (!notification) {
+        notification = document.createElement('div');
+        notification.id = 'notification';
+        notification.className = 'notification';
+        notification.style.display = 'none';
+        notification.style.position = 'fixed';
+        notification.style.bottom = '20px';
+        notification.style.right = '20px';
+        notification.style.padding = '1rem';
+        notification.style.background = 'white';
+        notification.style.border = '1px solid var(--border-color)';
+        notification.style.borderRadius = '4px';
+        notification.style.boxShadow = '0 4px 16px rgba(0,0,0,0.3)';
+        notification.style.maxWidth = '400px';
+        notification.style.zIndex = '99999';
+        notification.style.userSelect = 'text';
+        notification.style.cursor = 'text';
+        
+        content = document.createElement('div');
+        content.id = 'notificationContent';
+        notification.appendChild(content);
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Закрыть';
+        closeBtn.style.marginTop = '0.5rem';
+        closeBtn.onclick = hideNotification;
+        notification.appendChild(closeBtn);
+    } else {
+        content = document.getElementById('notificationContent');
+    }
     
     if (!notification || !content) return;
+    
+    // Перемещаем уведомление в конец body, чтобы оно было поверх всех элементов
+    // appendChild автоматически перемещает элемент, если он уже существует в DOM
+    document.body.appendChild(notification);
     
     content.innerHTML = message;
     notification.style.display = 'block';
     
-    // Устанавливаем высокий z-index чтобы уведомление было поверх модальных окон
-    notification.style.zIndex = '10000';
+    // Устанавливаем очень высокий z-index чтобы уведомление было поверх модальных окон
+    notification.style.zIndex = '99999';
+    notification.style.position = 'fixed';
     
     if (isError) {
         notification.style.borderLeft = '4px solid var(--primary-color)';

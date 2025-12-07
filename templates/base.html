@@ -210,16 +210,24 @@
         }
         
         .notification {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
+            position: fixed !important;
+            bottom: 20px !important;
+            right: 20px !important;
             padding: 1rem;
             background: white;
             border: 1px solid var(--border-color);
             border-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
             max-width: 400px;
-            z-index: 10001;
+            z-index: 99999 !important;
+            user-select: text;
+            cursor: text;
+        }
+        
+        #notificationContent {
+            user-select: text;
+            cursor: text;
+            word-wrap: break-word;
         }
         
         .badge {

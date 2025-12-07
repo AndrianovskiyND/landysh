@@ -167,13 +167,15 @@ class RACClient:
         """Регистрирует новый кластер
         
         Args:
-            host: Имя или IP-адрес компьютера
-            port: Основной порт основного менеджера
+            host: Имя или IP-адрес компьютера нового кластера (параметр --host)
+            port: Основной порт основного менеджера нового кластера (параметр --port)
             **kwargs: Дополнительные параметры (name, expiration-timeout, и т.д.)
         """
-        # Для регистрации кластера используем host:port из параметров, а не из подключения
-        connection_str = f'{host}:{port}'
+        # Получаем host:port из настроек подключения (ServerConnection)
+        # Это то, что идёт после 'rac' в команде: rac <host>[:<port>] cluster insert ...
+        connection_str = self.server_connection.get_connection_string()
         
+        # Аргументы команды cluster insert
         args = ['cluster', 'insert', f'--host={host}', f'--port={port}']
         
         # Маппинг параметров Python на параметры RAC
@@ -202,14 +204,21 @@ class RACClient:
                     value = 'yes' if value else 'no'
                 args.append(f'{param_name}={value}')
         
-        # Формируем команду без использования get_connection_string()
-        cmd_args = [self.rac_path] + args
+        # Формируем команду: rac [auth] cluster insert ... <connection_str>
+        # где connection_str - это host:port из настроек подключения
+        cmd_args = [self.rac_path]
         
-        # Добавляем аутентификацию если есть
+        # Добавляем аутентификацию если есть (после rac, перед аргументами команды)
         if self.server_connection.cluster_admin:
-            cmd_args.insert(1, f'--cluster-user={self.server_connection.cluster_admin}')
+            cmd_args.append(f'--cluster-user={self.server_connection.cluster_admin}')
             if self.server_connection.cluster_password:
-                cmd_args.insert(2, f'--cluster-pwd={self.server_connection.cluster_password}')
+                cmd_args.append(f'--cluster-pwd={self.server_connection.cluster_password}')
+        
+        # Добавляем аргументы команды
+        cmd_args.extend(args)
+        
+        # Добавляем connection_str в конец (host:port из настроек подключения)
+        cmd_args.append(connection_str)
         
         # Логируем маскированную команду
         masked_cmd = self._mask_sensitive_data(' '.join(cmd_args))

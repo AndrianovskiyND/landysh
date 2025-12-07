@@ -4,6 +4,81 @@
  */
 
 // ============================================
+// Маппинг названий столбцов для таблицы сеансов
+// ============================================
+const SESSIONS_COLUMN_MAPPING = {
+    'session': 'Сессия\n(session)',
+    'session_id': 'Номер сеанса\n(session_id)',
+    'infobase': 'Инф. база\n(infobase)',
+    'user_name': 'Пользователь\n(user_name)',
+    'host': 'Компьютер\n(host)',
+    'app_id': 'Приложение\n(app_id)',
+    'locale': 'Язык\n(locale)',
+    'started_at': 'Время начала\n(started_at)',
+    'last_active_at': 'Последняя активность\n(last_active_at)',
+    'hibernate': 'Спящий\n(hibernate)',
+    'passive_session_hibernate_time': 'Заснуть через\n(passive_session_hibernate_time)',
+    'hibernate_session_terminate_time': 'Завершить через\n(hibernate_session_terminate_time)',
+    'blocked_by_dbms': 'Заблокировано СУБД\n(blocked_by_dbms)',
+    'blocked_by_ls': 'Заблокировано упр.\n(blocked_by_ls)',
+    'bytes_all': 'Объем данных (всего)\n(bytes_all)',
+    'bytes_last_5min': 'Объем данных (5 мин)\n(bytes_last_5min)',
+    'calls_all': 'Количество вызовов (всего)\n(calls_all)',
+    'calls_last_5min': 'Количество вызовов (5 мин)\n(calls_last_5min)',
+    'dbms_bytes_all': 'Данных СУБД (всего)\n(dbms_bytes_all)',
+    'dbms_bytes_last_5min': 'Данных СУБД (5 минут)\n(dbms_bytes_last_5min)',
+    'duration_all': 'Время вызовов (всего)\n(duration_all)',
+    'duration_all_dbms': 'Время вызовов СУБД(всего)\n(duration_all_dbms)',
+    'duration_current': 'Время вызова (текущее)\n(duration_current)',
+    'duration_current_dbms': 'Время вызова СУБД(текущее)\n(duration_current_dbms)',
+    'duration_last_5min': 'Время вызовов (5 мин)\n(duration_last_5min)',
+    'duration_last_5min_dbms': 'Время вызовов СУБД(5 мин)\n(duration_last_5min_dbms)',
+    'memory_current': 'Память (текущая)\n(memory_current)',
+    'memory_last_5min': 'Память (5 мин)\n(memory_last_5min)',
+    'memory_total': 'Память (всего)\n(memory_total)',
+    'read_current': 'Чтение (текущее)\n(read_current)',
+    'read_last_5min': 'Чтение (5 мин)\n(read_last_5min)',
+    'read_total': 'Чтение (всего)\n(read_total)',
+    'write_current': 'Запись (текущая)\n(write_current)',
+    'write_last_5min': 'Запись (5 мин)\n(write_last_5min)',
+    'write_total': 'Запись (всего)\n(write_total)',
+    'duration_current_service': 'Время вызова сервиса(текущее)\n(duration_current_service)',
+    'duration_last_5min_service': 'Время вызовов сервисов(5 мин)\n(duration_last_5min_service)',
+    'duration_all_service': 'Время вызовов сервисов(всего)\n(duration_all_service)',
+    'current_service_name': 'Текущий сервис\n(current_service_name)',
+    'cpu_time_current': 'Процессорное время (текущее)\n(cpu_time_current)',
+    'cpu_time_last_5min': 'Процессорное время (5 мин)\n(cpu_time_last_5min)',
+    'cpu_time_total': 'Процессорное время (всего)\n(cpu_time_total)',
+    'client_ip': 'IP Клиента\n(client_ip)',
+    'connection': 'Соединение\n(connection)',
+    'process': 'Процесс\n(process)',
+    'data_separation': 'Разделение данных\n(data_separation)'
+};
+
+/**
+ * Получает отображаемое имя столбца для таблицы сеансов
+ */
+function getSessionColumnDisplayName(key) {
+    if (key === 'session') {
+        return 'Сессия\n(session)';
+    }
+    if (key === 'session_id') {
+        return 'Номер сеанса\n(session_id)';
+    }
+    
+    // Нормализуем ключ: заменяем дефисы на подчеркивания для поиска в маппинге
+    const normalizedKey = key.replace(/-/g, '_');
+    
+    // Ищем в маппинге по нормализованному ключу
+    if (SESSIONS_COLUMN_MAPPING[normalizedKey]) {
+        return SESSIONS_COLUMN_MAPPING[normalizedKey];
+    }
+    
+    // Если не найдено, возвращаем исходный ключ
+    return key;
+}
+
+// ============================================
 // Загрузка и отображение подключений
 // ============================================
 
@@ -1594,7 +1669,7 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
                     <div style="display: flex; align-items: center; gap: 0.25rem;">
                         <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterSessionsColumn('${key}', this.value)" data-column="${key}">
                     </div>
-                    <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'session' ? 'UUID сеанса' : key)}</div>
+                    <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(getSessionColumnDisplayName(key))}</div>
                 </div>
                 <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
             </th>`;
@@ -2218,19 +2293,20 @@ function exportSessionsToExcel() {
     sessions.forEach(session => {
         Object.keys(session.data || {}).forEach(key => allKeys.add(key));
     });
+    allKeys.add('session');
     const sortedKeys = Array.from(allKeys).sort().filter(key => visibleColumns.has(key));
     
     // Создаем CSV данные
     let csv = '\uFEFF'; // BOM для правильной кодировки UTF-8 в Excel
     
-    // Заголовки (включаем UUID если он видим)
+    // Заголовки (используем маппинг для русских названий)
     const headers = [];
-    if (visibleColumns.has('session')) {
-        headers.push('UUID сеанса');
-    }
     sortedKeys.forEach(key => {
-        if (key !== 'session' && visibleColumns.has(key)) {
-            headers.push(key);
+        if (visibleColumns.has(key)) {
+            const displayName = getSessionColumnDisplayName(key);
+            // Убираем перенос строки для Excel (оставляем только первую строку)
+            const excelName = displayName.split('\n')[0];
+            headers.push(excelName);
         }
     });
     // Используем точку с запятой как разделитель для лучшей совместимости с Excel
@@ -2238,15 +2314,17 @@ function exportSessionsToExcel() {
     
     csv += headers.map(h => h.replace(/"/g, '""')).join(separator) + '\n';
     
-    // Данные
+    // Данные (используем тот же порядок, что и в заголовках)
     sessions.forEach(session => {
         const row = [];
-        if (visibleColumns.has('session')) {
-            row.push(String(session.uuid || ''));
-        }
         sortedKeys.forEach(key => {
-            if (key !== 'session' && visibleColumns.has(key)) {
-                const value = session.data[key] || '';
+            if (visibleColumns.has(key)) {
+                let value = '';
+                if (key === 'session') {
+                    value = session.uuid || '';
+                } else {
+                    value = session.data[key] || '';
+                }
                 // Заменяем переносы строк на пробелы
                 const cleanValue = String(value).replace(/\n/g, ' ').replace(/\r/g, '');
                 row.push(cleanValue);
@@ -2329,7 +2407,7 @@ function updateSessionsColumnFilterList() {
     
     sortedKeys.forEach(key => {
         const isVisible = visibleColumns.has(key);
-        const displayName = key === 'session' ? 'UUID сеанса' : key;
+        const displayName = getSessionColumnDisplayName(key);
         html += `
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                 <input type="checkbox" class="session-column-checkbox" data-column="${key}" ${isVisible ? 'checked' : ''} onchange="toggleSessionsColumn('${key}', this.checked)">

@@ -328,6 +328,76 @@ def _parse_session_list(output):
     
     return sessions
 
+def _parse_process_list(output):
+    """Парсит вывод команды process list и извлекает информацию о процессах"""
+    processes = []
+    if not output:
+        return processes
+    
+    lines = output.strip().split('\n')
+    current_process = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между процессами
+            if current_process:
+                processes.append(current_process)
+                current_process = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'process':
+                # Начало нового процесса
+                if current_process:
+                    processes.append(current_process)
+                current_process = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_process:
+                # Сохраняем все данные процесса
+                current_process['data'][key] = value
+    
+    # Добавляем последний процесс
+    if current_process:
+        processes.append(current_process)
+    
+    return processes
+
+def _parse_process_info(output):
+    """Парсит вывод команды process info и извлекает информацию об одном процессе"""
+    process = None
+    if not output:
+        return process
+    
+    lines = output.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'process':
+                if process is None:
+                    process = {
+                        'uuid': value,
+                        'data': {}
+                    }
+            elif process:
+                process['data'][key] = value
+    
+    return process
+
 def _parse_infobase_info(output):
     """Парсит вывод команды infobase info и извлекает информацию об одной информационной базе"""
     infobase = None
@@ -510,6 +580,43 @@ def get_sessions(request, connection_id):
         
         if result['success']:
             sessions = _parse_session_list(result['output'])
+            
+            # Получаем список информационных баз для преобразования UUID в имена
+            infobases_map = {}
+            try:
+                infobases_result = rac_client.get_infobase_summary_list(cluster_uuid)
+                if infobases_result.get('success'):
+                    infobases = _parse_infobase_list(infobases_result.get('output', ''))
+                    for ib in infobases:
+                        infobases_map[ib.get('uuid', '')] = ib.get('name', ib.get('uuid', ''))
+            except Exception:
+                pass  # Игнорируем ошибки при получении списка информационных баз
+            
+            # Получаем список процессов для преобразования UUID в PID
+            processes_map = {}
+            try:
+                processes_result = rac_client.get_process_list(cluster_uuid)
+                if processes_result.get('success'):
+                    processes = _parse_process_list(processes_result.get('output', ''))
+                    for proc in processes:
+                        proc_uuid = proc.get('uuid', '')
+                        proc_pid = proc.get('data', {}).get('pid', '')
+                        if proc_uuid and proc_pid:
+                            processes_map[proc_uuid] = proc_pid
+            except Exception:
+                pass  # Игнорируем ошибки при получении списка процессов
+            
+            # Преобразуем UUID в имена
+            for session in sessions:
+                if 'infobase' in session.get('data', {}):
+                    infobase_uuid = session['data']['infobase']
+                    if infobase_uuid in infobases_map:
+                        session['data']['infobase'] = infobases_map[infobase_uuid]
+                if 'process' in session.get('data', {}):
+                    process_uuid = session['data']['process']
+                    if process_uuid in processes_map:
+                        session['data']['process'] = processes_map[process_uuid]
+            
             return JsonResponse({
                 'success': True,
                 'sessions': sessions,
@@ -584,6 +691,249 @@ def interrupt_server_calls(request):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+@login_required
+def get_session_info(request, connection_id, cluster_uuid):
+    """Получает информацию о сеансе"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        session_uuid = request.GET.get('session')
+        include_licenses = request.GET.get('licenses', 'false').lower() == 'true'
+        
+        if not session_uuid:
+            return JsonResponse({'success': False, 'error': 'Session UUID required'})
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_session_info(cluster_uuid, session_uuid, include_licenses)
+        
+        if result['success']:
+            session_info = _parse_session_info(result['output'])
+            return JsonResponse({
+                'success': True,
+                'session': session_info,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+def _parse_session_info(output):
+    """Парсит вывод команды session info и извлекает информацию об одном сеансе"""
+    session = None
+    if not output:
+        return session
+    
+    lines = output.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'session':
+                if session is None:
+                    session = {
+                        'uuid': value,
+                        'data': {}
+                    }
+            elif session:
+                session['data'][key] = value
+    
+    return session
+
+@login_required
+def get_processes(request, connection_id):
+    """Получает список процессов для подключения"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        cluster_uuid = request.GET.get('cluster')
+        server_uuid = request.GET.get('server')  # Опционально - для фильтрации по серверу
+        include_licenses = request.GET.get('licenses', 'false').lower() == 'true'
+        
+        if not cluster_uuid:
+            return JsonResponse({'success': False, 'error': 'Cluster UUID required'})
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_process_list(cluster_uuid, server_uuid, include_licenses)
+        
+        if result['success']:
+            processes = _parse_process_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'processes': processes,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+def get_process_info(request, connection_id, cluster_uuid):
+    """Получает информацию о процессе"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        process_uuid = request.GET.get('process')
+        include_licenses = request.GET.get('licenses', 'false').lower() == 'true'
+        
+        if not process_uuid:
+            return JsonResponse({'success': False, 'error': 'Process UUID required'})
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_process_info(cluster_uuid, process_uuid, include_licenses)
+        
+        if result['success']:
+            process_info = _parse_process_info(result['output'])
+            return JsonResponse({
+                'success': True,
+                'process': process_info,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+def _parse_manager_list(output):
+    """Парсит вывод команды manager list и извлекает информацию о менеджерах"""
+    managers = []
+    if not output:
+        return managers
+    
+    lines = output.strip().split('\n')
+    current_manager = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между менеджерами
+            if current_manager:
+                managers.append(current_manager)
+                current_manager = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'manager':
+                # Начало нового менеджера
+                if current_manager:
+                    managers.append(current_manager)
+                current_manager = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_manager:
+                # Сохраняем все данные менеджера
+                current_manager['data'][key] = value
+    
+    # Добавляем последнего менеджера
+    if current_manager:
+        managers.append(current_manager)
+    
+    return managers
+
+def _parse_manager_info(output):
+    """Парсит вывод команды manager info и извлекает информацию об одном менеджере"""
+    manager = None
+    if not output:
+        return manager
+    
+    lines = output.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'manager':
+                if manager is None:
+                    manager = {
+                        'uuid': value,
+                        'data': {}
+                    }
+            elif manager:
+                manager['data'][key] = value
+    
+    return manager
+
+@login_required
+def get_managers(request, connection_id):
+    """Получает список менеджеров для подключения"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        cluster_uuid = request.GET.get('cluster')
+        
+        if not cluster_uuid:
+            return JsonResponse({'success': False, 'error': 'Cluster UUID required'})
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_manager_list(cluster_uuid)
+        
+        if result['success']:
+            managers = _parse_manager_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'managers': managers,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+def get_manager_info(request, connection_id, cluster_uuid):
+    """Получает информацию о менеджере"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        manager_uuid = request.GET.get('manager')
+        
+        if not manager_uuid:
+            return JsonResponse({'success': False, 'error': 'Manager UUID required'})
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_manager_info(cluster_uuid, manager_uuid)
+        
+        if result['success']:
+            manager_info = _parse_manager_info(result['output'])
+            return JsonResponse({
+                'success': True,
+                'manager': manager_info,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
 def get_infobases(request, connection_id):

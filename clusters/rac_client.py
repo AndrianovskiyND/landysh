@@ -356,6 +356,49 @@ class RACClient:
         ]
         return self._execute_command(args)
     
+    def get_process_list(self, cluster_uuid, server_uuid=None, include_licenses=False):
+        """Получает список рабочих процессов"""
+        args = ['process', 'list', f'--cluster={cluster_uuid}']
+        if server_uuid:
+            args.append(f'--server={server_uuid}')
+        if include_licenses:
+            args.append('--licenses')
+        return self._execute_command(args)
+    
+    def get_process_info(self, cluster_uuid, process_uuid, include_licenses=False):
+        """Получает информацию о рабочем процессе"""
+        args = [
+            'process', 'info',
+            f'--cluster={cluster_uuid}',
+            f'--process={process_uuid}'
+        ]
+        if include_licenses:
+            args.append('--licenses')
+        return self._execute_command(args)
+    
+    def turn_off_process(self, cluster_uuid, process_uuid):
+        """Выключает рабочий процесс"""
+        args = [
+            'process', 'turn-off',
+            f'--cluster={cluster_uuid}',
+            f'--process={process_uuid}'
+        ]
+        return self._execute_command(args)
+    
+    def get_manager_list(self, cluster_uuid):
+        """Получает список менеджеров кластера"""
+        args = ['manager', 'list', f'--cluster={cluster_uuid}']
+        return self._execute_command(args)
+    
+    def get_manager_info(self, cluster_uuid, manager_uuid):
+        """Получает информацию о менеджере кластера"""
+        args = [
+            'manager', 'info',
+            f'--cluster={cluster_uuid}',
+            f'--manager={manager_uuid}'
+        ]
+        return self._execute_command(args)
+    
     def get_server_list(self, cluster_uuid):
         """Получает список рабочих серверов"""
         args = [

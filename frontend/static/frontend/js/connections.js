@@ -1036,10 +1036,25 @@ async function loadSectionData(section, connectionId, clusterUuid, sectionId) {
  * Загружает данные для подраздела кластера
  */
 async function loadClusterSection(section, connectionId, clusterUuid) {
-    // Для секции сеансов открываем модальное окно, не трогая contentArea
+    // Для секций сеансов и процессов открываем модальное окно, не трогая contentArea
     if (section === 'sessions') {
         await openSessionsModal(connectionId, clusterUuid);
         return;
+    }
+    if (section === 'processes') {
+        await openProcessesModal(connectionId, clusterUuid);
+        return;
+    }
+    if (section === 'managers') {
+        await openManagersModal(connectionId, clusterUuid);
+        return;
+    }
+    
+    // Для остальных секций проверяем, реализованы ли они
+    const implementedSections = ['infobases', 'servers'];
+    if (!implementedSections.includes(section)) {
+        showNotification(`⚠️ Функционал "${section}" находится в разработке`, true);
+        return; // Не меняем contentArea, остаемся в дереве
     }
     
     const contentArea = document.getElementById('contentArea');
@@ -1057,20 +1072,10 @@ async function loadClusterSection(section, connectionId, clusterUuid) {
                 await loadServers(connectionId, clusterUuid);
                 break;
             default:
-                contentArea.innerHTML = `
-                    <div class="info-card">
-                        <h4>Раздел "${section}"</h4>
-                        <p>Функционал в разработке</p>
-                    </div>
-                `;
+                showNotification(`⚠️ Функционал "${section}" находится в разработке`, true);
         }
     } catch (error) {
-        contentArea.innerHTML = `
-            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
-                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
-                <p style="color: #721c24; margin: 0;">Ошибка загрузки: ${error.message}</p>
-            </div>
-        `;
+        showNotification(`❌ Ошибка загрузки: ${error.message}`, true);
     }
 }
 
@@ -1366,11 +1371,17 @@ async function openSessionsModal(connectionId, clusterUuid, infobaseUuid = null)
             <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 1rem;">
                 <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                     <input type="text" id="sessionsSearch" placeholder="🔍 Поиск..." style="flex: 1; min-width: 200px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                    <button class="btn btn-secondary" onclick="toggleSessionsColumnFilter()" title="Фильтр столбцов">📊 Столбцы</button>
+                    <button class="btn btn-secondary" onclick="exportSessionsToExcel()" title="Выгрузить в Excel">📥 Excel</button>
                     <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                         <input type="checkbox" id="sessionsIncludeLicenses">
                         <span>Показать лицензии</span>
                     </label>
                     <button class="btn btn-secondary" onclick="refreshSessionsTable(${connectionId}, '${clusterUuid}', ${infobaseUuid ? `'${infobaseUuid}'` : 'null'})">🔄 Обновить</button>
+                </div>
+                <div id="sessionsColumnFilter" style="display: none; margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 6px; max-height: 200px; overflow-y: auto;">
+                    <div style="font-weight: 600; margin-bottom: 0.5rem;">Выберите столбцы для отображения:</div>
+                    <div id="sessionsColumnFilterList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;"></div>
                 </div>
                 <div id="sessionsTableContainer" style="flex: 1; overflow: auto;">
                     <div style="text-align: center; padding: 2rem;">
@@ -1521,7 +1532,7 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
                     <th style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; width: 40px;">
                         <input type="checkbox" id="selectAllSessionsHeader" onchange="toggleSelectAllSessions()">
                     </th>
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer;" onclick="sortSessionsTable('session')">
+                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer; white-space: nowrap;" onclick="sortSessionsTable('session')">
                         UUID сеанса ↕️
                     </th>
     `;
@@ -1534,9 +1545,21 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
     
     const sortedKeys = Array.from(allKeys).sort();
     
-    // Добавляем заголовки для всех полей
+    // Получаем сохраненное состояние видимости столбцов
+    // Если состояние не сохранено, создаем Set со всеми столбцами (кроме UUID, который всегда видим)
+    if (!window._sessionsVisibleColumns) {
+        window._sessionsVisibleColumns = new Set(sortedKeys);
+    }
+    const visibleColumns = window._sessionsVisibleColumns;
+    
+    // Добавляем заголовки только для видимых столбцов
     sortedKeys.forEach(key => {
-        html += `<th style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer;" onclick="sortSessionsTable('${key}')">${escapeHtml(key)} ↕️</th>`;
+        if (visibleColumns.has(key)) {
+            html += `<th class="resizable-column" style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer; white-space: nowrap; min-width: 150px; position: relative;" onclick="sortSessionsTable('${key}')" data-column="${key}">
+                <span>${escapeHtml(key)} ↕️</span>
+                <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
+            </th>`;
+        }
     });
     
     html += `
@@ -1549,15 +1572,25 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
         const isSelected = selectedSessions.has(session.uuid);
         html += `
             <tr class="session-row" data-session-uuid="${session.uuid}" data-index="${index}" style="cursor: pointer;" oncontextmenu="showSessionContextMenu(event, ${connectionId}, '${clusterUuid}', '${session.uuid}'); return false;">
-                <td style="padding: 0.75rem; border: 1px solid #ddd; text-align: center;" onclick="event.stopPropagation();">
+                <td style="padding: 0.5rem; border: 1px solid #ddd; text-align: center;" onclick="event.stopPropagation();">
                     <input type="checkbox" class="session-checkbox" value="${session.uuid}" ${isSelected ? 'checked' : ''} onchange="updateSessionSelection('${session.uuid}', this.checked)">
                 </td>
-                <td style="padding: 0.75rem; border: 1px solid #ddd; font-family: monospace; font-size: 0.85rem;">${escapeHtml(session.uuid)}</td>
         `;
         
         sortedKeys.forEach(key => {
-            const value = session.data[key] || '';
-            html += `<td style="padding: 0.75rem; border: 1px solid #ddd;">${escapeHtml(value)}</td>`;
+            if (visibleColumns.has(key)) {
+                let value = '';
+                if (key === 'session') {
+                    value = session.uuid;
+                } else {
+                    value = session.data[key] || '';
+                }
+                
+                // Добавляем tooltip для длинных значений
+                const titleAttr = value ? `title="${escapeHtml(value)}"` : '';
+                
+                html += `<td style="padding: 0.5rem; border: 1px solid #ddd; word-wrap: break-word; white-space: normal; max-width: 300px; font-size: 0.9rem;" ${titleAttr} data-column="${key}">${escapeHtml(value)}</td>`;
+            }
         });
         
         html += `</tr>`;
@@ -1573,14 +1606,13 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
     // Добавляем обработчики кликов на строки
     container.querySelectorAll('.session-row').forEach(row => {
         row.addEventListener('click', (e) => {
-            if (e.target.type !== 'checkbox') {
-                const uuid = row.getAttribute('data-session-uuid');
-                const checkbox = row.querySelector('.session-checkbox');
-                if (checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    updateSessionSelection(uuid, checkbox.checked);
-                }
+            // Если клик по чекбоксу - только выбор
+            if (e.target.type === 'checkbox' || e.target.closest('input[type="checkbox"]')) {
+                return;
             }
+            // Иначе открываем модальное окно с детальной информацией
+            const uuid = row.getAttribute('data-session-uuid');
+            openSessionInfoModal(connectionId, clusterUuid, uuid);
         });
     });
     
@@ -1779,6 +1811,305 @@ async function terminateSelectedSessions(connectionId, clusterUuid, sessionUuids
         }
     } catch (error) {
         showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+/**
+ * Открывает модальное окно с детальной информацией о сеансе
+ */
+async function openSessionInfoModal(connectionId, clusterUuid, sessionUuid) {
+    closeContextMenu();
+    
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('sessionInfoModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'sessionInfoModal';
+    modal.style.zIndex = '10002';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>💺 Информация о сеансе</h3>
+                <button class="modal-close-btn" onclick="closeSessionInfoModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="text-align: center; padding: 2rem;">
+                    <p>⏳ Загрузка информации...</p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    try {
+        const response = await fetch(`/api/clusters/sessions/${connectionId}/${clusterUuid}/info/?session=${sessionUuid}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const session = data.session || {};
+            const sessionData = session.data || {};
+            
+            let infoHtml = `
+                <div class="info-card">
+                    <h4>📊 Основная информация</h4>
+                    <div class="form-row">
+                        <label>UUID сеанса:</label>
+                        <input type="text" class="readonly-field" value="${escapeHtml(session.uuid || sessionUuid)}" readonly>
+                    </div>
+            `;
+            
+            // Сортируем ключи для красивого отображения
+            const sortedKeys = Object.keys(sessionData).sort();
+            
+            sortedKeys.forEach(key => {
+                const value = sessionData[key] || '';
+                infoHtml += `
+                    <div class="form-row">
+                        <label>${escapeHtml(key)}:</label>
+                        <input type="text" class="readonly-field" value="${escapeHtml(value)}" readonly>
+                    </div>
+                `;
+            });
+            
+            infoHtml += `</div>`;
+            
+            modal.querySelector('.modal-body').innerHTML = infoHtml;
+        } else {
+            modal.querySelector('.modal-body').innerHTML = `
+                <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                    <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                    <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        modal.querySelector('.modal-body').innerHTML = `
+            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                <p style="color: #721c24; margin: 0;">Ошибка загрузки: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Закрывает модальное окно информации о сеансе
+ */
+function closeSessionInfoModal() {
+    const modal = document.getElementById('sessionInfoModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Инициализирует изменение размера столбцов для таблицы
+ */
+function initColumnResize(tableSelector) {
+    const table = document.querySelector(tableSelector);
+    if (!table) return;
+    
+    const resizeHandles = table.querySelectorAll('.resize-handle');
+    let currentResize = null;
+    
+    resizeHandles.forEach(handle => {
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const th = handle.closest('th');
+            if (!th) return;
+            
+            const startX = e.pageX;
+            const startWidth = th.offsetWidth;
+            
+            currentResize = { th, startX, startWidth };
+            
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+    });
+    
+    function handleMouseMove(e) {
+        if (!currentResize) return;
+        
+        const diff = e.pageX - currentResize.startX;
+        const newWidth = currentResize.startWidth + diff;
+        
+        if (newWidth > 50) { // Минимальная ширина столбца
+            currentResize.th.style.width = newWidth + 'px';
+        }
+    }
+    
+    function handleMouseUp() {
+        if (currentResize) {
+            currentResize = null;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        }
+    }
+}
+
+/**
+ * Выгружает таблицу сеансов в Excel
+ */
+function exportSessionsToExcel() {
+    const sessions = window._sessionsData || [];
+    if (sessions.length === 0) {
+        showNotification('❌ Нет данных для выгрузки', true);
+        return;
+    }
+    
+    const visibleColumns = window._sessionsVisibleColumns || new Set();
+    const allKeys = new Set();
+    sessions.forEach(session => {
+        Object.keys(session.data || {}).forEach(key => allKeys.add(key));
+    });
+    const sortedKeys = Array.from(allKeys).sort().filter(key => visibleColumns.has(key));
+    
+    // Создаем CSV данные
+    let csv = '\uFEFF'; // BOM для правильной кодировки UTF-8 в Excel
+    
+    // Заголовки (включаем UUID если он видим)
+    const headers = [];
+    if (visibleColumns.has('session')) {
+        headers.push('UUID сеанса');
+    }
+    sortedKeys.forEach(key => {
+        if (key !== 'session' && visibleColumns.has(key)) {
+            headers.push(key);
+        }
+    });
+    csv += headers.map(h => `"${h.replace(/"/g, '""')}"`).join('\t') + '\n';
+    
+    // Данные
+    sessions.forEach(session => {
+        const row = [];
+        if (visibleColumns.has('session')) {
+            row.push(`"${session.uuid.replace(/"/g, '""')}"`);
+        }
+        sortedKeys.forEach(key => {
+            if (key !== 'session' && visibleColumns.has(key)) {
+                const value = session.data[key] || '';
+                // Экранируем кавычки и заменяем переносы строк на пробелы
+                const cleanValue = value.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '').replace(/\t/g, ' ');
+                row.push(`"${cleanValue}"`);
+            }
+        });
+        csv += row.join('\t') + '\n';
+    });
+    
+    // Создаем blob и скачиваем
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `sessions_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    showNotification('✅ Таблица выгружена в Excel', false);
+}
+
+/**
+ * Переключает отображение фильтра столбцов
+ */
+function toggleSessionsColumnFilter() {
+    const filterDiv = document.getElementById('sessionsColumnFilter');
+    if (filterDiv) {
+        filterDiv.style.display = filterDiv.style.display === 'none' ? 'block' : 'none';
+        
+        // Если открываем фильтр, заполняем список столбцов
+        if (filterDiv.style.display === 'block') {
+            updateSessionsColumnFilterList();
+        }
+    }
+}
+
+/**
+ * Обновляет список столбцов в фильтре
+ */
+function updateSessionsColumnFilterList() {
+    const filterList = document.getElementById('sessionsColumnFilterList');
+    if (!filterList) return;
+    
+    const sessions = window._sessionsData || [];
+    if (sessions.length === 0) return;
+    
+    // Собираем все уникальные ключи (UUID сеанса не включаем, он всегда видим)
+    const allKeys = new Set();
+    sessions.forEach(session => {
+        Object.keys(session.data || {}).forEach(key => allKeys.add(key));
+    });
+    
+    const sortedKeys = Array.from(allKeys).sort();
+    
+    // Получаем сохраненное состояние видимости столбцов
+    // Если состояние не сохранено, создаем Set со всеми столбцами (кроме UUID, который всегда видим)
+    if (!window._sessionsVisibleColumns) {
+        window._sessionsVisibleColumns = new Set(sortedKeys);
+    }
+    const visibleColumns = window._sessionsVisibleColumns;
+    
+    // Проверяем, все ли столбцы выбраны
+    const allSelected = sortedKeys.length > 0 && sortedKeys.every(key => visibleColumns.has(key));
+    
+    let html = `
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 600; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid #ddd;">
+            <input type="checkbox" id="selectAllSessionsColumns" ${allSelected ? 'checked' : ''} onchange="toggleAllSessionsColumns(this.checked)">
+            <span>Выбрать все</span>
+        </label>
+    `;
+    
+    sortedKeys.forEach(key => {
+        const isVisible = visibleColumns.has(key);
+        html += `
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" class="session-column-checkbox" data-column="${key}" ${isVisible ? 'checked' : ''} onchange="toggleSessionsColumn('${key}', this.checked)">
+                <span>${escapeHtml(key)}</span>
+            </label>
+        `;
+    });
+    
+    filterList.innerHTML = html;
+}
+
+/**
+ * Переключает видимость столбца
+ */
+function toggleSessionsColumn(columnKey, isVisible) {
+    if (!window._sessionsVisibleColumns) {
+        window._sessionsVisibleColumns = new Set();
+    }
+    
+    if (isVisible) {
+        window._sessionsVisibleColumns.add(columnKey);
+    } else {
+        window._sessionsVisibleColumns.delete(columnKey);
+    }
+    
+    // Перерисовываем таблицу
+    const connectionId = window._currentSessionsConnectionId;
+    const clusterUuid = window._currentSessionsClusterUuid;
+    const infobaseUuid = window._currentSessionsInfobaseUuid;
+    
+    if (connectionId && clusterUuid) {
+        const sessions = window._sessionsData || [];
+        renderSessionsTable(sessions, connectionId, clusterUuid);
+        filterSessionsTable(); // Применяем фильтр если есть
     }
 }
 
@@ -2430,6 +2761,9 @@ function showServerContextMenu(event, connectionId, clusterUuid, serverUuid, ser
     menu.innerHTML = `
         <div class="context-menu-item" onclick="openServerProperties(${connectionId}, '${clusterUuid}', '${serverUuid}'); closeContextMenu();">
             📋 Свойства
+        </div>
+        <div class="context-menu-item" onclick="openProcessesModal(${connectionId}, '${clusterUuid}', '${serverUuid}'); closeContextMenu();">
+            🔄 Процессы
         </div>
         <div class="context-menu-item" onclick="deleteServer(${connectionId}, '${clusterUuid}', '${serverUuid}', '${escapeHtml(serverName).replace(/'/g, "\\'")}'); closeContextMenu();">
             🗑️ Удалить
@@ -3439,3 +3773,1240 @@ async function deleteServer(connectionId, clusterUuid, serverUuid, serverName) {
     }
 }
 
+// ============================================
+// Функции для работы с процессами
+// ============================================
+
+/**
+ * Открывает модальное окно процессов на весь экран
+ */
+async function openProcessesModal(connectionId, clusterUuid, serverUuid = null) {
+    closeContextMenu();
+    
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('processesModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'processesModal';
+    modal.style.zIndex = '10001';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 95vw; max-height: 95vh; width: 95vw; height: 95vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="flex-shrink: 0;">
+                <h3>🔄 Рабочие процессы${serverUuid ? ' (фильтр по серверу)' : ''}</h3>
+                <button class="modal-close-btn" onclick="closeProcessesModal()">×</button>
+            </div>
+            <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 1rem;">
+                <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <input type="text" id="processesSearch" placeholder="🔍 Поиск..." style="flex: 1; min-width: 200px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                    <button class="btn btn-secondary" onclick="toggleProcessesColumnFilter()" title="Фильтр столбцов">📊 Столбцы</button>
+                    <button class="btn btn-secondary" onclick="exportProcessesToExcel()" title="Выгрузить в Excel">📥 Excel</button>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" id="processesIncludeLicenses">
+                        <span>Показать лицензии</span>
+                    </label>
+                    <button class="btn btn-secondary" onclick="refreshProcessesTable(${connectionId}, '${clusterUuid}', ${serverUuid ? `'${serverUuid}'` : 'null'})">🔄 Обновить</button>
+                </div>
+                <div id="processesColumnFilter" style="display: none; margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 6px; max-height: 200px; overflow-y: auto;">
+                    <div style="font-weight: 600; margin-bottom: 0.5rem;">Выберите столбцы для отображения:</div>
+                    <div id="processesColumnFilterList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;"></div>
+                </div>
+                <div id="processesTableContainer" style="flex: 1; overflow: auto;">
+                    <div style="text-align: center; padding: 2rem;">
+                        <p>⏳ Загрузка процессов...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Сохраняем параметры для обновления
+    window._currentProcessesConnectionId = connectionId;
+    window._currentProcessesClusterUuid = clusterUuid;
+    window._currentProcessesServerUuid = serverUuid;
+    window._selectedProcesses = new Set();
+    
+    // Загружаем процессы
+    await loadProcessesTable(connectionId, clusterUuid, serverUuid);
+    
+    // Добавляем обработчик поиска
+    const searchInput = document.getElementById('processesSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            filterProcessesTable();
+        });
+    }
+    
+    // Добавляем обработчик переключения лицензий
+    const licensesCheckbox = document.getElementById('processesIncludeLicenses');
+    if (licensesCheckbox) {
+        licensesCheckbox.addEventListener('change', () => {
+            loadProcessesTable(connectionId, clusterUuid, serverUuid);
+        });
+    }
+}
+
+/**
+ * Закрывает модальное окно процессов
+ */
+function closeProcessesModal() {
+    const modal = document.getElementById('processesModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Очищаем глобальные переменные
+    if (window._currentProcessesConnectionId) {
+        delete window._currentProcessesConnectionId;
+    }
+    if (window._currentProcessesClusterUuid) {
+        delete window._currentProcessesClusterUuid;
+    }
+    if (window._currentProcessesServerUuid) {
+        delete window._currentProcessesServerUuid;
+    }
+    if (window._selectedProcesses) {
+        delete window._selectedProcesses;
+    }
+    if (window._processesData) {
+        delete window._processesData;
+    }
+    if (window._processesSort) {
+        delete window._processesSort;
+    }
+}
+
+/**
+ * Загружает таблицу процессов
+ */
+async function loadProcessesTable(connectionId, clusterUuid, serverUuid = null) {
+    const container = document.getElementById('processesTableContainer');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align: center; padding: 2rem;"><p>⏳ Загрузка процессов...</p></div>';
+    
+    try {
+        const includeLicenses = document.getElementById('processesIncludeLicenses')?.checked || false;
+        let url = `/api/clusters/processes/${connectionId}/?cluster=${clusterUuid}`;
+        if (serverUuid) {
+            url += `&server=${serverUuid}`;
+        }
+        if (includeLicenses) {
+            url += `&licenses=true`;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            const processes = data.processes || [];
+            
+            if (processes.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: #666;">
+                        <p>Процессов нет</p>
+                    </div>
+                `;
+            } else {
+                renderProcessesTable(processes, connectionId, clusterUuid);
+            }
+        } else {
+            container.innerHTML = `
+                <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                    <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                    <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        container.innerHTML = `
+            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                <p style="color: #721c24; margin: 0;">Ошибка загрузки: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Обновляет таблицу процессов
+ */
+async function refreshProcessesTable(connectionId, clusterUuid, serverUuid) {
+    await loadProcessesTable(connectionId, clusterUuid, serverUuid);
+}
+
+/**
+ * Отрисовывает таблицу процессов
+ */
+function renderProcessesTable(processes, connectionId, clusterUuid) {
+    const container = document.getElementById('processesTableContainer');
+    if (!container) return;
+    
+    // Сохраняем выбранные процессы
+    const selectedProcesses = window._selectedProcesses || new Set();
+    
+    let html = `
+        <table id="processesTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: auto;">
+            <thead>
+                <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
+    `;
+    
+    // Собираем все уникальные ключи из всех процессов для заголовков
+    const allKeys = new Set();
+    processes.forEach(process => {
+        Object.keys(process.data || {}).forEach(key => allKeys.add(key));
+    });
+    
+    // Добавляем UUID процесса в список ключей для управления через фильтр
+    allKeys.add('process');
+    const sortedKeys = Array.from(allKeys).sort();
+    
+    // Получаем сохраненное состояние видимости столбцов
+    // По умолчанию UUID выключен, остальные включены
+    if (!window._processesVisibleColumns) {
+        window._processesVisibleColumns = new Set(sortedKeys.filter(k => k !== 'process'));
+    }
+    const visibleColumns = window._processesVisibleColumns;
+    
+    // Добавляем заголовки только для видимых столбцов
+    sortedKeys.forEach(key => {
+        if (visibleColumns.has(key)) {
+            html += `<th class="resizable-column" style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; min-width: 120px; position: relative; vertical-align: top;">
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <div style="text-align: center; font-size: 0.85rem; cursor: pointer;" onclick="sortProcessesTable('${key}')" title="Сортировать">↕️</div>
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterProcessesColumn('${key}', this.value)" data-column="${key}">
+                    </div>
+                    <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'process' ? 'UUID процесса' : key)}</div>
+                </div>
+                <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
+            </th>`;
+        }
+    });
+    
+    html += `
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    processes.forEach((process, index) => {
+        html += `
+            <tr class="process-row" data-process-uuid="${process.uuid}" data-index="${index}" style="cursor: pointer;">
+                <td style="padding: 0.75rem; border: 1px solid #ddd; font-family: monospace; font-size: 0.85rem; white-space: nowrap;">${escapeHtml(process.uuid)}</td>
+        `;
+        
+        sortedKeys.forEach(key => {
+            if (visibleColumns.has(key)) {
+                const value = process.data[key] || '';
+                
+                // Добавляем tooltip для длинных значений
+                const displayValue = value.length > 50 ? value.substring(0, 50) + '...' : value;
+                const titleAttr = value.length > 50 ? `title="${escapeHtml(value)}"` : '';
+                
+                html += `<td style="padding: 0.75rem; border: 1px solid #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;" ${titleAttr}>${escapeHtml(displayValue)}</td>`;
+            }
+        });
+        
+        html += `</tr>`;
+    });
+    
+    html += `
+            </tbody>
+        </table>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Добавляем обработчики кликов на строки
+    container.querySelectorAll('.process-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+            // Если клик по resize handle - не открываем модальное окно
+            if (e.target.classList.contains('resize-handle') || e.target.closest('.resize-handle')) {
+                return;
+            }
+            // Иначе открываем модальное окно с детальной информацией
+            const uuid = row.getAttribute('data-process-uuid');
+            openProcessInfoModal(connectionId, clusterUuid, uuid);
+        });
+    });
+    
+    // Добавляем обработчики для изменения размера столбцов
+    initColumnResize('#processesTable');
+    
+    // Сохраняем данные для фильтрации и сортировки
+    window._processesData = processes;
+    window._selectedProcesses = selectedProcesses;
+}
+
+/**
+ * Фильтрует таблицу процессов по поисковому запросу
+ */
+function filterProcessesTable() {
+    const searchInput = document.getElementById('processesSearch');
+    const searchTerm = (searchInput?.value || '').toLowerCase();
+    const rows = document.querySelectorAll('.process-row');
+    
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+}
+
+/**
+ * Сортирует таблицу процессов
+ */
+function sortProcessesTable(columnKey) {
+    const processes = window._processesData || [];
+    const currentSort = window._processesSort || { column: null, direction: 'asc' };
+    
+    let direction = 'asc';
+    if (currentSort.column === columnKey && currentSort.direction === 'asc') {
+        direction = 'desc';
+    }
+    
+    processes.sort((a, b) => {
+        let aVal = '';
+        let bVal = '';
+        
+        if (columnKey === 'process') {
+            aVal = a.uuid || '';
+            bVal = b.uuid || '';
+        } else {
+            aVal = a.data[columnKey] || '';
+            bVal = b.data[columnKey] || '';
+        }
+        
+        if (direction === 'asc') {
+            return aVal.localeCompare(bVal);
+        } else {
+            return bVal.localeCompare(aVal);
+        }
+    });
+    
+    window._processesSort = { column: columnKey, direction };
+    
+    // Перерисовываем таблицу
+    const connectionId = window._currentProcessesConnectionId;
+    const clusterUuid = window._currentProcessesClusterUuid;
+    
+    if (connectionId && clusterUuid) {
+        renderProcessesTable(processes, connectionId, clusterUuid);
+        filterProcessesTable(); // Применяем фильтр если есть
+    }
+}
+
+/**
+ * Переключает отображение фильтра столбцов для процессов
+ */
+function toggleProcessesColumnFilter() {
+    const filterDiv = document.getElementById('processesColumnFilter');
+    if (filterDiv) {
+        filterDiv.style.display = filterDiv.style.display === 'none' ? 'block' : 'none';
+        
+        // Если открываем фильтр, заполняем список столбцов
+        if (filterDiv.style.display === 'block') {
+            updateProcessesColumnFilterList();
+        }
+    }
+}
+
+/**
+ * Обновляет список столбцов в фильтре процессов
+ */
+function updateProcessesColumnFilterList() {
+    const filterList = document.getElementById('processesColumnFilterList');
+    if (!filterList) return;
+    
+    const processes = window._processesData || [];
+    if (processes.length === 0) return;
+    
+    // Собираем все уникальные ключи
+    const allKeys = new Set();
+    processes.forEach(process => {
+        Object.keys(process.data || {}).forEach(key => allKeys.add(key));
+    });
+    
+    const sortedKeys = Array.from(allKeys).sort();
+    
+    // Получаем сохраненное состояние видимости столбцов
+    // Если состояние не сохранено, создаем Set со всеми столбцами
+    if (!window._processesVisibleColumns) {
+        window._processesVisibleColumns = new Set(sortedKeys);
+    }
+    const visibleColumns = window._processesVisibleColumns;
+    
+    // Проверяем, все ли столбцы выбраны
+    const allSelected = sortedKeys.length > 0 && sortedKeys.every(key => visibleColumns.has(key));
+    
+    let html = `
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 600; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid #ddd;">
+            <input type="checkbox" id="selectAllProcessesColumns" ${allSelected ? 'checked' : ''} onchange="toggleAllProcessesColumns(this.checked)">
+            <span>Выбрать все</span>
+        </label>
+    `;
+    
+    sortedKeys.forEach(key => {
+        const isVisible = visibleColumns.has(key);
+        html += `
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" class="process-column-checkbox" data-column="${key}" ${isVisible ? 'checked' : ''} onchange="toggleProcessesColumn('${key}', this.checked)">
+                <span>${escapeHtml(key)}</span>
+            </label>
+        `;
+    });
+    
+    filterList.innerHTML = html;
+}
+
+/**
+ * Переключает выбор всех столбцов процессов
+ */
+function toggleAllProcessesColumns(selectAll) {
+    const processes = window._processesData || [];
+    if (processes.length === 0) return;
+    
+    // Собираем все уникальные ключи (включая UUID процесса)
+    const allKeys = new Set();
+    processes.forEach(process => {
+        Object.keys(process.data || {}).forEach(key => allKeys.add(key));
+    });
+    allKeys.add('process');
+    
+    const sortedKeys = Array.from(allKeys).sort();
+    
+    if (!window._processesVisibleColumns) {
+        window._processesVisibleColumns = new Set();
+    }
+    
+    if (selectAll) {
+        // Добавляем все столбцы
+        sortedKeys.forEach(key => window._processesVisibleColumns.add(key));
+    } else {
+        // Удаляем все столбцы
+        sortedKeys.forEach(key => window._processesVisibleColumns.delete(key));
+    }
+    
+    // Обновляем чекбоксы в фильтре
+    document.querySelectorAll('.process-column-checkbox').forEach(checkbox => {
+        checkbox.checked = selectAll;
+    });
+    
+    // Перерисовываем таблицу
+    const connectionId = window._currentProcessesConnectionId;
+    const clusterUuid = window._currentProcessesClusterUuid;
+    
+    if (connectionId && clusterUuid) {
+        const processes = window._processesData || [];
+        renderProcessesTable(processes, connectionId, clusterUuid);
+        filterProcessesTable(); // Применяем фильтр если есть
+    }
+}
+
+/**
+ * Фильтрует столбец процессов по значению поиска
+ */
+function filterProcessesColumn(columnKey, searchValue) {
+    const table = document.getElementById('processesTable');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tbody tr');
+    const searchLower = searchValue.toLowerCase();
+    
+    rows.forEach(row => {
+        const cell = row.querySelector(`td[data-column="${columnKey}"]`);
+        if (cell) {
+            const cellText = cell.textContent.toLowerCase();
+            if (searchValue === '' || cellText.includes(searchLower)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        }
+    });
+}
+
+/**
+ * Переключает видимость столбца процессов
+ */
+function toggleProcessesColumn(columnKey, isVisible) {
+    if (!window._processesVisibleColumns) {
+        window._processesVisibleColumns = new Set();
+    }
+    
+    if (isVisible) {
+        window._processesVisibleColumns.add(columnKey);
+    } else {
+        window._processesVisibleColumns.delete(columnKey);
+    }
+    
+    // Перерисовываем таблицу
+    const connectionId = window._currentProcessesConnectionId;
+    const clusterUuid = window._currentProcessesClusterUuid;
+    
+    if (connectionId && clusterUuid) {
+        const processes = window._processesData || [];
+        renderProcessesTable(processes, connectionId, clusterUuid);
+        filterProcessesTable(); // Применяем фильтр если есть
+    }
+}
+
+/**
+ * Открывает модальное окно с детальной информацией о процессе
+ */
+async function openProcessInfoModal(connectionId, clusterUuid, processUuid) {
+    closeContextMenu();
+    
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('processInfoModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'processInfoModal';
+    modal.style.zIndex = '10002';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>🔄 Информация о процессе</h3>
+                <button class="modal-close-btn" onclick="closeProcessInfoModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="text-align: center; padding: 2rem;">
+                    <p>⏳ Загрузка информации...</p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    try {
+        const response = await fetch(`/api/clusters/processes/${connectionId}/${clusterUuid}/info/?process=${processUuid}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const process = data.process || {};
+            const processData = process.data || {};
+            
+            let infoHtml = `
+                <div class="info-card">
+                    <h4>📊 Основная информация</h4>
+                    <div class="form-row">
+                        <label>UUID процесса:</label>
+                        <input type="text" class="readonly-field" value="${escapeHtml(process.uuid || processUuid)}" readonly>
+                    </div>
+            `;
+            
+            // Сортируем ключи для красивого отображения
+            const sortedKeys = Object.keys(processData).sort();
+            
+            sortedKeys.forEach(key => {
+                const value = processData[key] || '';
+                infoHtml += `
+                    <div class="form-row">
+                        <label>${escapeHtml(key)}:</label>
+                        <input type="text" class="readonly-field" value="${escapeHtml(value)}" readonly>
+                    </div>
+                `;
+            });
+            
+            infoHtml += `</div>`;
+            
+            modal.querySelector('.modal-body').innerHTML = infoHtml;
+        } else {
+            modal.querySelector('.modal-body').innerHTML = `
+                <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                    <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                    <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        modal.querySelector('.modal-body').innerHTML = `
+            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                <p style="color: #721c24; margin: 0;">Ошибка загрузки: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Закрывает модальное окно информации о процессе
+ */
+function closeProcessInfoModal() {
+    const modal = document.getElementById('processInfoModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Выгружает таблицу процессов в Excel
+ */
+function exportProcessesToExcel() {
+    const processes = window._processesData || [];
+    if (processes.length === 0) {
+        showNotification('❌ Нет данных для выгрузки', true);
+        return;
+    }
+    
+    const visibleColumns = window._processesVisibleColumns || new Set();
+    const allKeys = new Set();
+    processes.forEach(process => {
+        Object.keys(process.data || {}).forEach(key => allKeys.add(key));
+    });
+    allKeys.add('process');
+    const sortedKeys = Array.from(allKeys).sort().filter(key => visibleColumns.has(key));
+    
+    // Создаем TSV данные (tab-separated для лучшей совместимости с Excel)
+    let csv = '\uFEFF'; // BOM для правильной кодировки UTF-8 в Excel
+    
+    // Заголовки (включаем UUID если он видим)
+    const headers = [];
+    if (visibleColumns.has('process')) {
+        headers.push('UUID процесса');
+    }
+    sortedKeys.forEach(key => {
+        if (key !== 'process' && visibleColumns.has(key)) {
+            headers.push(key);
+        }
+    });
+    csv += headers.map(h => `"${h.replace(/"/g, '""')}"`).join('\t') + '\n';
+    
+    // Данные
+    processes.forEach(process => {
+        const row = [];
+        if (visibleColumns.has('process')) {
+            row.push(`"${process.uuid.replace(/"/g, '""')}"`);
+        }
+        sortedKeys.forEach(key => {
+            if (key !== 'process' && visibleColumns.has(key)) {
+                const value = process.data[key] || '';
+                // Экранируем кавычки и заменяем переносы строк на пробелы
+                const cleanValue = value.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '').replace(/\t/g, ' ');
+                row.push(`"${cleanValue}"`);
+            }
+        });
+        csv += row.join('\t') + '\n';
+    });
+    
+    // Создаем blob и скачиваем (используем tab-separated для лучшей совместимости с Excel)
+    const blob = new Blob([csv], { type: 'text/tab-separated-values;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `processes_${new Date().toISOString().split('T')[0]}.tsv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    showNotification('✅ Таблица выгружена в Excel', false);
+}
+
+/**
+ * Открывает модальное окно с менеджерами кластера
+ */
+async function openManagersModal(connectionId, clusterUuid) {
+    closeContextMenu();
+    
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('managersModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Сохраняем глобальные переменные
+    window._currentManagersConnectionId = connectionId;
+    window._currentManagersClusterUuid = clusterUuid;
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay modal-full-screen';
+    modal.id = 'managersModal';
+    modal.style.zIndex = '10002';
+    modal.innerHTML = `
+        <div class="modal" style="width: 95vw; height: 95vh; max-width: none; max-height: none; display: flex; flex-direction: column;">
+            <div class="modal-header" style="flex-shrink: 0;">
+                <h3>🏢 Менеджеры кластера</h3>
+                <button class="modal-close-btn" onclick="closeManagersModal()">×</button>
+            </div>
+            <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 1rem;">
+                <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <input type="text" id="managersSearch" placeholder="🔍 Поиск..." style="flex: 1; min-width: 200px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                    <button class="btn btn-secondary" onclick="toggleManagersColumnFilter()" title="Фильтр столбцов">📊 Столбцы</button>
+                    <button class="btn btn-secondary" onclick="exportManagersToExcel()" title="Выгрузить в Excel">📥 Excel</button>
+                    <button class="btn btn-secondary" onclick="refreshManagersTable(${connectionId}, '${clusterUuid}')">🔄 Обновить</button>
+                </div>
+                <div id="managersColumnFilter" style="display: none; position: absolute; background: white; border: 1px solid #ddd; border-radius: 4px; padding: 1rem; z-index: 10003; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 400px; overflow-y: auto; right: 1rem; top: 4rem;">
+                    <div id="managersColumnFilterList"></div>
+                </div>
+                <div id="managersTableContainer" style="flex: 1; overflow: auto;">
+                    <div style="text-align: center; padding: 2rem;">
+                        <p>⏳ Загрузка данных...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Добавляем обработчик поиска
+    const searchInput = document.getElementById('managersSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', filterManagersTable);
+    }
+    
+    // Загружаем данные
+    await loadManagersTable(connectionId, clusterUuid);
+}
+
+/**
+ * Закрывает модальное окно менеджеров
+ */
+function closeManagersModal() {
+    const modal = document.getElementById('managersModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Очищаем глобальные переменные
+    window._currentManagersConnectionId = null;
+    window._currentManagersClusterUuid = null;
+    window._managersData = null;
+}
+
+/**
+ * Загружает таблицу менеджеров
+ */
+async function loadManagersTable(connectionId, clusterUuid) {
+    const container = document.getElementById('managersTableContainer');
+    if (!container) return;
+    
+    try {
+        const response = await fetch(`/api/clusters/managers/${connectionId}/?cluster=${clusterUuid}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const managers = data.managers || [];
+            renderManagersTable(managers, connectionId, clusterUuid);
+        } else {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 2rem;">
+                    <p>❌ Ошибка загрузки: ${data.error || 'Неизвестная ошибка'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+                <p>❌ Ошибка загрузки: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Обновляет таблицу менеджеров
+ */
+async function refreshManagersTable(connectionId, clusterUuid) {
+    await loadManagersTable(connectionId, clusterUuid);
+}
+
+/**
+ * Рендерит таблицу менеджеров
+ */
+function renderManagersTable(managers, connectionId, clusterUuid) {
+    const container = document.getElementById('managersTableContainer');
+    if (!container) return;
+    
+    if (managers.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+                <p>Менеджеров не найдено</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Собираем все уникальные ключи
+    const allKeys = new Set();
+    managers.forEach(manager => {
+        Object.keys(manager.data || {}).forEach(key => allKeys.add(key));
+    });
+    
+    const sortedKeys = Array.from(allKeys).sort();
+    
+    // Получаем сохраненное состояние видимости столбцов
+    if (!window._managersVisibleColumns) {
+        window._managersVisibleColumns = new Set(sortedKeys);
+    }
+    const visibleColumns = window._managersVisibleColumns;
+    
+    let html = `
+        <table id="managersTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: fixed;">
+            <thead>
+                <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
+                    <th class="resizable-column" style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer; white-space: nowrap; min-width: 200px; position: relative;" onclick="sortManagersTable('manager')" data-column="manager">
+                        <span>UUID менеджера ↕️</span>
+                        <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
+                    </th>
+    `;
+    
+    // Добавляем заголовки только для видимых столбцов
+    sortedKeys.forEach(key => {
+        if (visibleColumns.has(key)) {
+            html += `<th class="resizable-column" style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer; white-space: nowrap; min-width: 150px; position: relative;" onclick="sortManagersTable('${key}')" data-column="${key}">
+                <span>${escapeHtml(key)} ↕️</span>
+                <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
+            </th>`;
+        }
+    });
+    
+    html += `
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    managers.forEach((manager, index) => {
+        html += `
+            <tr class="manager-row" data-manager-uuid="${manager.uuid}" data-index="${index}" style="cursor: pointer;">
+                <td style="padding: 0.75rem; border: 1px solid #ddd; font-family: monospace; font-size: 0.85rem; white-space: nowrap;">${escapeHtml(manager.uuid)}</td>
+        `;
+        
+        sortedKeys.forEach(key => {
+            if (visibleColumns.has(key)) {
+                const value = manager.data[key] || '';
+                
+                // Добавляем tooltip для длинных значений
+                const displayValue = value.length > 50 ? value.substring(0, 50) + '...' : value;
+                const titleAttr = value.length > 50 ? `title="${escapeHtml(value)}"` : '';
+                
+                html += `<td style="padding: 0.75rem; border: 1px solid #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;" ${titleAttr}>${escapeHtml(displayValue)}</td>`;
+            }
+        });
+        
+        html += `</tr>`;
+    });
+    
+    html += `
+            </tbody>
+        </table>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Добавляем обработчики кликов на строки
+    container.querySelectorAll('.manager-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+            // Если клик по resize handle или по полю поиска - не открываем модальное окно
+            if (e.target.classList.contains('resize-handle') || e.target.closest('.resize-handle') || 
+                e.target.classList.contains('column-search-input') || e.target.closest('.column-search-input')) {
+                return;
+            }
+            // Иначе открываем модальное окно с детальной информацией
+            const uuid = row.getAttribute('data-manager-uuid');
+            openManagerInfoModal(connectionId, clusterUuid, uuid);
+        });
+    });
+    
+    // Добавляем обработчики для изменения размера столбцов
+    initColumnResize('#managersTable');
+    
+    // Сохраняем данные для фильтрации и сортировки
+    window._managersData = managers;
+}
+
+/**
+ * Фильтрует столбец менеджеров по значению поиска
+ */
+function filterManagersColumn(columnKey, searchValue) {
+    const table = document.getElementById('managersTable');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tbody tr');
+    const searchLower = searchValue.toLowerCase();
+    
+    rows.forEach(row => {
+        const cell = row.querySelector(`td[data-column="${columnKey}"]`);
+        if (cell) {
+            const cellText = cell.textContent.toLowerCase();
+            if (searchValue === '' || cellText.includes(searchLower)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        }
+    });
+}
+
+/**
+ * Сортирует таблицу менеджеров
+ */
+function sortManagersTable(columnKey) {
+    const managers = window._managersData || [];
+    const currentSort = window._managersSort || { column: null, direction: 'asc' };
+    
+    let direction = 'asc';
+    if (currentSort.column === columnKey && currentSort.direction === 'asc') {
+        direction = 'desc';
+    }
+    
+    managers.sort((a, b) => {
+        let aVal = '';
+        let bVal = '';
+        
+        if (columnKey === 'manager') {
+            aVal = a.uuid || '';
+            bVal = b.uuid || '';
+        } else {
+            aVal = a.data[columnKey] || '';
+            bVal = b.data[columnKey] || '';
+        }
+        
+        if (direction === 'asc') {
+            return aVal.localeCompare(bVal);
+        } else {
+            return bVal.localeCompare(aVal);
+        }
+    });
+    
+    window._managersSort = { column: columnKey, direction };
+    
+    // Перерисовываем таблицу
+    const connectionId = window._currentManagersConnectionId;
+    const clusterUuid = window._currentManagersClusterUuid;
+    
+    if (connectionId && clusterUuid) {
+        renderManagersTable(managers, connectionId, clusterUuid);
+        filterManagersTable(); // Применяем фильтр если есть
+    }
+}
+
+/**
+ * Фильтрует таблицу менеджеров
+ */
+function filterManagersTable() {
+    const searchInput = document.getElementById('managersSearch');
+    if (!searchInput) return;
+    
+    const searchTerm = searchInput.value.toLowerCase();
+    const table = document.getElementById('managersTable');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+}
+
+/**
+ * Переключает фильтр столбцов менеджеров
+ */
+function toggleManagersColumnFilter() {
+    const filterDiv = document.getElementById('managersColumnFilter');
+    if (!filterDiv) return;
+    
+    const isVisible = filterDiv.style.display !== 'none';
+    filterDiv.style.display = isVisible ? 'none' : 'block';
+    
+    if (!isVisible) {
+        updateManagersColumnFilterList();
+    }
+}
+
+/**
+ * Обновляет список столбцов в фильтре менеджеров
+ */
+function updateManagersColumnFilterList() {
+    const filterList = document.getElementById('managersColumnFilterList');
+    if (!filterList) return;
+    
+    const managers = window._managersData || [];
+    if (managers.length === 0) return;
+    
+    // Собираем все уникальные ключи (включая UUID менеджера)
+    const allKeys = new Set();
+    managers.forEach(manager => {
+        Object.keys(manager.data || {}).forEach(key => allKeys.add(key));
+    });
+    allKeys.add('manager');
+    
+    const sortedKeys = Array.from(allKeys).sort();
+    
+    // Получаем сохраненное состояние видимости столбцов
+    // По умолчанию UUID выключен, остальные включены
+    if (!window._managersVisibleColumns) {
+        window._managersVisibleColumns = new Set(sortedKeys.filter(k => k !== 'manager'));
+    }
+    const visibleColumns = window._managersVisibleColumns;
+    
+    // Проверяем, все ли столбцы выбраны
+    const allSelected = sortedKeys.length > 0 && sortedKeys.every(key => visibleColumns.has(key));
+    
+    let html = `
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 600; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid #ddd;">
+            <input type="checkbox" id="selectAllManagersColumns" ${allSelected ? 'checked' : ''} onchange="toggleAllManagersColumns(this.checked)">
+            <span>Выбрать все</span>
+        </label>
+    `;
+    
+    sortedKeys.forEach(key => {
+        const isVisible = visibleColumns.has(key);
+        const displayName = key === 'manager' ? 'UUID менеджера' : key;
+        html += `
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" class="manager-column-checkbox" data-column="${key}" ${isVisible ? 'checked' : ''} onchange="toggleManagersColumn('${key}', this.checked)">
+                <span>${escapeHtml(displayName)}</span>
+            </label>
+        `;
+    });
+    
+    filterList.innerHTML = html;
+}
+
+/**
+ * Переключает выбор всех столбцов менеджеров
+ */
+function toggleAllManagersColumns(selectAll) {
+    const managers = window._managersData || [];
+    if (managers.length === 0) return;
+    
+    // Собираем все уникальные ключи (включая UUID менеджера)
+    const allKeys = new Set();
+    managers.forEach(manager => {
+        Object.keys(manager.data || {}).forEach(key => allKeys.add(key));
+    });
+    allKeys.add('manager');
+    
+    const sortedKeys = Array.from(allKeys).sort();
+    
+    if (!window._managersVisibleColumns) {
+        window._managersVisibleColumns = new Set();
+    }
+    
+    if (selectAll) {
+        // Добавляем все столбцы
+        sortedKeys.forEach(key => window._managersVisibleColumns.add(key));
+    } else {
+        // Удаляем все столбцы
+        sortedKeys.forEach(key => window._managersVisibleColumns.delete(key));
+    }
+    
+    // Обновляем чекбоксы в фильтре
+    document.querySelectorAll('.manager-column-checkbox').forEach(checkbox => {
+        checkbox.checked = selectAll;
+    });
+    
+    // Перерисовываем таблицу
+    const connectionId = window._currentManagersConnectionId;
+    const clusterUuid = window._currentManagersClusterUuid;
+    
+    if (connectionId && clusterUuid) {
+        const managers = window._managersData || [];
+        renderManagersTable(managers, connectionId, clusterUuid);
+        filterManagersTable(); // Применяем фильтр если есть
+    }
+}
+
+/**
+ * Переключает видимость столбца менеджеров
+ */
+function toggleManagersColumn(columnKey, isVisible) {
+    if (!window._managersVisibleColumns) {
+        window._managersVisibleColumns = new Set();
+    }
+    
+    if (isVisible) {
+        window._managersVisibleColumns.add(columnKey);
+    } else {
+        window._managersVisibleColumns.delete(columnKey);
+    }
+    
+    // Перерисовываем таблицу
+    const connectionId = window._currentManagersConnectionId;
+    const clusterUuid = window._currentManagersClusterUuid;
+    
+    if (connectionId && clusterUuid) {
+        const managers = window._managersData || [];
+        renderManagersTable(managers, connectionId, clusterUuid);
+        filterManagersTable(); // Применяем фильтр если есть
+    }
+}
+
+/**
+ * Открывает модальное окно с детальной информацией о менеджере
+ */
+async function openManagerInfoModal(connectionId, clusterUuid, managerUuid) {
+    closeContextMenu();
+    
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('managerInfoModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'managerInfoModal';
+    modal.style.zIndex = '10002';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>🏢 Информация о менеджере</h3>
+                <button class="modal-close-btn" onclick="closeManagerInfoModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="text-align: center; padding: 2rem;">
+                    <p>⏳ Загрузка информации...</p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    try {
+        const response = await fetch(`/api/clusters/managers/${connectionId}/${clusterUuid}/info/?manager=${managerUuid}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const manager = data.manager || {};
+            const managerData = manager.data || {};
+            
+            let infoHtml = `
+                <div class="info-card">
+                    <h4>📊 Основная информация</h4>
+                    <div class="form-row">
+                        <label>UUID менеджера:</label>
+                        <input type="text" class="readonly-field" value="${escapeHtml(manager.uuid || managerUuid)}" readonly>
+                    </div>
+            `;
+            
+            // Сортируем ключи для красивого отображения
+            const sortedKeys = Object.keys(managerData).sort();
+            
+            sortedKeys.forEach(key => {
+                const value = managerData[key] || '';
+                infoHtml += `
+                    <div class="form-row">
+                        <label>${escapeHtml(key)}:</label>
+                        <input type="text" class="readonly-field" value="${escapeHtml(value)}" readonly>
+                    </div>
+                `;
+            });
+            
+            infoHtml += `</div>`;
+            
+            const modalBody = modal.querySelector('.modal-body');
+            if (modalBody) {
+                modalBody.innerHTML = infoHtml;
+            }
+        } else {
+            const modalBody = modal.querySelector('.modal-body');
+            if (modalBody) {
+                modalBody.innerHTML = `
+                    <div style="text-align: center; padding: 2rem;">
+                        <p>❌ Ошибка загрузки: ${data.error || 'Неизвестная ошибка'}</p>
+                    </div>
+                `;
+            }
+        }
+    } catch (error) {
+        const modalBody = modal.querySelector('.modal-body');
+        if (modalBody) {
+            modalBody.innerHTML = `
+                <div style="text-align: center; padding: 2rem;">
+                    <p>❌ Ошибка загрузки: ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+}
+
+/**
+ * Закрывает модальное окно информации о менеджере
+ */
+function closeManagerInfoModal() {
+    const modal = document.getElementById('managerInfoModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Выгружает таблицу менеджеров в Excel
+ */
+function exportManagersToExcel() {
+    const managers = window._managersData || [];
+    if (managers.length === 0) {
+        showNotification('❌ Нет данных для выгрузки', true);
+        return;
+    }
+    
+    const visibleColumns = window._managersVisibleColumns || new Set();
+    const allKeys = new Set();
+    managers.forEach(manager => {
+        Object.keys(manager.data || {}).forEach(key => allKeys.add(key));
+    });
+    allKeys.add('manager');
+    const sortedKeys = Array.from(allKeys).sort().filter(key => visibleColumns.has(key));
+    
+    // Создаем TSV данные (tab-separated для лучшей совместимости с Excel)
+    let csv = '\uFEFF'; // BOM для правильной кодировки UTF-8 в Excel
+    
+    // Заголовки (включаем UUID если он видим)
+    const headers = [];
+    if (visibleColumns.has('manager')) {
+        headers.push('UUID менеджера');
+    }
+    sortedKeys.forEach(key => {
+        if (key !== 'manager' && visibleColumns.has(key)) {
+            headers.push(key);
+        }
+    });
+    csv += headers.map(h => `"${h.replace(/"/g, '""')}"`).join('\t') + '\n';
+    
+    // Данные
+    managers.forEach(manager => {
+        const row = [];
+        if (visibleColumns.has('manager')) {
+            row.push(`"${manager.uuid.replace(/"/g, '""')}"`);
+        }
+        sortedKeys.forEach(key => {
+            if (key !== 'manager' && visibleColumns.has(key)) {
+                const value = manager.data[key] || '';
+                // Экранируем кавычки и заменяем переносы строк на пробелы
+                const cleanValue = value.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '').replace(/\t/g, ' ');
+                row.push(`"${cleanValue}"`);
+            }
+        });
+        csv += row.join('\t') + '\n';
+    });
+    
+    // Создаем blob и скачиваем (используем tab-separated для лучшей совместимости с Excel)
+    const blob = new Blob([csv], { type: 'text/tab-separated-values;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `managers_${new Date().toISOString().split('T')[0]}.tsv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    showNotification('✅ Таблица выгружена в Excel', false);
+}

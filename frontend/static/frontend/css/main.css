@@ -723,9 +723,18 @@ input, select, button, .btn {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    word-break: keep-all;
 }
 
 #sessionsTable tbody td:hover {
-    white-space: normal;
-    word-break: break-word;
+    overflow: hidden;
+    white-space: nowrap;
+    word-break: keep-all;
+    position: relative;
+    z-index: 5;
+}
+
+/* Tooltip для длинных значений - показываем через title атрибут браузера */
+#sessionsTable tbody td[title]:hover {
+    cursor: help;
 }

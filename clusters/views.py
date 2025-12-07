@@ -193,6 +193,60 @@ def delete_connection(request, connection_id):
     
     return JsonResponse({'success': False, 'error': 'Only POST allowed'})
 
+def _parse_cluster_list(output):
+    """Парсит вывод команды cluster list и извлекает информацию о кластерах"""
+    clusters = []
+    if not output:
+        return clusters
+    
+    lines = output.strip().split('\n')
+    current_cluster = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между кластерами
+            if current_cluster:
+                clusters.append(current_cluster)
+                current_cluster = None
+            continue
+        
+        # Парсим строку вида "key : value"
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'cluster':
+                # Начало нового кластера
+                if current_cluster:
+                    clusters.append(current_cluster)
+                current_cluster = {
+                    'uuid': value,
+                    'name': '',
+                    'host': '',
+                    'port': '',
+                    'data': {}
+                }
+            elif current_cluster:
+                # Сохраняем все данные кластера
+                current_cluster['data'][key] = value
+                
+                # Извлекаем важные поля
+                if key == 'name':
+                    # Убираем кавычки если есть
+                    current_cluster['name'] = value.strip('"')
+                elif key == 'host':
+                    current_cluster['host'] = value
+                elif key == 'port':
+                    current_cluster['port'] = value
+    
+    # Добавляем последний кластер
+    if current_cluster:
+        clusters.append(current_cluster)
+    
+    return clusters
+
 @login_required
 def get_clusters(request, connection_id):
     """Получает список кластеров для подключения (выполняет команду cluster list)"""
@@ -202,9 +256,13 @@ def get_clusters(request, connection_id):
         result = rac_client.get_cluster_list()
         
         if result['success']:
+            # Парсим вывод и извлекаем структурированные данные
+            clusters = _parse_cluster_list(result['output'])
+            
             return JsonResponse({
                 'success': True, 
-                'output': result['output'],
+                'output': result['output'],  # Оставляем для обратной совместимости
+                'clusters': clusters,  # Структурированные данные
                 'rac_path': rac_client.rac_path
             }, json_dumps_params={'ensure_ascii': False})
         else:
@@ -314,6 +372,210 @@ def get_servers(request, connection_id):
             return JsonResponse({'success': True, 'servers': []})
         else:
             return JsonResponse({'success': False, 'error': result['error']})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+def get_cluster_details(request, connection_id, cluster_uuid):
+    """Получает детальную информацию о кластере"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        result = rac_client.get_cluster_info(cluster_uuid)
+        
+        if result['success']:
+            # Парсим вывод
+            cluster_data = {}
+            if result['output']:
+                lines = result['output'].strip().split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if ':' in line:
+                        parts = line.split(':', 1)
+                        key = parts[0].strip()
+                        value = parts[1].strip() if len(parts) > 1 else ''
+                        cluster_data[key] = value
+            
+            return JsonResponse({
+                'success': True,
+                'cluster': cluster_data,
+                'raw_output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Неизвестная ошибка')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def update_cluster(request, connection_id, cluster_uuid):
+    """Обновляет параметры кластера"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+    
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        
+        # Получаем данные из запроса
+        data = json.loads(request.body)
+        
+        # Подготавливаем параметры для обновления
+        update_params = {}
+        
+        # Маппинг полей из формы в параметры RAC
+        field_mapping = {
+            'name': 'name',
+            'expiration_timeout': 'expiration_timeout',
+            'lifetime_limit': 'lifetime_limit',
+            'max_memory_size': 'max_memory_size',
+            'max_memory_time_limit': 'max_memory_time_limit',
+            'security_level': 'security_level',
+            'session_fault_tolerance_level': 'session_fault_tolerance_level',
+            'load_balancing_mode': 'load_balancing_mode',
+            'errors_count_threshold': 'errors_count_threshold',
+            'kill_problem_processes': 'kill_problem_processes',
+            'kill_by_memory_with_dump': 'kill_by_memory_with_dump',
+            'allow_access_right_audit_events_recording': 'allow_access_right_audit_events_recording',
+            'ping_period': 'ping_period',
+            'ping_timeout': 'ping_timeout',
+        }
+        
+        for form_field, rac_param in field_mapping.items():
+            if form_field in data and data[form_field] != '':
+                value = data[form_field]
+                # Преобразуем строковые "yes"/"no" в булевы значения
+                if value in ['yes', 'no']:
+                    value = value == 'yes'
+                # Преобразуем числовые строки в числа
+                elif isinstance(value, str) and value.isdigit():
+                    value = int(value)
+                update_params[rac_param] = value
+        
+        # Выполняем обновление
+        result = rac_client.update_cluster(cluster_uuid, **update_params)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': 'Параметры кластера успешно обновлены'
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка обновления кластера')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def insert_cluster(request, connection_id):
+    """Регистрирует новый кластер"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+    
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        
+        # Получаем данные из запроса
+        data = json.loads(request.body)
+        
+        # Обязательные поля
+        host = data.get('host')
+        port = data.get('port')
+        
+        if not host or not port:
+            return JsonResponse({'success': False, 'error': 'Host и Port обязательны'})
+        
+        # Подготавливаем параметры для регистрации
+        insert_params = {}
+        
+        # Маппинг полей из формы в параметры RAC
+        field_mapping = {
+            'name': 'name',
+            'expiration_timeout': 'expiration_timeout',
+            'lifetime_limit': 'lifetime_limit',
+            'max_memory_size': 'max_memory_size',
+            'max_memory_time_limit': 'max_memory_time_limit',
+            'security_level': 'security_level',
+            'session_fault_tolerance_level': 'session_fault_tolerance_level',
+            'load_balancing_mode': 'load_balancing_mode',
+            'errors_count_threshold': 'errors_count_threshold',
+            'kill_problem_processes': 'kill_problem_processes',
+            'kill_by_memory_with_dump': 'kill_by_memory_with_dump',
+            'allow_access_right_audit_events_recording': 'allow_access_right_audit_events_recording',
+            'ping_period': 'ping_period',
+            'ping_timeout': 'ping_timeout',
+        }
+        
+        for form_field, rac_param in field_mapping.items():
+            if form_field in data and data[form_field] != '':
+                value = data[form_field]
+                # Преобразуем строковые "yes"/"no" в булевы значения
+                if value in ['yes', 'no']:
+                    value = value == 'yes'
+                # Преобразуем числовые строки в числа
+                elif isinstance(value, str) and value.isdigit():
+                    value = int(value)
+                insert_params[rac_param] = value
+        
+        # Выполняем регистрацию
+        result = rac_client.insert_cluster(host, port, **insert_params)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': 'Кластер успешно зарегистрирован'
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка регистрации кластера')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def remove_cluster(request, connection_id, cluster_uuid):
+    """Удаляет кластер"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+    
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        
+        # Выполняем удаление
+        result = rac_client.remove_cluster(cluster_uuid)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': 'Кластер успешно удалён'
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка удаления кластера')
+            }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'})

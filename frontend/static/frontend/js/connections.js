@@ -112,7 +112,7 @@ function renderConnectionsTree(connections) {
             
             // Клик на подключение - выполняет команду
             const connectionPart = node.querySelector('div');
-            connectionPart.onclick = () => loadConnectionData(conn.id);
+            connectionPart.onclick = () => loadConnectionData(conn.id, conn.display_name);
         }
         
         treeContainer.appendChild(node);
@@ -454,25 +454,144 @@ async function createConnection() {
  * Загрузить данные подключения и выполнить команду RAC
  * @param {number} connectionId - ID подключения
  */
-async function loadConnectionData(connectionId) {
+async function loadConnectionData(connectionId, connectionName = null) {
     const contentArea = document.getElementById('contentArea');
-    contentArea.innerHTML = '<div style="text-align: center; padding: 2rem;"><p>⏳ Выполнение команды RAC...</p></div>';
+    contentArea.innerHTML = '<div style="text-align: center; padding: 2rem;"><p>⏳ Загрузка кластеров...</p></div>';
+    
+    // Сохраняем connectionId для использования в контекстном меню
+    window._currentConnectionId = connectionId;
+    
+    // Если имя подключения не передано, получаем его из API
+    if (!connectionName) {
+        try {
+            const connResponse = await fetch('/api/clusters/connections/');
+            const connData = await connResponse.json();
+            if (connData.connections) {
+                const connection = connData.connections.find(c => c.id === connectionId);
+                if (connection) {
+                    connectionName = connection.display_name;
+                }
+            }
+        } catch (e) {
+            console.error('Ошибка загрузки имени подключения:', e);
+        }
+    }
+    
+    // Если имя всё ещё не найдено, используем значение по умолчанию
+    const displayConnectionName = connectionName || `Подключение ${connectionId}`;
     
     try {
         const response = await fetch(`/api/clusters/clusters/${connectionId}/`);
         const data = await response.json();
         
         if (data.success) {
-            // Отображаем результат команды
-            const output = data.output || '';
-            const formattedOutput = formatRACOutput(output);
+            // Используем структурированные данные если есть, иначе парсим вывод
+            let clusters = data.clusters || [];
             
-            contentArea.innerHTML = `
+            if (clusters.length === 0 && data.output) {
+                // Парсим вывод вручную если структурированных данных нет
+                clusters = parseClusterList(data.output);
+            }
+            
+            // Отображаем иерархическое дерево с подразделами
+            // Кнопка регистрации всегда видна, даже если кластеров нет
+            let clustersHTML = `
                 <div class="info-card">
-                    <h4>📊 Результат выполнения команды: cluster list</h4>
-                    <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap; word-wrap: break-word;">${formattedOutput}</pre>
-                </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4 style="margin: 0;">📊 Кластеры: ${escapeHtml(displayConnectionName)}</h4>
+                        <button class="btn btn-primary" onclick="openRegisterClusterModal(${connectionId})">
+                            + Регистрация нового кластера
+                        </button>
+                    </div>
             `;
+            
+            if (clusters.length === 0) {
+                clustersHTML += `
+                    <div style="padding: 1rem; text-align: center; color: #666;">
+                        <p>Кластеры не найдены</p>
+                    </div>
+                `;
+            } else {
+                clustersHTML += `<div class="clusters-tree">`;
+                
+                clusters.forEach((cluster, index) => {
+                const clusterName = cluster.name || `Кластер ${index + 1}`;
+                const clusterUuid = cluster.uuid || '';
+                const clusterId = `cluster-${connectionId}-${clusterUuid}`;
+                
+                clustersHTML += `
+                    <div class="cluster-tree-node" data-cluster-id="${clusterId}">
+                        <div class="cluster-header" 
+                             data-connection-id="${connectionId}" 
+                             data-cluster-uuid="${clusterUuid}"
+                             data-cluster-name="${escapeHtml(clusterName)}">
+                            <span class="tree-toggle" onclick="toggleClusterNode('${clusterId}')">▶</span>
+                            <span class="cluster-name">📊 ${escapeHtml(clusterName)}</span>
+                            <button class="btn btn-sm btn-danger" 
+                                    onclick="deleteCluster(${connectionId}, '${clusterUuid}', '${escapeHtml(clusterName).replace(/'/g, "\\'")}')"
+                                    style="margin-left: auto; padding: 0.25rem 0.5rem; font-size: 0.8rem;">
+                                🗑️
+                            </button>
+                        </div>
+                        <div class="cluster-children" id="${clusterId}-children" style="display: none;">
+                            <div class="tree-item" data-section="infobases" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">📁</span>
+                                <span>Информационные базы</span>
+                            </div>
+                            <div class="tree-item" data-section="servers" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">⚙️</span>
+                                <span>Рабочие серверы</span>
+                            </div>
+                            <div class="tree-item" data-section="admins" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">👥</span>
+                                <span>Администраторы</span>
+                            </div>
+                            <div class="tree-item" data-section="managers" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">🏢</span>
+                                <span>Менеджеры кластера</span>
+                            </div>
+                            <div class="tree-item" data-section="processes" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">🔄</span>
+                                <span>Рабочие процессы</span>
+                            </div>
+                            <div class="tree-item" data-section="sessions" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">💺</span>
+                                <span>Сеансы</span>
+                            </div>
+                            <div class="tree-item" data-section="locks" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">🔒</span>
+                                <span>Блокировки</span>
+                            </div>
+                            <div class="tree-item" data-section="connections" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">🔗</span>
+                                <span>Соединения</span>
+                            </div>
+                            <div class="tree-item" data-section="security" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">🛡️</span>
+                                <span>Профили безопасности</span>
+                            </div>
+                            <div class="tree-item" data-section="counters" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">📊</span>
+                                <span>Счетчики потребления ресурсов</span>
+                            </div>
+                            <div class="tree-item" data-section="limits" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                                <span class="tree-icon">⚖️</span>
+                                <span>Ограничения потребления ресурсов</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                });
+                
+                clustersHTML += `</div>`;
+            }
+            
+            clustersHTML += '</div>';
+            contentArea.innerHTML = clustersHTML;
+            
+            // Добавляем обработчики событий через делегирование
+            setupClusterEventHandlers();
+            
         } else {
             // Обработка ошибок
             let errorMessage = data.error || 'Неизвестная ошибка';
@@ -499,6 +618,65 @@ async function loadConnectionData(connectionId) {
             </div>
         `;
     }
+}
+
+/**
+ * Парсит вывод cluster list в структурированный формат
+ */
+function parseClusterList(output) {
+    const clusters = [];
+    if (!output) return clusters;
+    
+    const lines = output.trim().split('\n');
+    let currentCluster = null;
+    
+    for (let line of lines) {
+        line = line.trim();
+        if (!line) {
+            if (currentCluster) {
+                clusters.push(currentCluster);
+                currentCluster = null;
+            }
+            continue;
+        }
+        
+        if (line.includes(':')) {
+            const parts = line.split(':', 2);
+            const key = parts[0].trim();
+            const value = parts[1] ? parts[1].trim() : '';
+            
+            if (key === 'cluster') {
+                if (currentCluster) {
+                    clusters.push(currentCluster);
+                }
+                currentCluster = {
+                    uuid: value,
+                    name: '',
+                    data: {}
+                };
+            } else if (currentCluster) {
+                currentCluster.data[key] = value;
+                if (key === 'name') {
+                    currentCluster.name = value.replace(/^"|"$/g, '');
+                }
+            }
+        }
+    }
+    
+    if (currentCluster) {
+        clusters.push(currentCluster);
+    }
+    
+    return clusters;
+}
+
+/**
+ * Экранирует HTML для безопасного отображения
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 /**
@@ -718,6 +896,639 @@ async function deleteSelectedConnections(connections) {
             ? `❌ Ошибка удаления подключений: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`
             : '❌ Ошибка удаления подключений';
         showNotification(errorMessage, true);
+    }
+}
+
+/**
+ * Настраивает обработчики событий для кластеров
+ */
+function setupClusterEventHandlers() {
+    // Обработчик контекстного меню для заголовка кластера
+    document.addEventListener('contextmenu', (e) => {
+        const clusterHeader = e.target.closest('.cluster-header');
+        if (clusterHeader) {
+            e.preventDefault();
+            const connectionId = clusterHeader.dataset.connectionId;
+            const clusterUuid = clusterHeader.dataset.clusterUuid;
+            const clusterName = clusterHeader.dataset.clusterName;
+            showClusterContextMenu(e, connectionId, clusterUuid, clusterName);
+        }
+    });
+    
+    // Обработчик клика по подразделам
+    document.addEventListener('click', (e) => {
+        const treeItem = e.target.closest('.tree-item');
+        if (treeItem) {
+            const section = treeItem.dataset.section;
+            const connectionId = treeItem.dataset.connectionId;
+            const clusterUuid = treeItem.dataset.clusterUuid;
+            loadClusterSection(section, connectionId, clusterUuid);
+        }
+    });
+}
+
+/**
+ * Переключает раскрытие/сворачивание узла кластера
+ */
+function toggleClusterNode(clusterId) {
+    const children = document.getElementById(`${clusterId}-children`);
+    const toggle = document.querySelector(`[onclick="toggleClusterNode('${clusterId}')"]`);
+    
+    if (children) {
+        if (children.style.display === 'none') {
+            children.style.display = 'block';
+            if (toggle) toggle.textContent = '▼';
+        } else {
+            children.style.display = 'none';
+            if (toggle) toggle.textContent = '▶';
+        }
+    }
+}
+
+/**
+ * Загружает данные для подраздела кластера
+ */
+async function loadClusterSection(section, connectionId, clusterUuid) {
+    const contentArea = document.getElementById('contentArea');
+    contentArea.innerHTML = '<div style="text-align: center; padding: 2rem;"><p>⏳ Загрузка данных...</p></div>';
+    
+    try {
+        // В зависимости от раздела загружаем соответствующие данные
+        switch(section) {
+            case 'infobases':
+                await loadInfobases(connectionId, clusterUuid);
+                break;
+            case 'servers':
+                await loadServers(connectionId, clusterUuid);
+                break;
+            case 'sessions':
+                await loadSessions(connectionId, clusterUuid);
+                break;
+            default:
+                contentArea.innerHTML = `
+                    <div class="info-card">
+                        <h4>Раздел "${section}"</h4>
+                        <p>Функционал в разработке</p>
+                    </div>
+                `;
+        }
+    } catch (error) {
+        contentArea.innerHTML = `
+            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                <p style="color: #721c24; margin: 0;">Ошибка загрузки: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Загружает информационные базы
+ */
+async function loadInfobases(connectionId, clusterUuid) {
+    const response = await fetch(`/api/clusters/infobases/${connectionId}/?cluster=${clusterUuid}`);
+    const data = await response.json();
+    
+    const contentArea = document.getElementById('contentArea');
+    if (data.success) {
+        contentArea.innerHTML = `
+            <div class="info-card">
+                <h4>📁 Информационные базы</h4>
+                <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;">${data.output || 'Нет данных'}</pre>
+            </div>
+        `;
+    } else {
+        contentArea.innerHTML = `
+            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Загружает рабочие серверы
+ */
+async function loadServers(connectionId, clusterUuid) {
+    const response = await fetch(`/api/clusters/servers/${connectionId}/?cluster=${clusterUuid}`);
+    const data = await response.json();
+    
+    const contentArea = document.getElementById('contentArea');
+    if (data.success) {
+        contentArea.innerHTML = `
+            <div class="info-card">
+                <h4>⚙️ Рабочие серверы</h4>
+                <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;">${data.output || 'Нет данных'}</pre>
+            </div>
+        `;
+    } else {
+        contentArea.innerHTML = `
+            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Загружает сеансы
+ */
+async function loadSessions(connectionId, clusterUuid) {
+    const response = await fetch(`/api/clusters/sessions/${connectionId}/?cluster=${clusterUuid}`);
+    const data = await response.json();
+    
+    const contentArea = document.getElementById('contentArea');
+    if (data.success) {
+        contentArea.innerHTML = `
+            <div class="info-card">
+                <h4>💺 Сеансы</h4>
+                <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;">${data.output || 'Нет данных'}</pre>
+            </div>
+        `;
+    } else {
+        contentArea.innerHTML = `
+            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Показывает контекстное меню для кластера
+ */
+function showClusterContextMenu(event, connectionId, clusterUuid, clusterName) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Удаляем предыдущее меню если есть
+    const existingMenu = document.getElementById('clusterContextMenu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    // Создаём контекстное меню
+    const menu = document.createElement('div');
+    menu.id = 'clusterContextMenu';
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+    menu.style.zIndex = '10000';
+    menu.style.background = '#fff';
+    menu.style.border = '1px solid #ddd';
+    menu.style.borderRadius = '6px';
+    menu.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+    menu.style.padding = '0.5rem 0';
+    menu.style.minWidth = '180px';
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="openClusterProperties('${connectionId}', '${clusterUuid}', '${escapeHtml(clusterName)}'); closeContextMenu();">
+            📋 Свойства
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    // Закрываем меню при клике вне его
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            closeContextMenu();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+    }, 100);
+}
+
+/**
+ * Закрывает контекстное меню
+ */
+function closeContextMenu() {
+    const menu = document.getElementById('clusterContextMenu');
+    if (menu) {
+        menu.remove();
+    }
+}
+
+/**
+ * Открывает модальное окно свойств кластера
+ */
+async function openClusterProperties(connectionId, clusterUuid, clusterName) {
+    // Загружаем детальную информацию о кластере
+    try {
+        const response = await fetch(`/api/clusters/clusters/${connectionId}/${clusterUuid}/`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            showNotification('❌ Ошибка загрузки свойств кластера: ' + (data.error || 'Неизвестная ошибка'), true);
+            return;
+        }
+        
+        const cluster = data.cluster || {};
+        
+        // Получаем имя кластера, убирая кавычки если есть
+        let clusterNameValue = cluster.name || '';
+        if (clusterNameValue) {
+            clusterNameValue = clusterNameValue.replace(/^"|"$/g, '').trim();
+        }
+        // Если имя не найдено в данных кластера, используем переданное имя
+        if (!clusterNameValue) {
+            clusterNameValue = clusterName || '';
+        }
+        // Если всё ещё пусто, используем значение по умолчанию
+        if (!clusterNameValue) {
+            clusterNameValue = 'Кластер';
+        }
+        
+        const displayName = clusterNameValue;
+        
+        // Создаём модальное окно в стилистике системы
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'clusterPropertiesModal';
+        modal.innerHTML = `
+            <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <div class="modal-header">
+                    <h3>⚙️ Свойства кластера: ${escapeHtml(displayName)}</h3>
+                    <button class="modal-close-btn" onclick="closeClusterPropertiesModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <form id="clusterPropertiesForm">
+                        <div class="info-card">
+                            <h4>📊 Основная информация</h4>
+                            <div class="form-row">
+                                <label>Имя кластера:</label>
+                                <input type="text" id="clusterName" name="name" value="${escapeHtml(clusterNameValue)}">
+                            </div>
+                            <div class="form-row">
+                                <label>UUID кластера:</label>
+                                <input type="text" class="readonly-field" value="${escapeHtml(cluster.cluster || clusterUuid)}" readonly>
+                            </div>
+                            <div class="form-row">
+                                <label>Хост:</label>
+                                <input type="text" class="readonly-field" value="${escapeHtml(cluster.host || '')}" readonly>
+                            </div>
+                            <div class="form-row">
+                                <label>Порт:</label>
+                                <input type="text" class="readonly-field" value="${escapeHtml(cluster.port || '')}" readonly>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <h4>⚙️ Параметры кластера</h4>
+                            <div class="form-row">
+                                <label>Период принудительного завершения (секунды):</label>
+                                <input type="number" id="expirationTimeout" name="expiration_timeout" value="${cluster['expiration-timeout'] || cluster.expiration_timeout || '60'}">
+                            </div>
+                            <div class="form-row">
+                                <label>Период перезапуска рабочих процессов (секунды):</label>
+                                <input type="number" id="lifetimeLimit" name="lifetime_limit" value="${cluster['lifetime-limit'] || cluster.lifetime_limit || '0'}">
+                            </div>
+                            <div class="form-row">
+                                <label>Максимальный объем памяти (КБ):</label>
+                                <input type="number" id="maxMemorySize" name="max_memory_size" value="${cluster['max-memory-size'] || cluster.max_memory_size || '0'}">
+                            </div>
+                            <div class="form-row">
+                                <label>Максимальный период превышения памяти (секунды):</label>
+                                <input type="number" id="maxMemoryTimeLimit" name="max_memory_time_limit" value="${cluster['max-memory-time-limit'] || cluster.max_memory_time_limit || '0'}">
+                            </div>
+                            <div class="form-row">
+                                <label>Уровень безопасности:</label>
+                                <input type="number" id="securityLevel" name="security_level" value="${cluster['security-level'] || cluster.security_level || '0'}">
+                            </div>
+                            <div class="form-row">
+                                <label>Уровень отказоустойчивости:</label>
+                                <input type="number" id="sessionFaultToleranceLevel" name="session_fault_tolerance_level" value="${cluster['session-fault-tolerance-level'] || cluster.session_fault_tolerance_level || '0'}">
+                            </div>
+                            <div class="form-row">
+                                <label>Режим распределения нагрузки:</label>
+                                <select id="loadBalancingMode" name="load_balancing_mode">
+                                    <option value="performance" ${(cluster['load-balancing-mode'] || cluster.load_balancing_mode || 'performance') === 'performance' ? 'selected' : ''}>Приоритет по производительности</option>
+                                    <option value="memory" ${(cluster['load-balancing-mode'] || cluster.load_balancing_mode) === 'memory' ? 'selected' : ''}>Приоритет по памяти</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label>Допустимое отклонение ошибок (%):</label>
+                                <input type="number" id="errorsCountThreshold" name="errors_count_threshold" value="${cluster['errors-count-threshold'] || cluster.errors_count_threshold || '0'}">
+                            </div>
+                            <div class="form-row">
+                                <label>Принудительно завершать проблемные процессы:</label>
+                                <select id="killProblemProcesses" name="kill_problem_processes">
+                                    <option value="yes" ${(cluster['kill-problem-processes'] || cluster.kill_problem_processes || '1') === '1' || (cluster['kill-problem-processes'] || cluster.kill_problem_processes) === 'yes' ? 'selected' : ''}>Да</option>
+                                    <option value="no" ${(cluster['kill-problem-processes'] || cluster.kill_problem_processes) === '0' || (cluster['kill-problem-processes'] || cluster.kill_problem_processes) === 'no' ? 'selected' : ''}>Нет</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label>Формировать дамп при превышении памяти:</label>
+                                <select id="killByMemoryWithDump" name="kill_by_memory_with_dump">
+                                    <option value="yes" ${(cluster['kill-by-memory-with-dump'] || cluster.kill_by_memory_with_dump || '0') === '1' || (cluster['kill-by-memory-with-dump'] || cluster.kill_by_memory_with_dump) === 'yes' ? 'selected' : ''}>Да</option>
+                                    <option value="no" ${(cluster['kill-by-memory-with-dump'] || cluster.kill_by_memory_with_dump || '0') === '0' || (cluster['kill-by-memory-with-dump'] || cluster.kill_by_memory_with_dump) === 'no' ? 'selected' : ''}>Нет</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label>Разрешать запись событий аудита:</label>
+                                <select id="allowAccessRightAuditEventsRecording" name="allow_access_right_audit_events_recording">
+                                    <option value="yes" ${(cluster['allow-access-right-audit-events-recording'] || cluster.allow_access_right_audit_events_recording || '0') === '1' || (cluster['allow-access-right-audit-events-recording'] || cluster.allow_access_right_audit_events_recording) === 'yes' ? 'selected' : ''}>Да</option>
+                                    <option value="no" ${(cluster['allow-access-right-audit-events-recording'] || cluster.allow_access_right_audit_events_recording || '0') === '0' || (cluster['allow-access-right-audit-events-recording'] || cluster.allow_access_right_audit_events_recording) === 'no' ? 'selected' : ''}>Нет</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label>Период отправки ping (миллисекунды):</label>
+                                <input type="number" id="pingPeriod" name="ping_period" value="${cluster['ping-period'] || cluster.ping_period || '0'}">
+                            </div>
+                            <div class="form-row">
+                                <label>Таймаут ping (миллисекунды):</label>
+                                <input type="number" id="pingTimeout" name="ping_timeout" value="${cluster['ping-timeout'] || cluster.ping_timeout || '0'}">
+                            </div>
+                        </div>
+                        <div class="form-actions" style="margin-top: 1.5rem;">
+                            <button type="button" class="btn btn-secondary" onclick="closeClusterPropertiesModal()">Отмена</button>
+                            <button type="button" class="btn btn-primary" onclick="saveClusterProperties('${connectionId}', '${clusterUuid}')">Сохранить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        showNotification('❌ Ошибка загрузки свойств кластера: ' + error.message, true);
+    }
+}
+
+/**
+ * Закрывает модальное окно свойств кластера
+ */
+function closeClusterPropertiesModal() {
+    const modal = document.getElementById('clusterPropertiesModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Сохраняет свойства кластера
+ */
+async function saveClusterProperties(connectionId, clusterUuid) {
+    const form = document.getElementById('clusterPropertiesForm');
+    if (!form) return;
+    
+    const formData = new FormData(form);
+    const data = {};
+    
+    // Собираем данные формы
+    for (let [key, value] of formData.entries()) {
+        data[key] = value;
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch(`/api/clusters/clusters/${connectionId}/${clusterUuid}/update/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Параметры кластера успешно обновлены', false);
+            closeClusterPropertiesModal();
+            // Обновляем список кластеров
+            if (window._currentConnectionId) {
+                loadConnectionData(window._currentConnectionId);
+            }
+        } else {
+            showNotification('❌ Ошибка обновления кластера: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка сохранения: ' + error.message, true);
+    }
+}
+
+/**
+ * Открывает модальное окно регистрации нового кластера
+ */
+function openRegisterClusterModal(connectionId) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'registerClusterModal';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>➕ Регистрация нового кластера</h3>
+                <button class="modal-close-btn" onclick="closeRegisterClusterModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="registerClusterForm">
+                    <div class="info-card">
+                        <h4>📊 Основная информация</h4>
+                        <div class="form-row">
+                            <label>Хост (обязательно):</label>
+                            <input type="text" id="registerHost" name="host" required placeholder="localhost или IP-адрес">
+                        </div>
+                        <div class="form-row">
+                            <label>Порт (обязательно):</label>
+                            <input type="number" id="registerPort" name="port" value="1541" required>
+                        </div>
+                        <div class="form-row">
+                            <label>Имя кластера:</label>
+                            <input type="text" id="registerName" name="name" placeholder="Локальный кластер">
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <h4>⚙️ Параметры кластера</h4>
+                        <div class="form-row">
+                            <label>Период принудительного завершения (секунды):</label>
+                            <input type="number" id="registerExpirationTimeout" name="expiration_timeout" value="60">
+                        </div>
+                        <div class="form-row">
+                            <label>Период перезапуска рабочих процессов (секунды):</label>
+                            <input type="number" id="registerLifetimeLimit" name="lifetime_limit" value="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Максимальный объем памяти (КБ):</label>
+                            <input type="number" id="registerMaxMemorySize" name="max_memory_size" value="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Максимальный период превышения памяти (секунды):</label>
+                            <input type="number" id="registerMaxMemoryTimeLimit" name="max_memory_time_limit" value="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Уровень безопасности:</label>
+                            <input type="number" id="registerSecurityLevel" name="security_level" value="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Уровень отказоустойчивости:</label>
+                            <input type="number" id="registerSessionFaultToleranceLevel" name="session_fault_tolerance_level" value="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Режим распределения нагрузки:</label>
+                            <select id="registerLoadBalancingMode" name="load_balancing_mode">
+                                <option value="performance" selected>Приоритет по производительности</option>
+                                <option value="memory">Приоритет по памяти</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Допустимое отклонение ошибок (%):</label>
+                            <input type="number" id="registerErrorsCountThreshold" name="errors_count_threshold" value="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Принудительно завершать проблемные процессы:</label>
+                            <select id="registerKillProblemProcesses" name="kill_problem_processes">
+                                <option value="yes" selected>Да</option>
+                                <option value="no">Нет</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Формировать дамп при превышении памяти:</label>
+                            <select id="registerKillByMemoryWithDump" name="kill_by_memory_with_dump">
+                                <option value="yes">Да</option>
+                                <option value="no" selected>Нет</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Разрешать запись событий аудита:</label>
+                            <select id="registerAllowAccessRightAuditEventsRecording" name="allow_access_right_audit_events_recording">
+                                <option value="yes">Да</option>
+                                <option value="no" selected>Нет</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Период отправки ping (миллисекунды):</label>
+                            <input type="number" id="registerPingPeriod" name="ping_period" value="0">
+                        </div>
+                        <div class="form-row">
+                            <label>Таймаут ping (миллисекунды):</label>
+                            <input type="number" id="registerPingTimeout" name="ping_timeout" value="0">
+                        </div>
+                    </div>
+                    <div class="form-actions" style="margin-top: 1.5rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeRegisterClusterModal()">Отмена</button>
+                        <button type="button" class="btn btn-primary" onclick="saveRegisterCluster(${connectionId})">Зарегистрировать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+/**
+ * Закрывает модальное окно регистрации кластера
+ */
+function closeRegisterClusterModal() {
+    const modal = document.getElementById('registerClusterModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Сохраняет регистрацию нового кластера
+ */
+async function saveRegisterCluster(connectionId) {
+    const form = document.getElementById('registerClusterForm');
+    if (!form) return;
+    
+    const formData = new FormData(form);
+    const data = {};
+    
+    // Собираем данные формы
+    for (let [key, value] of formData.entries()) {
+        data[key] = value;
+    }
+    
+    // Проверяем обязательные поля
+    if (!data.host || !data.port) {
+        showNotification('❌ Ошибка: Host и Port обязательны', true);
+        return;
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch(`/api/clusters/clusters/${connectionId}/insert/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Кластер успешно зарегистрирован', false);
+            closeRegisterClusterModal();
+            // Обновляем список кластеров
+            if (window._currentConnectionId) {
+                loadConnectionData(window._currentConnectionId);
+            }
+        } else {
+            showNotification('❌ Ошибка регистрации кластера: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка сохранения: ' + error.message, true);
+    }
+}
+
+/**
+ * Удаляет кластер
+ */
+async function deleteCluster(connectionId, clusterUuid, clusterName) {
+    if (!confirm(`Вы уверены, что хотите удалить кластер "${clusterName}"?`)) {
+        return;
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch(`/api/clusters/clusters/${connectionId}/${clusterUuid}/remove/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Кластер успешно удалён', false);
+            // Обновляем список кластеров
+            if (window._currentConnectionId) {
+                loadConnectionData(window._currentConnectionId);
+            }
+        } else {
+            showNotification('❌ Ошибка удаления кластера: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка удаления: ' + error.message, true);
     }
 }
 

@@ -306,22 +306,46 @@ class RACClient:
         
         return self._execute_command(args)
     
-    def get_session_list(self, cluster_uuid=None, infobase_uuid=None):
+    def get_session_list(self, cluster_uuid, infobase_uuid=None, include_licenses=False):
         """Получает список сеансов"""
-        args = ['session', 'list']
-        if cluster_uuid:
-            args.insert(1, f'--cluster={cluster_uuid}')
+        args = ['session', 'list', f'--cluster={cluster_uuid}']
         if infobase_uuid:
-            args.insert(2, f'--infobase={infobase_uuid}')
+            args.append(f'--infobase={infobase_uuid}')
+        if include_licenses:
+            args.append('--licenses')
         return self._execute_command(args)
     
-    def terminate_session(self, session_uuid, cluster_uuid):
-        """Завершает сеанс"""
+    def get_session_info(self, cluster_uuid, session_uuid, include_licenses=False):
+        """Получает информацию о сеансе"""
+        args = [
+            'session', 'info',
+            f'--cluster={cluster_uuid}',
+            f'--session={session_uuid}'
+        ]
+        if include_licenses:
+            args.append('--licenses')
+        return self._execute_command(args)
+    
+    def terminate_session(self, cluster_uuid, session_uuid, error_message=None):
+        """Принудительно завершает сеанс"""
         args = [
             'session', 'terminate',
-            f'--session={session_uuid}',
-            f'--cluster={cluster_uuid}'
+            f'--cluster={cluster_uuid}',
+            f'--session={session_uuid}'
         ]
+        if error_message:
+            args.append(f'--error-message={error_message}')
+        return self._execute_command(args)
+    
+    def interrupt_server_call(self, cluster_uuid, session_uuid, error_message=None):
+        """Прерывает текущий серверный вызов"""
+        args = [
+            'session', 'interrupt-current-server-call',
+            f'--cluster={cluster_uuid}',
+            f'--session={session_uuid}'
+        ]
+        if error_message:
+            args.append(f'--error-message={error_message}')
         return self._execute_command(args)
     
     def get_infobase_summary_list(self, cluster_uuid):

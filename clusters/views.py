@@ -287,6 +287,47 @@ def _parse_infobase_list(output):
     
     return infobases
 
+def _parse_session_list(output):
+    """Парсит вывод команды session list и извлекает информацию о сеансах"""
+    sessions = []
+    if not output:
+        return sessions
+    
+    lines = output.strip().split('\n')
+    current_session = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между сеансами
+            if current_session:
+                sessions.append(current_session)
+                current_session = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'session':
+                # Начало нового сеанса
+                if current_session:
+                    sessions.append(current_session)
+                current_session = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_session:
+                # Сохраняем все данные сеанса
+                current_session['data'][key] = value
+    
+    # Добавляем последний сеанс
+    if current_session:
+        sessions.append(current_session)
+    
+    return sessions
+
 def _parse_infobase_info(output):
     """Парсит вывод команды infobase info и извлекает информацию об одной информационной базе"""
     infobase = None
@@ -458,15 +499,24 @@ def get_sessions(request, connection_id):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         cluster_uuid = request.GET.get('cluster')
+        infobase_uuid = request.GET.get('infobase')  # Опционально - для фильтрации по информационной базе
+        include_licenses = request.GET.get('licenses', 'false').lower() == 'true'
+        
+        if not cluster_uuid:
+            return JsonResponse({'success': False, 'error': 'Cluster UUID required'})
         
         rac_client = RACClient(connection)
-        result = rac_client.get_session_list(cluster_uuid=cluster_uuid)
+        result = rac_client.get_session_list(cluster_uuid, infobase_uuid, include_licenses)
         
         if result['success']:
-            # Здесь нужно будет парсить вывод rac session list
-            return JsonResponse({'success': True, 'sessions': []})
+            sessions = _parse_session_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'sessions': sessions,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']})
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'})
@@ -476,27 +526,59 @@ def get_sessions(request, connection_id):
 @login_required
 @csrf_exempt
 def terminate_sessions(request):
-    """Завершает сеансы"""
+    """Принудительно завершает сеансы"""
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
             connection_id = data['connection_id']
             session_uuids = data['session_uuids']
             cluster_uuid = data['cluster_uuid']
+            error_message = data.get('error_message')
             
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             rac_client = RACClient(connection)
             
             results = []
             for session_uuid in session_uuids:
-                result = rac_client.terminate_session(session_uuid, cluster_uuid)
+                result = rac_client.terminate_session(cluster_uuid, session_uuid, error_message)
                 results.append({
                     'session_uuid': session_uuid,
                     'success': result['success'],
                     'error': result.get('error')
                 })
             
-            return JsonResponse({'success': True, 'results': results})
+            return JsonResponse({'success': True, 'results': results}, json_dumps_params={'ensure_ascii': False})
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+@login_required
+@csrf_exempt
+def interrupt_server_calls(request):
+    """Прерывает текущие серверные вызовы"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            connection_id = data['connection_id']
+            session_uuids = data['session_uuids']
+            cluster_uuid = data['cluster_uuid']
+            error_message = data.get('error_message')
+            
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            rac_client = RACClient(connection)
+            
+            results = []
+            for session_uuid in session_uuids:
+                result = rac_client.interrupt_server_call(cluster_uuid, session_uuid, error_message)
+                results.append({
+                    'session_uuid': session_uuid,
+                    'success': result['success'],
+                    'error': result.get('error')
+                })
+            
+            return JsonResponse({'success': True, 'results': results}, json_dumps_params={'ensure_ascii': False})
             
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})

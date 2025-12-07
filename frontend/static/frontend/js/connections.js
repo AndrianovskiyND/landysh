@@ -939,8 +939,14 @@ function setupClusterEventHandlers() {
     
     // Обработчик клика по секциям (Информационные базы, Рабочие серверы)
     document.addEventListener('click', (e) => {
+        // Игнорируем клики внутри модальных окон
+        if (e.target.closest('.modal-overlay')) {
+            return;
+        }
+        
         const treeItemSection = e.target.closest('.tree-item-section');
         if (treeItemSection) {
+            e.stopPropagation();
             const section = treeItemSection.dataset.section;
             const connectionId = treeItemSection.dataset.connectionId;
             const clusterUuid = treeItemSection.dataset.clusterUuid;
@@ -952,15 +958,18 @@ function setupClusterEventHandlers() {
             
             // Загружаем данные для секции
             loadSectionData(section, connectionId, clusterUuid, sectionId);
+            return;
         }
         
         // Обработчик для других разделов (переход на другую страницу)
         const treeItem = e.target.closest('.tree-item:not(.tree-item-section)');
         if (treeItem && treeItem.dataset.section) {
+            e.stopPropagation();
             const section = treeItem.dataset.section;
             const connectionId = treeItem.dataset.connectionId;
             const clusterUuid = treeItem.dataset.clusterUuid;
             loadClusterSection(section, connectionId, clusterUuid);
+            return;
         }
     });
 }
@@ -1027,7 +1036,15 @@ async function loadSectionData(section, connectionId, clusterUuid, sectionId) {
  * Загружает данные для подраздела кластера
  */
 async function loadClusterSection(section, connectionId, clusterUuid) {
+    // Для секции сеансов открываем модальное окно, не трогая contentArea
+    if (section === 'sessions') {
+        await openSessionsModal(connectionId, clusterUuid);
+        return;
+    }
+    
     const contentArea = document.getElementById('contentArea');
+    if (!contentArea) return;
+    
     contentArea.innerHTML = '<div style="text-align: center; padding: 2rem;"><p>⏳ Загрузка данных...</p></div>';
     
     try {
@@ -1038,9 +1055,6 @@ async function loadClusterSection(section, connectionId, clusterUuid) {
                 break;
             case 'servers':
                 await loadServers(connectionId, clusterUuid);
-                break;
-            case 'sessions':
-                await loadSessions(connectionId, clusterUuid);
                 break;
             default:
                 contentArea.innerHTML = `
@@ -1328,27 +1342,499 @@ async function loadServers(connectionId, clusterUuid) {
 }
 
 /**
- * Загружает сеансы
+ * Открывает модальное окно сеансов на весь экран
  */
-async function loadSessions(connectionId, clusterUuid) {
-    const response = await fetch(`/api/clusters/sessions/${connectionId}/?cluster=${clusterUuid}`);
-    const data = await response.json();
+async function openSessionsModal(connectionId, clusterUuid, infobaseUuid = null) {
+    closeContextMenu();
     
-    const contentArea = document.getElementById('contentArea');
-    if (data.success) {
-        contentArea.innerHTML = `
-            <div class="info-card">
-                <h4>💺 Сеансы</h4>
-                <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;">${data.output || 'Нет данных'}</pre>
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('sessionsModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'sessionsModal';
+    modal.style.zIndex = '10001';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 95vw; max-height: 95vh; width: 95vw; height: 95vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="flex-shrink: 0;">
+                <h3>💺 Сеансы${infobaseUuid ? ' (фильтр по информационной базе)' : ''}</h3>
+                <button class="modal-close-btn" onclick="closeSessionsModal()">×</button>
             </div>
-        `;
-    } else {
-        contentArea.innerHTML = `
+            <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 1rem;">
+                <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <input type="text" id="sessionsSearch" placeholder="🔍 Поиск..." style="flex: 1; min-width: 200px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" id="sessionsIncludeLicenses">
+                        <span>Показать лицензии</span>
+                    </label>
+                    <button class="btn btn-secondary" onclick="refreshSessionsTable(${connectionId}, '${clusterUuid}', ${infobaseUuid ? `'${infobaseUuid}'` : 'null'})">🔄 Обновить</button>
+                </div>
+                <div id="sessionsTableContainer" style="flex: 1; overflow: auto;">
+                    <div style="text-align: center; padding: 2rem;">
+                        <p>⏳ Загрузка сеансов...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Сохраняем параметры для обновления
+    window._currentSessionsConnectionId = connectionId;
+    window._currentSessionsClusterUuid = clusterUuid;
+    window._currentSessionsInfobaseUuid = infobaseUuid;
+    window._selectedSessions = new Set();
+    
+    // Загружаем сеансы
+    await loadSessionsTable(connectionId, clusterUuid, infobaseUuid);
+    
+    // Добавляем обработчик поиска
+    const searchInput = document.getElementById('sessionsSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            filterSessionsTable();
+        });
+    }
+    
+    // Добавляем обработчик переключения лицензий
+    const licensesCheckbox = document.getElementById('sessionsIncludeLicenses');
+    if (licensesCheckbox) {
+        licensesCheckbox.addEventListener('change', () => {
+            loadSessionsTable(connectionId, clusterUuid, infobaseUuid);
+        });
+    }
+}
+
+/**
+ * Закрывает модальное окно сеансов
+ */
+function closeSessionsModal() {
+    const modal = document.getElementById('sessionsModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Очищаем глобальные переменные
+    if (window._currentSessionsConnectionId) {
+        delete window._currentSessionsConnectionId;
+    }
+    if (window._currentSessionsClusterUuid) {
+        delete window._currentSessionsClusterUuid;
+    }
+    if (window._currentSessionsInfobaseUuid) {
+        delete window._currentSessionsInfobaseUuid;
+    }
+    if (window._selectedSessions) {
+        delete window._selectedSessions;
+    }
+    if (window._sessionsData) {
+        delete window._sessionsData;
+    }
+    if (window._sessionsSort) {
+        delete window._sessionsSort;
+    }
+}
+
+/**
+ * Загружает таблицу сеансов
+ */
+async function loadSessionsTable(connectionId, clusterUuid, infobaseUuid = null) {
+    const container = document.getElementById('sessionsTableContainer');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align: center; padding: 2rem;"><p>⏳ Загрузка сеансов...</p></div>';
+    
+    try {
+        const includeLicenses = document.getElementById('sessionsIncludeLicenses')?.checked || false;
+        let url = `/api/clusters/sessions/${connectionId}/?cluster=${clusterUuid}`;
+        if (infobaseUuid) {
+            url += `&infobase=${infobaseUuid}`;
+        }
+        if (includeLicenses) {
+            url += `&licenses=true`;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            const sessions = data.sessions || [];
+            
+            if (sessions.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: #666;">
+                        <p>Сеансов нет</p>
+                    </div>
+                `;
+            } else {
+                renderSessionsTable(sessions, connectionId, clusterUuid);
+            }
+        } else {
+            container.innerHTML = `
+                <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                    <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                    <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        container.innerHTML = `
             <div class="info-card" style="border-left: 4px solid var(--primary-color);">
                 <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
-                <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
+                <p style="color: #721c24; margin: 0;">Ошибка загрузки: ${error.message}</p>
             </div>
         `;
+    }
+}
+
+/**
+ * Обновляет таблицу сеансов
+ */
+async function refreshSessionsTable(connectionId, clusterUuid, infobaseUuid) {
+    await loadSessionsTable(connectionId, clusterUuid, infobaseUuid);
+}
+
+/**
+ * Отрисовывает таблицу сеансов
+ */
+function renderSessionsTable(sessions, connectionId, clusterUuid) {
+    const container = document.getElementById('sessionsTableContainer');
+    if (!container) return;
+    
+    // Сохраняем выбранные сеансы
+    const selectedSessions = window._selectedSessions || new Set();
+    
+    let html = `
+        <div style="margin-bottom: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" id="selectAllSessions" onchange="toggleSelectAllSessions()">
+                <span>Выбрать все</span>
+            </label>
+        </div>
+        <table id="sessionsTable" style="width: 100%; border-collapse: collapse; background: white;">
+            <thead>
+                <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
+                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; width: 40px;">
+                        <input type="checkbox" id="selectAllSessionsHeader" onchange="toggleSelectAllSessions()">
+                    </th>
+                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer;" onclick="sortSessionsTable('session')">
+                        UUID сеанса ↕️
+                    </th>
+    `;
+    
+    // Собираем все уникальные ключи из всех сеансов для заголовков
+    const allKeys = new Set();
+    sessions.forEach(session => {
+        Object.keys(session.data || {}).forEach(key => allKeys.add(key));
+    });
+    
+    const sortedKeys = Array.from(allKeys).sort();
+    
+    // Добавляем заголовки для всех полей
+    sortedKeys.forEach(key => {
+        html += `<th style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer;" onclick="sortSessionsTable('${key}')">${escapeHtml(key)} ↕️</th>`;
+    });
+    
+    html += `
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    sessions.forEach((session, index) => {
+        const isSelected = selectedSessions.has(session.uuid);
+        html += `
+            <tr class="session-row" data-session-uuid="${session.uuid}" data-index="${index}" style="cursor: pointer;" oncontextmenu="showSessionContextMenu(event, ${connectionId}, '${clusterUuid}', '${session.uuid}'); return false;">
+                <td style="padding: 0.75rem; border: 1px solid #ddd; text-align: center;" onclick="event.stopPropagation();">
+                    <input type="checkbox" class="session-checkbox" value="${session.uuid}" ${isSelected ? 'checked' : ''} onchange="updateSessionSelection('${session.uuid}', this.checked)">
+                </td>
+                <td style="padding: 0.75rem; border: 1px solid #ddd; font-family: monospace; font-size: 0.85rem;">${escapeHtml(session.uuid)}</td>
+        `;
+        
+        sortedKeys.forEach(key => {
+            const value = session.data[key] || '';
+            html += `<td style="padding: 0.75rem; border: 1px solid #ddd;">${escapeHtml(value)}</td>`;
+        });
+        
+        html += `</tr>`;
+    });
+    
+    html += `
+            </tbody>
+        </table>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Добавляем обработчики кликов на строки
+    container.querySelectorAll('.session-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+            if (e.target.type !== 'checkbox') {
+                const uuid = row.getAttribute('data-session-uuid');
+                const checkbox = row.querySelector('.session-checkbox');
+                if (checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    updateSessionSelection(uuid, checkbox.checked);
+                }
+            }
+        });
+    });
+    
+    // Сохраняем данные для фильтрации и сортировки
+    window._sessionsData = sessions;
+    window._selectedSessions = selectedSessions;
+}
+
+/**
+ * Переключает выбор всех сеансов
+ */
+function toggleSelectAllSessions() {
+    const selectAll = document.getElementById('selectAllSessions') || document.getElementById('selectAllSessionsHeader');
+    const checkboxes = document.querySelectorAll('.session-checkbox');
+    const selectedSessions = window._selectedSessions || new Set();
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+        updateSessionSelection(checkbox.value, selectAll.checked);
+    });
+}
+
+/**
+ * Обновляет выбор сеанса
+ */
+function updateSessionSelection(sessionUuid, isSelected) {
+    if (!window._selectedSessions) {
+        window._selectedSessions = new Set();
+    }
+    
+    if (isSelected) {
+        window._selectedSessions.add(sessionUuid);
+    } else {
+        window._selectedSessions.delete(sessionUuid);
+    }
+    
+    // Обновляем состояние "Выбрать все"
+    const selectAll = document.getElementById('selectAllSessions') || document.getElementById('selectAllSessionsHeader');
+    if (selectAll) {
+        const checkboxes = document.querySelectorAll('.session-checkbox');
+        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+        selectAll.checked = allChecked;
+    }
+}
+
+/**
+ * Фильтрует таблицу сеансов по поисковому запросу
+ */
+function filterSessionsTable() {
+    const searchInput = document.getElementById('sessionsSearch');
+    const searchTerm = (searchInput?.value || '').toLowerCase();
+    const rows = document.querySelectorAll('.session-row');
+    
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+}
+
+/**
+ * Сортирует таблицу сеансов
+ */
+function sortSessionsTable(columnKey) {
+    const sessions = window._sessionsData || [];
+    const currentSort = window._sessionsSort || { column: null, direction: 'asc' };
+    
+    let direction = 'asc';
+    if (currentSort.column === columnKey && currentSort.direction === 'asc') {
+        direction = 'desc';
+    }
+    
+    sessions.sort((a, b) => {
+        let aVal = '';
+        let bVal = '';
+        
+        if (columnKey === 'session') {
+            aVal = a.uuid || '';
+            bVal = b.uuid || '';
+        } else {
+            aVal = a.data[columnKey] || '';
+            bVal = b.data[columnKey] || '';
+        }
+        
+        if (direction === 'asc') {
+            return aVal.localeCompare(bVal);
+        } else {
+            return bVal.localeCompare(aVal);
+        }
+    });
+    
+    window._sessionsSort = { column: columnKey, direction };
+    
+    // Перерисовываем таблицу
+    const connectionId = window._currentSessionsConnectionId;
+    const clusterUuid = window._currentSessionsClusterUuid;
+    const infobaseUuid = window._currentSessionsInfobaseUuid;
+    
+    if (connectionId && clusterUuid) {
+        renderSessionsTable(sessions, connectionId, clusterUuid);
+        filterSessionsTable(); // Применяем фильтр если есть
+    }
+}
+
+/**
+ * Показывает контекстное меню для сеанса
+ */
+function showSessionContextMenu(event, connectionId, clusterUuid, sessionUuid) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    closeContextMenu();
+    
+    const selectedSessions = window._selectedSessions || new Set();
+    const sessionsToProcess = selectedSessions.has(sessionUuid) ? Array.from(selectedSessions) : [sessionUuid];
+    
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+    menu.style.zIndex = '10001';
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="terminateSelectedSessions(${connectionId}, '${clusterUuid}', ${JSON.stringify(sessionsToProcess)}); closeContextMenu();">
+            ⛔ Принудительное завершение сеанса${sessionsToProcess.length > 1 ? ` (${sessionsToProcess.length})` : ''}
+        </div>
+        <div class="context-menu-item" onclick="interruptSelectedSessions(${connectionId}, '${clusterUuid}', ${JSON.stringify(sessionsToProcess)}); closeContextMenu();">
+            🔄 Прерывание текущего серверного вызова${sessionsToProcess.length > 1 ? ` (${sessionsToProcess.length})` : ''}
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+    }, 100);
+}
+
+/**
+ * Принудительно завершает выбранные сеансы
+ */
+async function terminateSelectedSessions(connectionId, clusterUuid, sessionUuids) {
+    closeContextMenu();
+    
+    if (!sessionUuids || sessionUuids.length === 0) {
+        showNotification('❌ Выберите сеансы для завершения', true);
+        return;
+    }
+    
+    const count = sessionUuids.length;
+    if (!confirm(`Вы уверены, что хотите принудительно завершить ${count} сеанс${count > 1 ? 'ов' : ''}?`)) {
+        return;
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch('/api/clusters/sessions/terminate/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                connection_id: connectionId,
+                cluster_uuid: clusterUuid,
+                session_uuids: sessionUuids
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            const failed = result.results.filter(r => !r.success);
+            if (failed.length === 0) {
+                showNotification(`✅ Успешно завершено ${count} сеанс${count > 1 ? 'ов' : ''}`, false);
+            } else {
+                showNotification(`⚠️ Завершено ${count - failed.length} из ${count} сеансов. Ошибки: ${failed.map(f => f.error).join(', ')}`, true);
+            }
+            
+            // Обновляем таблицу
+            await refreshSessionsTable(connectionId, clusterUuid, window._currentSessionsInfobaseUuid || null);
+        } else {
+            showNotification('❌ Ошибка завершения сеансов: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+/**
+ * Прерывает текущие серверные вызовы для выбранных сеансов
+ */
+async function interruptSelectedSessions(connectionId, clusterUuid, sessionUuids) {
+    closeContextMenu();
+    
+    if (!sessionUuids || sessionUuids.length === 0) {
+        showNotification('❌ Выберите сеансы для прерывания', true);
+        return;
+    }
+    
+    const count = sessionUuids.length;
+    if (!confirm(`Вы уверены, что хотите прервать текущий серверный вызов для ${count} сеанс${count > 1 ? 'ов' : ''}?`)) {
+        return;
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch('/api/clusters/sessions/interrupt/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                connection_id: connectionId,
+                cluster_uuid: clusterUuid,
+                session_uuids: sessionUuids
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            const failed = result.results.filter(r => !r.success);
+            if (failed.length === 0) {
+                showNotification(`✅ Успешно прервано ${count} серверных вызов${count > 1 ? 'ов' : ''}`, false);
+            } else {
+                showNotification(`⚠️ Прервано ${count - failed.length} из ${count} вызовов. Ошибки: ${failed.map(f => f.error).join(', ')}`, true);
+            }
+            
+            // Обновляем таблицу
+            await refreshSessionsTable(connectionId, clusterUuid, window._currentSessionsInfobaseUuid || null);
+        } else {
+            showNotification('❌ Ошибка прерывания вызовов: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
     }
 }
 
@@ -1899,6 +2385,9 @@ function showInfobaseContextMenu(event, connectionId, clusterUuid, infobaseUuid,
         <div class="context-menu-item" onclick="openInfobaseProperties(${connectionId}, '${clusterUuid}', '${infobaseUuid}'); closeContextMenu();">
             📋 Свойства
         </div>
+        <div class="context-menu-item" onclick="openSessionsModal(${connectionId}, '${clusterUuid}', '${infobaseUuid}'); closeContextMenu();">
+            💺 Сеансы
+        </div>
         <div class="context-menu-item" onclick="deleteInfobase(${connectionId}, '${clusterUuid}', '${infobaseUuid}', '${escapeHtml(infobaseName).replace(/'/g, "\\'")}'); closeContextMenu();">
             🗑️ Удалить
         </div>
@@ -2089,35 +2578,38 @@ function openCreateInfobaseModal(connectionId, clusterUuid) {
     const dbNameInput = document.getElementById('infobaseDbName');
     
     if (nameInput && descrInput && dbNameInput) {
-        let isUserTyping = false;
-        let lastValue = '';
+        let dbNameWasManuallyEdited = false;
+        let lastNameValue = '';
         
+        // Автозаполнение при вводе имени информационной базы
         nameInput.addEventListener('input', (e) => {
             const currentValue = e.target.value.trim();
             
-            // Если пользователь только начал вводить или изменил значение
-            if (!isUserTyping || currentValue !== lastValue) {
-                // Автозаполняем описание
-                if (currentValue && !descrInput.value) {
-                    descrInput.value = `Владелец:`;
-                }
-                
-                // Автозаполняем имя базы данных
-                if (currentValue && !dbNameInput.value) {
-                    dbNameInput.value = currentValue;
-                }
-                
-                lastValue = currentValue;
+            // Автозаполняем описание только если оно пустое
+            if (currentValue && !descrInput.value) {
+                descrInput.value = `Владелец:`;
+            }
+            
+            // Автозаполняем имя базы данных только если оно не было изменено вручную
+            if (currentValue && !dbNameWasManuallyEdited) {
+                dbNameInput.value = currentValue;
+            }
+            
+            lastNameValue = currentValue;
+        });
+        
+        // Отслеживаем ручное редактирование поля "Имя базы данных"
+        dbNameInput.addEventListener('input', () => {
+            // Если пользователь изменил значение вручную, помечаем это
+            if (dbNameInput.value !== lastNameValue) {
+                dbNameWasManuallyEdited = true;
             }
         });
         
-        // Отслеживаем ручное редактирование полей
-        descrInput.addEventListener('focus', () => {
-            isUserTyping = true;
-        });
-        
+        // При фокусе на поле "Имя базы данных" разрешаем независимое редактирование
         dbNameInput.addEventListener('focus', () => {
-            isUserTyping = true;
+            // Разрешаем независимое редактирование
+            dbNameWasManuallyEdited = true;
         });
     }
 }

@@ -13,6 +13,7 @@ urlpatterns = [
     path('clusters/<int:connection_id>/<str:cluster_uuid>/remove/', views.remove_cluster, name='remove_cluster'),
     path('sessions/<int:connection_id>/', views.get_sessions, name='get_sessions'),
     path('sessions/terminate/', views.terminate_sessions, name='terminate_sessions'),
+    path('sessions/interrupt/', views.interrupt_server_calls, name='interrupt_server_calls'),
     path('infobases/<int:connection_id>/', views.get_infobases, name='get_infobases'),
     path('infobases/<int:connection_id>/<str:cluster_uuid>/info/', views.get_infobase_info, name='get_infobase_info'),
     path('infobases/<int:connection_id>/<str:cluster_uuid>/create/', views.create_infobase, name='create_infobase'),

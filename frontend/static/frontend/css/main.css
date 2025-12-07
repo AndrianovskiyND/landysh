@@ -698,3 +698,34 @@ input, select, button, .btn {
 .context-menu-item:active {
     background: #e9ecef;
 }
+
+/* Стили для таблицы сеансов */
+#sessionsTable {
+    font-size: 0.9rem;
+}
+
+#sessionsTable thead th {
+    background: #f8f9fa;
+    font-weight: 600;
+    user-select: none;
+}
+
+#sessionsTable tbody tr:hover {
+    background: #f8f9fa;
+}
+
+#sessionsTable tbody tr.selected {
+    background: #e3f2fd;
+}
+
+#sessionsTable tbody td {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#sessionsTable tbody td:hover {
+    white-space: normal;
+    word-break: break-word;
+}

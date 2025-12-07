@@ -1519,21 +1519,6 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
     // Сохраняем выбранные сеансы
     const selectedSessions = window._selectedSessions || new Set();
     
-    let html = `
-        <div style="margin-bottom: 1rem;">
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                <input type="checkbox" id="selectAllSessions" onchange="toggleSelectAllSessions()">
-                <span>Выбрать все</span>
-            </label>
-        </div>
-        <table id="sessionsTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: auto;">
-            <thead>
-                <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
-                    <th style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; width: 40px;">
-                        <input type="checkbox" id="selectAllSessionsHeader" onchange="toggleSelectAllSessions()">
-                    </th>
-    `;
-    
     // Собираем все уникальные ключи из всех сеансов для заголовков
     const allKeys = new Set();
     sessions.forEach(session => {
@@ -1551,10 +1536,63 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
     }
     const visibleColumns = window._sessionsVisibleColumns;
     
-    // Добавляем заголовки только для видимых столбцов
-    sortedKeys.forEach(key => {
+    // Получаем сохраненный порядок столбцов
+    const columnOrderKey = `sessions_column_order_${connectionId}_${clusterUuid}`;
+    let columnOrder = JSON.parse(localStorage.getItem(columnOrderKey) || 'null');
+    if (!columnOrder || !Array.isArray(columnOrder)) {
+        columnOrder = sortedKeys.filter(k => visibleColumns.has(k));
+    } else {
+        // Фильтруем порядок, оставляя только видимые столбцы
+        columnOrder = columnOrder.filter(k => visibleColumns.has(k));
+        // Добавляем новые столбцы в конец
+        sortedKeys.forEach(k => {
+            if (visibleColumns.has(k) && !columnOrder.includes(k)) {
+                columnOrder.push(k);
+            }
+        });
+    }
+    
+    // Проверяем, есть ли видимые столбцы
+    const hasVisibleColumns = visibleColumns.size > 0;
+    
+    let html = `
+        <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" id="selectAllSessions" onchange="toggleSelectAllSessions()">
+                <span>Выбрать все</span>
+            </label>
+            <button class="btn btn-danger" onclick="terminateSelectedSessionsFromTable()" id="terminateSessionsBtn" style="display: none;">
+                ⛔ Принудительное завершение сеанса
+            </button>
+            <button class="btn btn-warning" onclick="interruptSelectedSessionsFromTable()" id="interruptSessionsBtn" style="display: none;">
+                🔄 Прерывание текущего серверного вызова
+            </button>
+        </div>
+    `;
+    
+    if (!hasVisibleColumns) {
+        html += `
+            <div style="text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 1rem;">
+                <p style="color: #6c757d; margin: 0;">Нет данных для отображения</p>
+            </div>
+        `;
+        container.innerHTML = html;
+        return;
+    }
+    
+    html += `
+        <table id="sessionsTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: auto;">
+            <thead>
+                <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
+                    <th style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; width: 40px;">
+                        <input type="checkbox" id="selectAllSessionsHeader" onchange="toggleSelectAllSessions()">
+                    </th>
+    `;
+    
+    // Добавляем заголовки в сохраненном порядке
+    columnOrder.forEach((key, index) => {
         if (visibleColumns.has(key)) {
-            html += `<th class="resizable-column" style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; min-width: 120px; position: relative; vertical-align: top;">
+            html += `<th class="resizable-column draggable-column" draggable="true" data-column="${key}" data-index="${index}" style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; min-width: 120px; position: relative; vertical-align: top; cursor: move;">
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                     <div style="text-align: center; font-size: 0.85rem; cursor: pointer;" onclick="sortSessionsTable('${key}')" title="Сортировать">↕️</div>
                     <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -1576,13 +1614,14 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
     sessions.forEach((session, index) => {
         const isSelected = selectedSessions.has(session.uuid);
         html += `
-            <tr class="session-row" data-session-uuid="${session.uuid}" data-index="${index}" style="cursor: pointer;" oncontextmenu="showSessionContextMenu(event, ${connectionId}, '${clusterUuid}', '${session.uuid}'); return false;">
+            <tr class="session-row" data-session-uuid="${session.uuid}" data-index="${index}" style="cursor: pointer;">
                 <td style="padding: 0.5rem; border: 1px solid #ddd; text-align: center;" onclick="event.stopPropagation();">
                     <input type="checkbox" class="session-checkbox" value="${session.uuid}" ${isSelected ? 'checked' : ''} onchange="updateSessionSelection('${session.uuid}', this.checked)">
                 </td>
         `;
         
-        sortedKeys.forEach(key => {
+        // Используем сохраненный порядок столбцов
+        columnOrder.forEach(key => {
             if (visibleColumns.has(key)) {
                 let value = '';
                 if (key === 'session') {
@@ -1608,30 +1647,41 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
     
     container.innerHTML = html;
     
-    // Добавляем обработчики кликов на строки
-    container.querySelectorAll('.session-row').forEach(row => {
-        row.addEventListener('click', (e) => {
-            // Если клик по чекбоксу - только выбор
-            if (e.target.type === 'checkbox' || e.target.closest('input[type="checkbox"]')) {
-                return;
-            }
-            // Если клик по resize handle или по полю поиска - не открываем модальное окно
-            if (e.target.classList.contains('resize-handle') || e.target.closest('.resize-handle') || 
-                e.target.classList.contains('column-search-input') || e.target.closest('.column-search-input')) {
-                return;
-            }
-            // Иначе открываем модальное окно с детальной информацией
-            const uuid = row.getAttribute('data-session-uuid');
-            openSessionInfoModal(connectionId, clusterUuid, uuid);
+    if (hasVisibleColumns) {
+        // Добавляем обработчики кликов на строки
+        container.querySelectorAll('.session-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                // Если клик по чекбоксу - только выбор
+                if (e.target.type === 'checkbox' || e.target.closest('input[type="checkbox"]')) {
+                    return;
+                }
+                // Если клик по resize handle или по полю поиска - не открываем модальное окно
+                if (e.target.classList.contains('resize-handle') || e.target.closest('.resize-handle') || 
+                    e.target.classList.contains('column-search-input') || e.target.closest('.column-search-input')) {
+                    return;
+                }
+                // Иначе открываем модальное окно с детальной информацией
+                const uuid = row.getAttribute('data-session-uuid');
+                openSessionInfoModal(connectionId, clusterUuid, uuid);
+            });
         });
-    });
+        
+        // Добавляем обработчики для изменения размера столбцов
+        initColumnResize('#sessionsTable');
+        
+        // Добавляем обработчики drag and drop для перестановки столбцов
+        initColumnDragDrop('#sessionsTable', columnOrderKey);
+    }
     
-    // Добавляем обработчики для изменения размера столбцов
-    initColumnResize('#sessionsTable');
+    // Обновляем видимость кнопок действий
+    updateSessionsActionButtons();
     
     // Сохраняем данные для фильтрации и сортировки
     window._sessionsData = sessions;
     window._selectedSessions = selectedSessions;
+    if (columnOrder && Array.isArray(columnOrder)) {
+        window._sessionsColumnOrder = columnOrder;
+    }
 }
 
 /**
@@ -1669,6 +1719,79 @@ function updateSessionSelection(sessionUuid, isSelected) {
         const allChecked = Array.from(checkboxes).every(cb => cb.checked);
         selectAll.checked = allChecked;
     }
+    
+    // Обновляем видимость кнопок действий
+    updateSessionsActionButtons();
+}
+
+/**
+ * Обновляет видимость кнопок действий для сеансов
+ */
+function updateSessionsActionButtons() {
+    const selectedSessions = window._selectedSessions || new Set();
+    const terminateBtn = document.getElementById('terminateSessionsBtn');
+    const interruptBtn = document.getElementById('interruptSessionsBtn');
+    
+    if (terminateBtn) {
+        terminateBtn.style.display = selectedSessions.size > 0 ? 'inline-block' : 'none';
+    }
+    if (interruptBtn) {
+        interruptBtn.style.display = selectedSessions.size > 0 ? 'inline-block' : 'none';
+    }
+}
+
+/**
+ * Принудительное завершение выбранных сеансов из таблицы
+ */
+async function terminateSelectedSessionsFromTable() {
+    const selectedSessions = window._selectedSessions || new Set();
+    const connectionId = window._currentSessionsConnectionId;
+    const clusterUuid = window._currentSessionsClusterUuid;
+    
+    if (!connectionId || !clusterUuid) {
+        showNotification('❌ Ошибка: не найдены параметры подключения', true);
+        return;
+    }
+    
+    const sessionUuids = Array.from(selectedSessions);
+    if (sessionUuids.length === 0) {
+        showNotification('❌ Выберите сеансы для завершения', true);
+        return;
+    }
+    
+    const count = sessionUuids.length;
+    if (!confirm(`Вы уверены, что хотите принудительно завершить ${count} сеанс${count > 1 ? 'ов' : ''}?`)) {
+        return;
+    }
+    
+    await terminateSelectedSessions(connectionId, clusterUuid, sessionUuids);
+}
+
+/**
+ * Прерывание текущих серверных вызовов для выбранных сеансов из таблицы
+ */
+async function interruptSelectedSessionsFromTable() {
+    const selectedSessions = window._selectedSessions || new Set();
+    const connectionId = window._currentSessionsConnectionId;
+    const clusterUuid = window._currentSessionsClusterUuid;
+    
+    if (!connectionId || !clusterUuid) {
+        showNotification('❌ Ошибка: не найдены параметры подключения', true);
+        return;
+    }
+    
+    const sessionUuids = Array.from(selectedSessions);
+    if (sessionUuids.length === 0) {
+        showNotification('❌ Выберите сеансы для прерывания', true);
+        return;
+    }
+    
+    const count = sessionUuids.length;
+    if (!confirm(`Вы уверены, что хотите прервать текущий серверный вызов для ${count} сеанс${count > 1 ? 'ов' : ''}?`)) {
+        return;
+    }
+    
+    await interruptSelectedSessions(connectionId, clusterUuid, sessionUuids);
 }
 
 /**
@@ -1749,11 +1872,8 @@ function showSessionContextMenu(event, connectionId, clusterUuid, sessionUuid) {
     menu.style.zIndex = '10001';
     
     menu.innerHTML = `
-        <div class="context-menu-item" onclick="terminateSelectedSessions(${connectionId}, '${clusterUuid}', ${JSON.stringify(sessionsToProcess)}); closeContextMenu();">
-            ⛔ Принудительное завершение сеанса${sessionsToProcess.length > 1 ? ` (${sessionsToProcess.length})` : ''}
-        </div>
-        <div class="context-menu-item" onclick="interruptSelectedSessions(${connectionId}, '${clusterUuid}', ${JSON.stringify(sessionsToProcess)}); closeContextMenu();">
-            🔄 Прерывание текущего серверного вызова${sessionsToProcess.length > 1 ? ` (${sessionsToProcess.length})` : ''}
+        <div class="context-menu-item" onclick="openSessionInfoModal(${connectionId}, '${clusterUuid}', '${sessionUuid}'); closeContextMenu();">
+            📋 Свойства
         </div>
     `;
     
@@ -1923,6 +2043,100 @@ function closeSessionInfoModal() {
 /**
  * Инициализирует изменение размера столбцов для таблицы
  */
+/**
+ * Инициализирует drag and drop для перестановки столбцов
+ */
+function initColumnDragDrop(tableSelector, orderKey) {
+    const table = document.querySelector(tableSelector);
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('thead th.draggable-column');
+    let draggedElement = null;
+    
+    headers.forEach((header) => {
+        header.addEventListener('dragstart', (e) => {
+            draggedElement = header;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', header.getAttribute('data-column'));
+            header.style.opacity = '0.5';
+            header.classList.add('dragging');
+        });
+        
+        header.addEventListener('dragend', (e) => {
+            header.style.opacity = '1';
+            header.classList.remove('dragging');
+            draggedElement = null;
+        });
+        
+        header.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            if (!draggedElement || draggedElement === header) return;
+            
+            const afterElement = getDragAfterElement(table.querySelector('thead tr'), e.clientX);
+            if (afterElement == null) {
+                table.querySelector('thead tr').appendChild(draggedElement);
+            } else {
+                table.querySelector('thead tr').insertBefore(draggedElement, afterElement);
+            }
+        });
+        
+        header.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (!draggedElement) return;
+            
+            // Обновляем порядок в ячейках данных
+            const tbody = table.querySelector('tbody');
+            if (tbody) {
+                const rows = tbody.querySelectorAll('tr');
+                rows.forEach(row => {
+                    const cells = Array.from(row.querySelectorAll('td[data-column]'));
+                    const headerOrder = Array.from(table.querySelectorAll('thead th.draggable-column')).map(h => h.getAttribute('data-column'));
+                    
+                    // Создаем новый порядок ячеек
+                    const newCells = [];
+                    headerOrder.forEach(colKey => {
+                        const cell = cells.find(c => c.getAttribute('data-column') === colKey);
+                        if (cell) newCells.push(cell);
+                    });
+                    
+                    // Заменяем ячейки
+                    newCells.forEach(cell => row.appendChild(cell));
+                });
+            }
+            
+            // Сохраняем новый порядок
+            const newOrder = [];
+            const allHeaders = table.querySelectorAll('thead th.draggable-column');
+            allHeaders.forEach(h => {
+                const colKey = h.getAttribute('data-column');
+                if (colKey) newOrder.push(colKey);
+            });
+            
+            localStorage.setItem(orderKey, JSON.stringify(newOrder));
+        });
+    });
+}
+
+/**
+ * Получает элемент после которого нужно вставить перетаскиваемый элемент
+ */
+function getDragAfterElement(container, x) {
+    const draggableElements = [...container.querySelectorAll('th.draggable-column:not(.dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = x - box.left - box.width / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
 function initColumnResize(tableSelector) {
     const table = document.querySelector(tableSelector);
     if (!table) return;
@@ -1958,7 +2172,25 @@ function initColumnResize(tableSelector) {
         const newWidth = currentResize.startWidth + diff;
         
         if (newWidth > 50) { // Минимальная ширина столбца
+            const columnIndex = Array.from(currentResize.th.parentElement.children).indexOf(currentResize.th);
+            const columnKey = currentResize.th.getAttribute('data-column');
+            
+            // Устанавливаем ширину заголовка
             currentResize.th.style.width = newWidth + 'px';
+            currentResize.th.style.minWidth = newWidth + 'px';
+            
+            // Обновляем ширину всех ячеек в этом столбце
+            const tbody = table.querySelector('tbody');
+            if (tbody) {
+                const rows = tbody.querySelectorAll('tr');
+                rows.forEach(row => {
+                    const cell = row.querySelector(`td[data-column="${columnKey}"]`);
+                    if (cell) {
+                        cell.style.width = newWidth + 'px';
+                        cell.style.minWidth = newWidth + 'px';
+                    }
+                });
+            }
         }
     }
     
@@ -2185,17 +2417,16 @@ function toggleSessionsColumn(columnKey, isVisible) {
  * Прерывает текущие серверные вызовы для выбранных сеансов
  */
 async function interruptSelectedSessions(connectionId, clusterUuid, sessionUuids) {
-    closeContextMenu();
-    
     if (!sessionUuids || sessionUuids.length === 0) {
         showNotification('❌ Выберите сеансы для прерывания', true);
         return;
     }
     
     const count = sessionUuids.length;
-    if (!confirm(`Вы уверены, что хотите прервать текущий серверный вызов для ${count} сеанс${count > 1 ? 'ов' : ''}?`)) {
-        return;
-    }
+    let successCount = 0;
+    let errorCount = 0;
+    
+    showNotification(`⏳ Прерывание ${count} сеанс${count > 1 ? 'ов' : ''}...`, false);
     
     try {
         const csrfToken = getCSRFToken();
@@ -2204,36 +2435,54 @@ async function interruptSelectedSessions(connectionId, clusterUuid, sessionUuids
             return;
         }
         
-        const response = await fetch('/api/clusters/sessions/interrupt/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({
-                connection_id: connectionId,
-                cluster_uuid: clusterUuid,
-                session_uuids: sessionUuids
-            })
+        // Выполняем запросы для каждого сеанса
+        const promises = sessionUuids.map(async (sessionUuid) => {
+            try {
+                const response = await fetch('/api/clusters/sessions/interrupt/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        connection_id: connectionId,
+                        cluster_uuid: clusterUuid,
+                        session_uuids: [sessionUuid]
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    successCount++;
+                } else {
+                    errorCount++;
+                }
+            } catch (error) {
+                errorCount++;
+            }
         });
         
-        const result = await response.json();
+        await Promise.all(promises);
         
-        if (result.success) {
-            const failed = result.results.filter(r => !r.success);
-            if (failed.length === 0) {
-                showNotification(`✅ Успешно прервано ${count} серверных вызов${count > 1 ? 'ов' : ''}`, false);
-            } else {
-                showNotification(`⚠️ Прервано ${count - failed.length} из ${count} вызовов. Ошибки: ${failed.map(f => f.error).join(', ')}`, true);
-            }
-            
-            // Обновляем таблицу
-            await refreshSessionsTable(connectionId, clusterUuid, window._currentSessionsInfobaseUuid || null);
+        // Очищаем выбор
+        window._selectedSessions = new Set();
+        updateSessionsActionButtons();
+        const checkboxes = document.querySelectorAll('.session-checkbox');
+        checkboxes.forEach(cb => cb.checked = false);
+        const selectAll = document.getElementById('selectAllSessions') || document.getElementById('selectAllSessionsHeader');
+        if (selectAll) selectAll.checked = false;
+        
+        // Показываем результат
+        if (errorCount === 0) {
+            showNotification(`✅ Успешно прервано ${successCount} сеанс${successCount > 1 ? 'ов' : ''}`, false);
         } else {
-            showNotification('❌ Ошибка прерывания вызовов: ' + (result.error || 'Неизвестная ошибка'), true);
+            showNotification(`⚠️ Прервано ${successCount} из ${count} сеанс${count > 1 ? 'ов' : ''}. Ошибок: ${errorCount}`, true);
         }
+        
+        // Обновляем таблицу
+        await refreshSessionsTable(connectionId, clusterUuid, window._currentSessionsInfobaseUuid || null);
     } catch (error) {
-        showNotification('❌ Ошибка: ' + error.message, true);
+        showNotification(`❌ Ошибка: ${error.message}`, true);
     }
 }
 
@@ -4018,12 +4267,6 @@ function renderProcessesTable(processes, connectionId, clusterUuid) {
     // Сохраняем выбранные процессы
     const selectedProcesses = window._selectedProcesses || new Set();
     
-    let html = `
-        <table id="processesTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: auto;">
-            <thead>
-                <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
-    `;
-    
     // Собираем все уникальные ключи из всех процессов для заголовков
     const allKeys = new Set();
     processes.forEach(process => {
@@ -4041,75 +4284,121 @@ function renderProcessesTable(processes, connectionId, clusterUuid) {
     }
     const visibleColumns = window._processesVisibleColumns;
     
-    // Добавляем заголовки только для видимых столбцов
-    sortedKeys.forEach(key => {
-        if (visibleColumns.has(key)) {
-            html += `<th class="resizable-column" style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; min-width: 120px; position: relative; vertical-align: top;">
-                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                    <div style="text-align: center; font-size: 0.85rem; cursor: pointer;" onclick="sortProcessesTable('${key}')" title="Сортировать">↕️</div>
-                    <div style="display: flex; align-items: center; gap: 0.25rem;">
-                        <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterProcessesColumn('${key}', this.value)" data-column="${key}">
-                    </div>
-                    <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'process' ? 'UUID процесса' : key)}</div>
-                </div>
-                <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
-            </th>`;
-        }
-    });
+    // Проверяем, есть ли видимые столбцы
+    const hasVisibleColumns = visibleColumns.size > 0;
     
-    html += `
-                </tr>
-            </thead>
-            <tbody>
-    `;
+    // Получаем сохраненный порядок столбцов
+    const columnOrderKey = `processes_column_order_${connectionId}_${clusterUuid}`;
+    let columnOrder = JSON.parse(localStorage.getItem(columnOrderKey) || 'null');
+    if (!columnOrder || !Array.isArray(columnOrder)) {
+        columnOrder = sortedKeys.filter(k => visibleColumns.has(k));
+    } else {
+        // Фильтруем порядок, оставляя только видимые столбцы
+        columnOrder = columnOrder.filter(k => visibleColumns.has(k));
+        // Добавляем новые столбцы в конец
+        sortedKeys.forEach(k => {
+            if (visibleColumns.has(k) && !columnOrder.includes(k)) {
+                columnOrder.push(k);
+            }
+        });
+    }
     
-    processes.forEach((process, index) => {
-        html += `
-            <tr class="process-row" data-process-uuid="${process.uuid}" data-index="${index}" style="cursor: pointer;">
-                <td style="padding: 0.75rem; border: 1px solid #ddd; font-family: monospace; font-size: 0.85rem; white-space: nowrap;">${escapeHtml(process.uuid)}</td>
+    let html = '';
+    
+    if (!hasVisibleColumns) {
+        html = `
+            <div style="text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 6px;">
+                <p style="color: #6c757d; margin: 0;">Нет данных для отображения</p>
+            </div>
+        `;
+    } else {
+        html = `
+            <table id="processesTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: auto;">
+                <thead>
+                    <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
         `;
         
-        sortedKeys.forEach(key => {
+        // Добавляем заголовки в сохраненном порядке
+        columnOrder.forEach((key, index) => {
             if (visibleColumns.has(key)) {
-                const value = process.data[key] || '';
-                
-                // Добавляем tooltip для длинных значений
-                const displayValue = value.length > 50 ? value.substring(0, 50) + '...' : value;
-                const titleAttr = value.length > 50 ? `title="${escapeHtml(value)}"` : '';
-                
-                html += `<td style="padding: 0.75rem; border: 1px solid #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;" ${titleAttr}>${escapeHtml(displayValue)}</td>`;
+                html += `<th class="resizable-column draggable-column" draggable="true" data-column="${key}" data-index="${index}" style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; min-width: 120px; position: relative; vertical-align: top; cursor: move;">
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <div style="text-align: center; font-size: 0.85rem; cursor: pointer;" onclick="sortProcessesTable('${key}')" title="Сортировать">↕️</div>
+                        <div style="display: flex; align-items: center; gap: 0.25rem;">
+                            <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterProcessesColumn('${key}', this.value)" data-column="${key}">
+                        </div>
+                        <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'process' ? 'UUID процесса' : key)}</div>
+                    </div>
+                    <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
+                </th>`;
             }
         });
         
-        html += `</tr>`;
-    });
-    
-    html += `
-            </tbody>
-        </table>
-    `;
+        html += `
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        processes.forEach((process, index) => {
+            html += `
+                <tr class="process-row" data-process-uuid="${process.uuid}" data-index="${index}" style="cursor: pointer;">
+            `;
+            
+            // Используем сохраненный порядок столбцов
+            columnOrder.forEach(key => {
+                if (visibleColumns.has(key)) {
+                    let value = '';
+                    if (key === 'process') {
+                        value = process.uuid;
+                    } else {
+                        value = process.data[key] || '';
+                    }
+                    
+                    // Добавляем tooltip для длинных значений
+                    const titleAttr = value ? `title="${escapeHtml(value)}"` : '';
+                    
+                    html += `<td style="padding: 0.5rem; border: 1px solid #ddd; word-wrap: break-word; white-space: normal; max-width: 300px; font-size: 0.9rem;" ${titleAttr} data-column="${key}">${escapeHtml(value)}</td>`;
+                }
+            });
+            
+            html += `</tr>`;
+        });
+        
+        html += `
+                </tbody>
+            </table>
+        `;
+    }
     
     container.innerHTML = html;
     
-    // Добавляем обработчики кликов на строки
-    container.querySelectorAll('.process-row').forEach(row => {
-        row.addEventListener('click', (e) => {
-            // Если клик по resize handle - не открываем модальное окно
-            if (e.target.classList.contains('resize-handle') || e.target.closest('.resize-handle')) {
-                return;
-            }
-            // Иначе открываем модальное окно с детальной информацией
-            const uuid = row.getAttribute('data-process-uuid');
-            openProcessInfoModal(connectionId, clusterUuid, uuid);
+    if (hasVisibleColumns) {
+        // Добавляем обработчики кликов на строки
+        container.querySelectorAll('.process-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                // Если клик по resize handle или по полю поиска - не открываем модальное окно
+                if (e.target.classList.contains('resize-handle') || e.target.closest('.resize-handle') || 
+                    e.target.classList.contains('column-search-input') || e.target.closest('.column-search-input')) {
+                    return;
+                }
+                // Иначе открываем модальное окно с детальной информацией
+                const uuid = row.getAttribute('data-process-uuid');
+                openProcessInfoModal(connectionId, clusterUuid, uuid);
+            });
         });
-    });
-    
-    // Добавляем обработчики для изменения размера столбцов
-    initColumnResize('#processesTable');
+        
+        // Добавляем обработчики для изменения размера столбцов
+        initColumnResize('#processesTable');
+        
+        // Добавляем обработчики drag and drop для перестановки столбцов
+        initColumnDragDrop('#processesTable', columnOrderKey);
+    }
     
     // Сохраняем данные для фильтрации и сортировки
     window._processesData = processes;
     window._selectedProcesses = selectedProcesses;
+    window._processesColumnOrder = columnOrder;
 }
 
 /**
@@ -4637,84 +4926,120 @@ function renderManagersTable(managers, connectionId, clusterUuid) {
     }
     const visibleColumns = window._managersVisibleColumns;
     
-    let html = `
-        <table id="managersTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: auto;">
-            <thead>
-                <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
-    `;
+    // Проверяем, есть ли видимые столбцы
+    const hasVisibleColumns = visibleColumns.size > 0;
     
-    // Добавляем заголовки только для видимых столбцов
-    sortedKeys.forEach(key => {
-        if (visibleColumns.has(key)) {
-            html += `<th class="resizable-column" style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; min-width: 120px; position: relative; vertical-align: top;">
-                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                    <div style="text-align: center; font-size: 0.85rem; cursor: pointer;" onclick="sortManagersTable('${key}')" title="Сортировать">↕️</div>
-                    <div style="display: flex; align-items: center; gap: 0.25rem;">
-                        <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterManagersColumn('${key}', this.value)" data-column="${key}">
-                    </div>
-                    <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'manager' ? 'UUID менеджера' : key)}</div>
-                </div>
-                <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
-            </th>`;
-        }
-    });
-    
-    html += `
-                </tr>
-            </thead>
-            <tbody>
-    `;
-    
-    managers.forEach((manager, index) => {
-        html += `
-            <tr class="manager-row" data-manager-uuid="${manager.uuid}" data-index="${index}" style="cursor: pointer;">
-        `;
-        
-        sortedKeys.forEach(key => {
-            if (visibleColumns.has(key)) {
-                let value = '';
-                if (key === 'manager') {
-                    value = manager.uuid;
-                } else {
-                    value = manager.data[key] || '';
-                }
-                
-                // Добавляем tooltip для длинных значений
-                const titleAttr = value ? `title="${escapeHtml(value)}"` : '';
-                
-                html += `<td style="padding: 0.5rem; border: 1px solid #ddd; word-wrap: break-word; white-space: normal; max-width: 300px; font-size: 0.9rem;" ${titleAttr} data-column="${key}">${escapeHtml(value)}</td>`;
+    // Получаем сохраненный порядок столбцов
+    const columnOrderKey = `managers_column_order_${connectionId}_${clusterUuid}`;
+    let columnOrder = JSON.parse(localStorage.getItem(columnOrderKey) || 'null');
+    if (!columnOrder || !Array.isArray(columnOrder)) {
+        columnOrder = sortedKeys.filter(k => visibleColumns.has(k));
+    } else {
+        // Фильтруем порядок, оставляя только видимые столбцы
+        columnOrder = columnOrder.filter(k => visibleColumns.has(k));
+        // Добавляем новые столбцы в конец
+        sortedKeys.forEach(k => {
+            if (visibleColumns.has(k) && !columnOrder.includes(k)) {
+                columnOrder.push(k);
             }
         });
-        
-        html += `</tr>`;
-    });
+    }
     
-    html += `
-            </tbody>
-        </table>
-    `;
+    let html = '';
+    
+    if (!hasVisibleColumns) {
+        html = `
+            <div style="text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 6px;">
+                <p style="color: #6c757d; margin: 0;">Нет данных для отображения</p>
+            </div>
+        `;
+    } else {
+        html = `
+            <table id="managersTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: auto;">
+                <thead>
+                    <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
+        `;
+        
+        // Добавляем заголовки в сохраненном порядке
+        columnOrder.forEach((key, index) => {
+            if (visibleColumns.has(key)) {
+                html += `<th class="resizable-column draggable-column" draggable="true" data-column="${key}" data-index="${index}" style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; min-width: 120px; position: relative; vertical-align: top; cursor: move;">
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <div style="text-align: center; font-size: 0.85rem; cursor: pointer;" onclick="sortManagersTable('${key}')" title="Сортировать">↕️</div>
+                        <div style="display: flex; align-items: center; gap: 0.25rem;">
+                            <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterManagersColumn('${key}', this.value)" data-column="${key}">
+                        </div>
+                        <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'manager' ? 'UUID менеджера' : key)}</div>
+                    </div>
+                    <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
+                </th>`;
+            }
+        });
+    
+        html += `
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        managers.forEach((manager, index) => {
+            html += `
+                <tr class="manager-row" data-manager-uuid="${manager.uuid}" data-index="${index}" style="cursor: pointer;">
+            `;
+            
+            // Используем сохраненный порядок столбцов
+            columnOrder.forEach(key => {
+                if (visibleColumns.has(key)) {
+                    let value = '';
+                    if (key === 'manager') {
+                        value = manager.uuid;
+                    } else {
+                        value = manager.data[key] || '';
+                    }
+                    
+                    // Добавляем tooltip для длинных значений
+                    const titleAttr = value ? `title="${escapeHtml(value)}"` : '';
+                    
+                    html += `<td style="padding: 0.5rem; border: 1px solid #ddd; word-wrap: break-word; white-space: normal; max-width: 300px; font-size: 0.9rem;" ${titleAttr} data-column="${key}">${escapeHtml(value)}</td>`;
+                }
+            });
+            
+            html += `</tr>`;
+        });
+        
+        html += `
+                </tbody>
+            </table>
+        `;
+    }
     
     container.innerHTML = html;
     
-    // Добавляем обработчики кликов на строки
-    container.querySelectorAll('.manager-row').forEach(row => {
-        row.addEventListener('click', (e) => {
-            // Если клик по resize handle или по полю поиска - не открываем модальное окно
-            if (e.target.classList.contains('resize-handle') || e.target.closest('.resize-handle') || 
-                e.target.classList.contains('column-search-input') || e.target.closest('.column-search-input')) {
-                return;
-            }
-            // Иначе открываем модальное окно с детальной информацией
-            const uuid = row.getAttribute('data-manager-uuid');
-            openManagerInfoModal(connectionId, clusterUuid, uuid);
+    if (hasVisibleColumns) {
+        // Добавляем обработчики кликов на строки
+        container.querySelectorAll('.manager-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                // Если клик по resize handle или по полю поиска - не открываем модальное окно
+                if (e.target.classList.contains('resize-handle') || e.target.closest('.resize-handle') || 
+                    e.target.classList.contains('column-search-input') || e.target.closest('.column-search-input')) {
+                    return;
+                }
+                // Иначе открываем модальное окно с детальной информацией
+                const uuid = row.getAttribute('data-manager-uuid');
+                openManagerInfoModal(connectionId, clusterUuid, uuid);
+            });
         });
-    });
-    
-    // Добавляем обработчики для изменения размера столбцов
-    initColumnResize('#managersTable');
+        
+        // Добавляем обработчики для изменения размера столбцов
+        initColumnResize('#managersTable');
+        
+        // Добавляем обработчики drag and drop для перестановки столбцов
+        initColumnDragDrop('#managersTable', columnOrderKey);
+    }
     
     // Сохраняем данные для фильтрации и сортировки
     window._managersData = managers;
+    window._managersColumnOrder = columnOrder;
 }
 
 /**

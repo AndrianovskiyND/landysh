@@ -247,6 +247,86 @@ def _parse_cluster_list(output):
     
     return clusters
 
+def _parse_infobase_list(output):
+    """Парсит вывод команды infobase summary list и извлекает информацию об информационных базах"""
+    infobases = []
+    if not output:
+        return infobases
+    
+    lines = output.strip().split('\n')
+    current_infobase = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            if current_infobase:
+                infobases.append(current_infobase)
+                current_infobase = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'infobase':
+                if current_infobase:
+                    infobases.append(current_infobase)
+                current_infobase = {
+                    'uuid': value,
+                    'name': '',
+                    'data': {}
+                }
+            elif current_infobase:
+                current_infobase['data'][key] = value
+                if key == 'name':
+                    current_infobase['name'] = value.strip('"')
+    
+    if current_infobase:
+        infobases.append(current_infobase)
+    
+    return infobases
+
+def _parse_server_list(output):
+    """Парсит вывод команды server list и извлекает информацию о рабочих серверах"""
+    servers = []
+    if not output:
+        return servers
+    
+    lines = output.strip().split('\n')
+    current_server = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            if current_server:
+                servers.append(current_server)
+                current_server = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'server':
+                if current_server:
+                    servers.append(current_server)
+                current_server = {
+                    'uuid': value,
+                    'name': '',
+                    'data': {}
+                }
+            elif current_server:
+                current_server['data'][key] = value
+                if key == 'name':
+                    current_server['name'] = value.strip('"')
+    
+    if current_server:
+        servers.append(current_server)
+    
+    return servers
+
 @login_required
 def get_clusters(request, connection_id):
     """Получает список кластеров для подключения (выполняет команду cluster list)"""
@@ -343,14 +423,21 @@ def get_infobases(request, connection_id):
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         cluster_uuid = request.GET.get('cluster')
         
+        if not cluster_uuid:
+            return JsonResponse({'success': False, 'error': 'Cluster UUID required'})
+        
         rac_client = RACClient(connection)
         result = rac_client.get_infobase_summary_list(cluster_uuid)
         
         if result['success']:
-            # Здесь нужно будет парсить вывод rac infobase summary list
-            return JsonResponse({'success': True, 'infobases': []})
+            infobases = _parse_infobase_list(result['output'])
+            return JsonResponse({
+                'success': True, 
+                'infobases': infobases,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']})
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'})
@@ -364,14 +451,21 @@ def get_servers(request, connection_id):
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         cluster_uuid = request.GET.get('cluster')
         
+        if not cluster_uuid:
+            return JsonResponse({'success': False, 'error': 'Cluster UUID required'})
+        
         rac_client = RACClient(connection)
         result = rac_client.get_server_list(cluster_uuid)
         
         if result['success']:
-            # Здесь нужно будет парсить вывод rac server list
-            return JsonResponse({'success': True, 'servers': []})
+            servers = _parse_server_list(result['output'])
+            return JsonResponse({
+                'success': True, 
+                'servers': servers,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']})
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'})
@@ -575,6 +669,338 @@ def remove_cluster(request, connection_id, cluster_uuid):
             return JsonResponse({
                 'success': False,
                 'error': result.get('error', 'Ошибка удаления кластера')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+# ============================================
+# Endpoints для работы с информационными базами
+# ============================================
+
+@login_required
+def get_infobase_info(request, connection_id, cluster_uuid):
+    """Получает информацию об информационной базе"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        infobase_uuid = request.GET.get('infobase')
+        infobase_name = request.GET.get('name')
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_infobase_info(cluster_uuid, infobase_uuid, infobase_name)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка получения информации')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def create_infobase(request, connection_id, cluster_uuid):
+    """Создаёт новую информационную базу"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+    
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        
+        data = json.loads(request.body)
+        
+        # Обязательные поля
+        name = data.get('name')
+        dbms = data.get('dbms')
+        db_server = data.get('db_server')
+        db_name = data.get('db_name')
+        locale = data.get('locale')
+        
+        if not all([name, dbms, db_server, db_name, locale]):
+            return JsonResponse({'success': False, 'error': 'Missing required fields'})
+        
+        # Дополнительные параметры
+        kwargs = {}
+        if 'create_database' in data:
+            kwargs['create_database'] = data['create_database']
+        if 'db_user' in data:
+            kwargs['db_user'] = data['db_user']
+        if 'db_pwd' in data:
+            kwargs['db_pwd'] = data['db_pwd']
+        if 'descr' in data:
+            kwargs['descr'] = data['descr']
+        if 'date_offset' in data:
+            kwargs['date_offset'] = data['date_offset']
+        if 'security_level' in data:
+            kwargs['security_level'] = data['security_level']
+        if 'scheduled_jobs_deny' in data:
+            kwargs['scheduled_jobs_deny'] = data['scheduled_jobs_deny']
+        if 'license_distribution' in data:
+            kwargs['license_distribution'] = data['license_distribution']
+        
+        result = rac_client.create_infobase(cluster_uuid, name, dbms, db_server, db_name, locale, **kwargs)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': 'Информационная база успешно создана'
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка создания информационной базы')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def update_infobase(request, connection_id, cluster_uuid):
+    """Обновляет информацию об информационной базе"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+    
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        
+        data = json.loads(request.body)
+        infobase_uuid = data.get('infobase_uuid')
+        infobase_name = data.get('infobase_name')
+        
+        if not infobase_uuid and not infobase_name:
+            return JsonResponse({'success': False, 'error': 'infobase_uuid or infobase_name required'})
+        
+        # Собираем параметры для обновления
+        kwargs = {}
+        for key in ['infobase_user', 'infobase_pwd', 'dbms', 'db_server', 'db_name', 'db_user', 'db_pwd',
+                    'descr', 'denied_from', 'denied_message', 'denied_parameter', 'denied_to', 'permission_code',
+                    'sessions_deny', 'scheduled_jobs_deny', 'license_distribution',
+                    'external_session_manager_connection_string', 'external_session_manager_required',
+                    'reserve_working_processes', 'security_profile_name', 'safe_mode_security_profile_name',
+                    'disable_local_speech_to_text', 'configuration_unload_delay_by_working_process_without_active_users',
+                    'minimum_scheduled_jobs_start_period_without_active_users',
+                    'maximum_scheduled_jobs_start_shift_without_active_users']:
+            if key in data:
+                kwargs[key] = data[key]
+        
+        result = rac_client.update_infobase(cluster_uuid, infobase_uuid, infobase_name, **kwargs)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': 'Информационная база успешно обновлена'
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка обновления информационной базы')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def drop_infobase(request, connection_id, cluster_uuid):
+    """Удаляет информационную базу"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+    
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        
+        data = json.loads(request.body)
+        infobase_uuid = data.get('infobase_uuid')
+        infobase_name = data.get('infobase_name')
+        
+        if not infobase_uuid and not infobase_name:
+            return JsonResponse({'success': False, 'error': 'infobase_uuid or infobase_name required'})
+        
+        result = rac_client.drop_infobase(
+            cluster_uuid,
+            infobase_uuid,
+            infobase_name,
+            data.get('infobase_user'),
+            data.get('infobase_pwd'),
+            data.get('drop_database', False),
+            data.get('clear_database', False)
+        )
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': 'Информационная база успешно удалена'
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка удаления информационной базы')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+# ============================================
+# Endpoints для работы с рабочими серверами
+# ============================================
+
+@login_required
+def get_server_info(request, connection_id, cluster_uuid, server_uuid):
+    """Получает информацию о рабочем сервере"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        
+        result = rac_client.get_server_info(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка получения информации')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def insert_server(request, connection_id, cluster_uuid):
+    """Регистрирует новый рабочий сервер"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+    
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        
+        data = json.loads(request.body)
+        
+        # Обязательные поля
+        agent_host = data.get('agent_host')
+        agent_port = data.get('agent_port')
+        port_range = data.get('port_range')
+        
+        if not all([agent_host, agent_port, port_range]):
+            return JsonResponse({'success': False, 'error': 'Missing required fields: agent_host, agent_port, port_range'})
+        
+        # Дополнительные параметры
+        kwargs = {}
+        for key in ['name', 'using', 'infobases_limit', 'memory_limit', 'connections_limit', 'cluster_port',
+                    'dedicate_managers', 'safe_working_processes_memory_limit', 'safe_call_memory_limit',
+                    'critical_total_memory', 'temporary_allowed_total_memory',
+                    'temporary_allowed_total_memory_time_limit', 'service_principal_name',
+                    'restart_schedule', 'add_prohibiting_assignment_rule']:
+            if key in data:
+                kwargs[key] = data[key]
+        
+        result = rac_client.insert_server(cluster_uuid, agent_host, agent_port, port_range, **kwargs)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': 'Рабочий сервер успешно зарегистрирован'
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка регистрации рабочего сервера')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def update_server(request, connection_id, cluster_uuid, server_uuid):
+    """Обновляет параметры рабочего сервера"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+    
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        
+        data = json.loads(request.body)
+        
+        # Собираем параметры для обновления
+        kwargs = {}
+        for key in ['port_range', 'using', 'infobases_limit', 'memory_limit', 'connections_limit',
+                    'dedicate_managers', 'safe_working_processes_memory_limit', 'safe_call_memory_limit',
+                    'critical_total_memory', 'temporary_allowed_total_memory',
+                    'temporary_allowed_total_memory_time_limit', 'service_principal_name',
+                    'restart_schedule']:
+            if key in data:
+                kwargs[key] = data[key]
+        
+        result = rac_client.update_server(cluster_uuid, server_uuid, **kwargs)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': 'Рабочий сервер успешно обновлён'
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка обновления рабочего сервера')
+            }, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def remove_server(request, connection_id, cluster_uuid, server_uuid):
+    """Удаляет рабочий сервер"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+    
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        
+        result = rac_client.remove_server(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'message': 'Рабочий сервер успешно удалён'
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Ошибка удаления рабочего сервера')
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:

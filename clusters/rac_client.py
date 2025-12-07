@@ -333,3 +333,216 @@ class RACClient:
             f'--cluster={cluster_uuid}'
         ]
         return self._execute_command(args)
+    
+    # ============================================
+    # Методы для работы с информационными базами
+    # ============================================
+    
+    def get_infobase_info(self, cluster_uuid, infobase_uuid=None, infobase_name=None):
+        """Получает информацию об информационной базе"""
+        args = ['infobase', 'info', f'--cluster={cluster_uuid}']
+        
+        if infobase_uuid:
+            args.append(f'--infobase={infobase_uuid}')
+        elif infobase_name:
+            args.append(f'--name={infobase_name}')
+        
+        return self._execute_command(args)
+    
+    def create_infobase(self, cluster_uuid, name, dbms, db_server, db_name, locale, **kwargs):
+        """Создаёт новую информационную базу"""
+        args = [
+            'infobase', 'create',
+            f'--cluster={cluster_uuid}',
+            f'--name={name}',
+            f'--dbms={dbms}',
+            f'--db-server={db_server}',
+            f'--db-name={db_name}',
+            f'--locale={locale}'
+        ]
+        
+        # Маппинг параметров
+        param_mapping = {
+            'create_database': '--create-database',
+            'db_user': '--db-user',
+            'db_pwd': '--db-pwd',
+            'descr': '--descr',
+            'date_offset': '--date-offset',
+            'security_level': '--security-level',
+            'scheduled_jobs_deny': '--scheduled-jobs-deny',
+            'license_distribution': '--license-distribution',
+        }
+        
+        for key, value in kwargs.items():
+            if key in param_mapping and value is not None:
+                param_name = param_mapping[key]
+                if isinstance(value, bool):
+                    value = 'on' if value else 'off'
+                args.append(f'{param_name}={value}')
+        
+        return self._execute_command(args)
+    
+    def update_infobase(self, cluster_uuid, infobase_uuid=None, infobase_name=None, **kwargs):
+        """Обновляет информацию об информационной базе"""
+        args = ['infobase', 'update', f'--cluster={cluster_uuid}']
+        
+        if infobase_uuid:
+            args.append(f'--infobase={infobase_uuid}')
+        elif infobase_name:
+            args.append(f'--name={infobase_name}')
+        
+        # Маппинг параметров
+        param_mapping = {
+            'infobase_user': '--infobase-user',
+            'infobase_pwd': '--infobase-pwd',
+            'dbms': '--dbms',
+            'db_server': '--db-server',
+            'db_name': '--db-name',
+            'db_user': '--db-user',
+            'db_pwd': '--db-pwd',
+            'descr': '--descr',
+            'denied_from': '--denied-from',
+            'denied_message': '--denied-message',
+            'denied_parameter': '--denied-parameter',
+            'denied_to': '--denied-to',
+            'permission_code': '--permission-code',
+            'sessions_deny': '--sessions-deny',
+            'scheduled_jobs_deny': '--scheduled-jobs-deny',
+            'license_distribution': '--license-distribution',
+            'external_session_manager_connection_string': '--external-session-manager-connection-string',
+            'external_session_manager_required': '--external-session-manager-required',
+            'reserve_working_processes': '--reserve-working-processes',
+            'security_profile_name': '--security-profile-name',
+            'safe_mode_security_profile_name': '--safe-mode-security-profile-name',
+            'disable_local_speech_to_text': '--disable-local-speech-to-text',
+            'configuration_unload_delay_by_working_process_without_active_users': '--configuration-unload-delay-by-working-process-without-active-users',
+            'minimum_scheduled_jobs_start_period_without_active_users': '--minimum-scheduled-jobs-start-period-without-active-users',
+            'maximum_scheduled_jobs_start_shift_without_active_users': '--maximum-scheduled-jobs-start-shift-without-active-users',
+        }
+        
+        for key, value in kwargs.items():
+            if key in param_mapping and value is not None:
+                param_name = param_mapping[key]
+                if isinstance(value, bool):
+                    if 'deny' in key or 'required' in key:
+                        value = 'yes' if value else 'no'
+                    else:
+                        value = 'on' if value else 'off'
+                args.append(f'{param_name}={value}')
+        
+        return self._execute_command(args)
+    
+    def drop_infobase(self, cluster_uuid, infobase_uuid=None, infobase_name=None, 
+                      infobase_user=None, infobase_pwd=None, drop_database=False, clear_database=False):
+        """Удаляет информационную базу"""
+        args = ['infobase', 'drop', f'--cluster={cluster_uuid}']
+        
+        if infobase_uuid:
+            args.append(f'--infobase={infobase_uuid}')
+        elif infobase_name:
+            args.append(f'--name={infobase_name}')
+        
+        if infobase_user:
+            args.append(f'--infobase-user={infobase_user}')
+        if infobase_pwd:
+            args.append(f'--infobase-pwd={infobase_pwd}')
+        if drop_database:
+            args.append('--drop-database')
+        if clear_database:
+            args.append('--clear-database')
+        
+        return self._execute_command(args)
+    
+    # ============================================
+    # Методы для работы с рабочими серверами
+    # ============================================
+    
+    def get_server_info(self, cluster_uuid, server_uuid):
+        """Получает информацию о рабочем сервере"""
+        args = [
+            'server', 'info',
+            f'--cluster={cluster_uuid}',
+            f'--server={server_uuid}'
+        ]
+        return self._execute_command(args)
+    
+    def insert_server(self, cluster_uuid, agent_host, agent_port, port_range, **kwargs):
+        """Регистрирует новый рабочий сервер"""
+        args = [
+            'server', 'insert',
+            f'--cluster={cluster_uuid}',
+            f'--agent-host={agent_host}',
+            f'--agent-port={agent_port}',
+            f'--port-range={port_range}'
+        ]
+        
+        # Маппинг параметров
+        param_mapping = {
+            'name': '--name',
+            'using': '--using',
+            'infobases_limit': '--infobases-limit',
+            'memory_limit': '--memory-limit',
+            'connections_limit': '--connections-limit',
+            'cluster_port': '--cluster-port',
+            'dedicate_managers': '--dedicate-managers',
+            'safe_working_processes_memory_limit': '--safe-working-processes-memory-limit',
+            'safe_call_memory_limit': '--safe-call-memory-limit',
+            'critical_total_memory': '--critical-total-memory',
+            'temporary_allowed_total_memory': '--temporary-allowed-total-memory',
+            'temporary_allowed_total_memory_time_limit': '--temporary-allowed-total-memory-time-limit',
+            'service_principal_name': '--service-principal-name',
+            'restart_schedule': '--restart-schedule',
+            'add_prohibiting_assignment_rule': '--add-prohibiting-assignment-rule',
+        }
+        
+        for key, value in kwargs.items():
+            if key in param_mapping and value is not None:
+                param_name = param_mapping[key]
+                if isinstance(value, bool):
+                    value = 'yes' if value else 'no'
+                args.append(f'{param_name}={value}')
+        
+        return self._execute_command(args)
+    
+    def update_server(self, cluster_uuid, server_uuid, **kwargs):
+        """Обновляет параметры рабочего сервера"""
+        args = [
+            'server', 'update',
+            f'--cluster={cluster_uuid}',
+            f'--server={server_uuid}'
+        ]
+        
+        # Маппинг параметров (аналогично insert_server)
+        param_mapping = {
+            'port_range': '--port-range',
+            'using': '--using',
+            'infobases_limit': '--infobases-limit',
+            'memory_limit': '--memory-limit',
+            'connections_limit': '--connections-limit',
+            'dedicate_managers': '--dedicate-managers',
+            'safe_working_processes_memory_limit': '--safe-working-processes-memory-limit',
+            'safe_call_memory_limit': '--safe-call-memory-limit',
+            'critical_total_memory': '--critical-total-memory',
+            'temporary_allowed_total_memory': '--temporary-allowed-total-memory',
+            'temporary_allowed_total_memory_time_limit': '--temporary-allowed-total-memory-time-limit',
+            'service_principal_name': '--service-principal-name',
+            'restart_schedule': '--restart-schedule',
+        }
+        
+        for key, value in kwargs.items():
+            if key in param_mapping and value is not None:
+                param_name = param_mapping[key]
+                if isinstance(value, bool):
+                    value = 'yes' if value else 'no'
+                args.append(f'{param_name}={value}')
+        
+        return self._execute_command(args)
+    
+    def remove_server(self, cluster_uuid, server_uuid):
+        """Удаляет рабочий сервер"""
+        args = [
+            'server', 'remove',
+            f'--cluster={cluster_uuid}',
+            f'--server={server_uuid}'
+        ]
+        return self._execute_command(args)

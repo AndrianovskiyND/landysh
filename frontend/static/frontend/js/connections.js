@@ -912,13 +912,30 @@ function setupClusterEventHandlers() {
             const clusterUuid = clusterHeader.dataset.clusterUuid;
             const clusterName = clusterHeader.dataset.clusterName;
             showClusterContextMenu(e, connectionId, clusterUuid, clusterName);
+            return;
+        }
+        
+        // Обработчик контекстного меню для секций "Информационные базы" и "Рабочие серверы"
+        const treeItem = e.target.closest('.tree-item[data-section]');
+        if (treeItem) {
+            const section = treeItem.dataset.section;
+            const connectionId = treeItem.dataset.connectionId;
+            const clusterUuid = treeItem.dataset.clusterUuid;
+            
+            if (section === 'infobases') {
+                e.preventDefault();
+                showSectionContextMenu(e, connectionId, clusterUuid, 'infobases');
+            } else if (section === 'servers') {
+                e.preventDefault();
+                showSectionContextMenu(e, connectionId, clusterUuid, 'servers');
+            }
         }
     });
     
     // Обработчик клика по подразделам
     document.addEventListener('click', (e) => {
         const treeItem = e.target.closest('.tree-item');
-        if (treeItem) {
+        if (treeItem && treeItem.dataset.section) {
             const section = treeItem.dataset.section;
             const connectionId = treeItem.dataset.connectionId;
             const clusterUuid = treeItem.dataset.clusterUuid;
@@ -991,12 +1008,52 @@ async function loadInfobases(connectionId, clusterUuid) {
     
     const contentArea = document.getElementById('contentArea');
     if (data.success) {
-        contentArea.innerHTML = `
+        const infobases = data.infobases || [];
+        
+        let html = `
             <div class="info-card">
                 <h4>📁 Информационные базы</h4>
-                <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;">${data.output || 'Нет данных'}</pre>
-            </div>
         `;
+        
+        if (infobases.length === 0) {
+            html += `
+                <div style="padding: 1rem; text-align: center; color: #666;">
+                    <p>Информационные базы не найдены</p>
+                </div>
+            `;
+        } else {
+            html += `<div class="clusters-tree">`;
+            infobases.forEach((infobase) => {
+                const infobaseName = infobase.name || `Информационная база ${infobase.uuid.substring(0, 8)}`;
+                html += `
+                    <div class="tree-item" 
+                         data-infobase-uuid="${infobase.uuid}"
+                         data-connection-id="${connectionId}"
+                         data-cluster-uuid="${clusterUuid}"
+                         style="cursor: pointer; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0;"
+                         oncontextmenu="showInfobaseContextMenu(event, ${connectionId}, '${clusterUuid}', '${infobase.uuid}', '${escapeHtml(infobaseName).replace(/'/g, "\\'")}'); return false;">
+                        <span class="tree-icon">📁</span>
+                        <span>${escapeHtml(infobaseName)}</span>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+        }
+        
+        html += `</div>`;
+        contentArea.innerHTML = html;
+        
+        // Добавляем обработчики кликов для открытия свойств
+        contentArea.querySelectorAll('[data-infobase-uuid]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.button === 0) { // Левый клик
+                    const uuid = item.getAttribute('data-infobase-uuid');
+                    const connId = item.getAttribute('data-connection-id');
+                    const clustUuid = item.getAttribute('data-cluster-uuid');
+                    openInfobaseProperties(connId, clustUuid, uuid);
+                }
+            });
+        });
     } else {
         contentArea.innerHTML = `
             <div class="info-card" style="border-left: 4px solid var(--primary-color);">
@@ -1016,12 +1073,52 @@ async function loadServers(connectionId, clusterUuid) {
     
     const contentArea = document.getElementById('contentArea');
     if (data.success) {
-        contentArea.innerHTML = `
+        const servers = data.servers || [];
+        
+        let html = `
             <div class="info-card">
                 <h4>⚙️ Рабочие серверы</h4>
-                <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;">${data.output || 'Нет данных'}</pre>
-            </div>
         `;
+        
+        if (servers.length === 0) {
+            html += `
+                <div style="padding: 1rem; text-align: center; color: #666;">
+                    <p>Рабочие серверы не найдены</p>
+                </div>
+            `;
+        } else {
+            html += `<div class="clusters-tree">`;
+            servers.forEach((server) => {
+                const serverName = server.name || `Рабочий сервер ${server.uuid.substring(0, 8)}`;
+                html += `
+                    <div class="tree-item" 
+                         data-server-uuid="${server.uuid}"
+                         data-connection-id="${connectionId}"
+                         data-cluster-uuid="${clusterUuid}"
+                         style="cursor: pointer; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0;"
+                         oncontextmenu="showServerContextMenu(event, ${connectionId}, '${clusterUuid}', '${server.uuid}', '${escapeHtml(serverName).replace(/'/g, "\\'")}'); return false;">
+                        <span class="tree-icon">⚙️</span>
+                        <span>${escapeHtml(serverName)}</span>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+        }
+        
+        html += `</div>`;
+        contentArea.innerHTML = html;
+        
+        // Добавляем обработчики кликов для открытия свойств
+        contentArea.querySelectorAll('[data-server-uuid]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.button === 0) { // Левый клик
+                    const uuid = item.getAttribute('data-server-uuid');
+                    const connId = item.getAttribute('data-connection-id');
+                    const clustUuid = item.getAttribute('data-cluster-uuid');
+                    openServerProperties(connId, clustUuid, uuid);
+                }
+            });
+        });
     } else {
         contentArea.innerHTML = `
             <div class="info-card" style="border-left: 4px solid var(--primary-color);">
@@ -1526,6 +1623,282 @@ async function deleteCluster(connectionId, clusterUuid, clusterName) {
             }
         } else {
             showNotification('❌ Ошибка удаления кластера: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка удаления: ' + error.message, true);
+    }
+}
+
+// ============================================
+// Контекстные меню для секций
+// ============================================
+
+/**
+ * Показывает контекстное меню для секций (Информационные базы, Рабочие серверы)
+ */
+function showSectionContextMenu(event, connectionId, clusterUuid, section) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Удаляем предыдущее меню если есть
+    const existingMenu = document.getElementById('sectionContextMenu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    const menu = document.createElement('div');
+    menu.id = 'sectionContextMenu';
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+    menu.style.zIndex = '10000';
+    
+    const sectionName = section === 'infobases' ? 'Информационные базы' : 'Рабочие серверы';
+    const createFunction = section === 'infobases' ? `openCreateInfobaseModal(${connectionId}, '${clusterUuid}')` : `openCreateServerModal(${connectionId}, '${clusterUuid}')`;
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="${createFunction}; closeContextMenu();">
+            ➕ Создать
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            closeContextMenu();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+    }, 100);
+}
+
+/**
+ * Показывает контекстное меню для информационной базы
+ */
+function showInfobaseContextMenu(event, connectionId, clusterUuid, infobaseUuid, infobaseName) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const existingMenu = document.getElementById('infobaseContextMenu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    const menu = document.createElement('div');
+    menu.id = 'infobaseContextMenu';
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+    menu.style.zIndex = '10000';
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="openInfobaseProperties(${connectionId}, '${clusterUuid}', '${infobaseUuid}'); closeContextMenu();">
+            📋 Свойства
+        </div>
+        <div class="context-menu-item" onclick="deleteInfobase(${connectionId}, '${clusterUuid}', '${infobaseUuid}', '${escapeHtml(infobaseName).replace(/'/g, "\\'")}'); closeContextMenu();">
+            🗑️ Удалить
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            closeContextMenu();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+    }, 100);
+}
+
+/**
+ * Показывает контекстное меню для рабочего сервера
+ */
+function showServerContextMenu(event, connectionId, clusterUuid, serverUuid, serverName) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const existingMenu = document.getElementById('serverContextMenu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    const menu = document.createElement('div');
+    menu.id = 'serverContextMenu';
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+    menu.style.zIndex = '10000';
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="openServerProperties(${connectionId}, '${clusterUuid}', '${serverUuid}'); closeContextMenu();">
+            📋 Свойства
+        </div>
+        <div class="context-menu-item" onclick="deleteServer(${connectionId}, '${clusterUuid}', '${serverUuid}', '${escapeHtml(serverName).replace(/'/g, "\\'")}'); closeContextMenu();">
+            🗑️ Удалить
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            closeContextMenu();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+    }, 100);
+}
+
+/**
+ * Закрывает контекстное меню
+ */
+function closeContextMenu() {
+    const menus = ['sectionContextMenu', 'infobaseContextMenu', 'serverContextMenu', 'clusterContextMenu'];
+    menus.forEach(id => {
+        const menu = document.getElementById(id);
+        if (menu) {
+            menu.remove();
+        }
+    });
+}
+
+// ============================================
+// Функции для работы с информационными базами
+// ============================================
+
+/**
+ * Открывает модальное окно создания информационной базы
+ */
+function openCreateInfobaseModal(connectionId, clusterUuid) {
+    closeContextMenu();
+    
+    // TODO: Реализовать модальное окно создания информационной базы
+    showNotification('Функция создания информационной базы в разработке', false);
+}
+
+/**
+ * Открывает модальное окно свойств информационной базы
+ */
+async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
+    closeContextMenu();
+    
+    // TODO: Реализовать модальное окно свойств информационной базы
+    showNotification('Функция свойств информационной базы в разработке', false);
+}
+
+/**
+ * Удаляет информационную базу
+ */
+async function deleteInfobase(connectionId, clusterUuid, infobaseUuid, infobaseName) {
+    closeContextMenu();
+    
+    if (!confirm(`Вы уверены, что хотите удалить информационную базу "${infobaseName}"?`)) {
+        return;
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch(`/api/clusters/infobases/${connectionId}/${clusterUuid}/drop/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                infobase_uuid: infobaseUuid
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Информационная база успешно удалена', false);
+            // Перезагружаем список информационных баз
+            await loadInfobases(connectionId, clusterUuid);
+        } else {
+            showNotification('❌ Ошибка удаления: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка удаления: ' + error.message, true);
+    }
+}
+
+// ============================================
+// Функции для работы с рабочими серверами
+// ============================================
+
+/**
+ * Открывает модальное окно создания рабочего сервера
+ */
+function openCreateServerModal(connectionId, clusterUuid) {
+    closeContextMenu();
+    
+    // TODO: Реализовать модальное окно создания рабочего сервера
+    showNotification('Функция создания рабочего сервера в разработке', false);
+}
+
+/**
+ * Открывает модальное окно свойств рабочего сервера
+ */
+async function openServerProperties(connectionId, clusterUuid, serverUuid) {
+    closeContextMenu();
+    
+    // TODO: Реализовать модальное окно свойств рабочего сервера
+    showNotification('Функция свойств рабочего сервера в разработке', false);
+}
+
+/**
+ * Удаляет рабочий сервер
+ */
+async function deleteServer(connectionId, clusterUuid, serverUuid, serverName) {
+    closeContextMenu();
+    
+    if (!confirm(`Вы уверены, что хотите удалить рабочий сервер "${serverName}"?`)) {
+        return;
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch(`/api/clusters/servers/${connectionId}/${clusterUuid}/${serverUuid}/remove/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Рабочий сервер успешно удалён', false);
+            // Перезагружаем список рабочих серверов
+            await loadServers(connectionId, clusterUuid);
+        } else {
+            showNotification('❌ Ошибка удаления: ' + (result.error || 'Неизвестная ошибка'), true);
         }
     } catch (error) {
         showNotification('❌ Ошибка удаления: ' + error.message, true);

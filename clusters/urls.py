@@ -14,5 +14,13 @@ urlpatterns = [
     path('sessions/<int:connection_id>/', views.get_sessions, name='get_sessions'),
     path('sessions/terminate/', views.terminate_sessions, name='terminate_sessions'),
     path('infobases/<int:connection_id>/', views.get_infobases, name='get_infobases'),
+    path('infobases/<int:connection_id>/<str:cluster_uuid>/info/', views.get_infobase_info, name='get_infobase_info'),
+    path('infobases/<int:connection_id>/<str:cluster_uuid>/create/', views.create_infobase, name='create_infobase'),
+    path('infobases/<int:connection_id>/<str:cluster_uuid>/update/', views.update_infobase, name='update_infobase'),
+    path('infobases/<int:connection_id>/<str:cluster_uuid>/drop/', views.drop_infobase, name='drop_infobase'),
     path('servers/<int:connection_id>/', views.get_servers, name='get_servers'),
+    path('servers/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/info/', views.get_server_info, name='get_server_info'),
+    path('servers/<int:connection_id>/<str:cluster_uuid>/insert/', views.insert_server, name='insert_server'),
+    path('servers/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/update/', views.update_server, name='update_server'),
+    path('servers/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/remove/', views.remove_server, name='remove_server'),
 ]

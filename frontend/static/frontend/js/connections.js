@@ -1557,10 +1557,6 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
     
     let html = `
         <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                <input type="checkbox" id="selectAllSessions" onchange="toggleSelectAllSessions()">
-                <span>Выбрать все</span>
-            </label>
             <button class="btn btn-danger" onclick="terminateSelectedSessionsFromTable()" id="terminateSessionsBtn" style="display: none;">
                 ⛔ Принудительное завершение сеанса
             </button>
@@ -1688,13 +1684,15 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
  * Переключает выбор всех сеансов
  */
 function toggleSelectAllSessions() {
-    const selectAll = document.getElementById('selectAllSessions') || document.getElementById('selectAllSessionsHeader');
+    const selectAll = document.getElementById('selectAllSessionsHeader');
+    if (!selectAll) return;
+    
     const checkboxes = document.querySelectorAll('.session-checkbox');
-    const selectedSessions = window._selectedSessions || new Set();
+    const isChecked = selectAll.checked;
     
     checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAll.checked;
-        updateSessionSelection(checkbox.value, selectAll.checked);
+        checkbox.checked = isChecked;
+        updateSessionSelection(checkbox.value, isChecked);
     });
 }
 
@@ -1712,11 +1710,11 @@ function updateSessionSelection(sessionUuid, isSelected) {
         window._selectedSessions.delete(sessionUuid);
     }
     
-    // Обновляем состояние "Выбрать все"
-    const selectAll = document.getElementById('selectAllSessions') || document.getElementById('selectAllSessionsHeader');
+    // Обновляем состояние "Выбрать все" в заголовке таблицы
+    const selectAll = document.getElementById('selectAllSessionsHeader');
     if (selectAll) {
         const checkboxes = document.querySelectorAll('.session-checkbox');
-        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+        const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
         selectAll.checked = allChecked;
     }
     

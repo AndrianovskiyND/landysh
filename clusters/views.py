@@ -287,6 +287,50 @@ def _parse_infobase_list(output):
     
     return infobases
 
+def _parse_infobase_info(output):
+    """Парсит вывод команды infobase info и извлекает информацию об одной информационной базе"""
+    infobase = None
+    if not output:
+        return infobase
+    
+    lines = output.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'infobase':
+                # Начало новой информационной базы - если уже есть, значит это вторая, игнорируем
+                if infobase is None:
+                    infobase = {
+                        'uuid': value,
+                        'name': '',
+                        'data': {}
+                    }
+            elif infobase:
+                # Сохраняем все данные информационной базы
+                # Убираем кавычки из значения если есть
+                clean_value = value.strip('"').strip()
+                infobase['data'][key] = clean_value
+                
+                # Извлекаем важные поля
+                if key == 'name':
+                    infobase['name'] = clean_value
+                elif key == 'descr' or key == 'description':
+                    # Сохраняем описание под ключом 'descr' для единообразия
+                    infobase['data']['descr'] = clean_value
+                    # Также сохраняем под оригинальным ключом
+                    if key == 'description':
+                        infobase['data']['description'] = clean_value
+    
+    return infobase
+
 def _parse_server_list(output):
     """Парсит вывод команды server list и извлекает информацию о рабочих серверах"""
     servers = []
@@ -330,6 +374,45 @@ def _parse_server_list(output):
         servers.append(current_server)
     
     return servers
+
+def _parse_server_info(output):
+    """Парсит вывод команды server info и извлекает информацию об одном рабочем сервере"""
+    server = None
+    if not output:
+        return server
+    
+    lines = output.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'server':
+                # Начало нового сервера - если уже есть, значит это второй сервер, игнорируем
+                if server is None:
+                    server = {
+                        'uuid': value,
+                        'name': '',
+                        'host': '',
+                        'data': {}
+                    }
+            elif server:
+                # Сохраняем все данные сервера
+                server['data'][key] = value
+                
+                # Извлекаем важные поля
+                if key == 'name':
+                    server['name'] = value.strip('"')
+                elif key == 'host' or key == 'agent-host':
+                    server['host'] = value.strip('"')
+    
+    return server
 
 @login_required
 def get_clusters(request, connection_id):
@@ -696,9 +779,13 @@ def get_infobase_info(request, connection_id, cluster_uuid):
         result = rac_client.get_infobase_info(cluster_uuid, infobase_uuid, infobase_name)
         
         if result['success']:
+            # Парсим вывод и извлекаем структурированные данные (только первая информационная база)
+            infobase = _parse_infobase_info(result['output'])
+            
             return JsonResponse({
                 'success': True,
-                'output': result['output']
+                'output': result['output'],  # Оставляем для обратной совместимости
+                'infobase': infobase  # Структурированные данные
             }, json_dumps_params={'ensure_ascii': False})
         else:
             return JsonResponse({
@@ -729,15 +816,21 @@ def create_infobase(request, connection_id, cluster_uuid):
         dbms = data.get('dbms')
         db_server = data.get('db_server')
         db_name = data.get('db_name')
-        locale = data.get('locale')
+        # locale всегда по умолчанию ru_RU, если не указан
+        locale = data.get('locale', 'ru_RU').strip() or 'ru_RU'
         
-        if not all([name, dbms, db_server, db_name, locale]):
+        if not all([name, dbms, db_server, db_name]):
             return JsonResponse({'success': False, 'error': 'Missing required fields'})
         
         # Дополнительные параметры
         kwargs = {}
         if 'create_database' in data:
-            kwargs['create_database'] = data['create_database']
+            # Преобразуем строку 'true'/'false' в булево значение
+            create_db_value = data['create_database']
+            if isinstance(create_db_value, str):
+                kwargs['create_database'] = create_db_value.lower() == 'true'
+            else:
+                kwargs['create_database'] = bool(create_db_value)
         if 'db_user' in data:
             kwargs['db_user'] = data['db_user']
         if 'db_pwd' in data:
@@ -878,9 +971,13 @@ def get_server_info(request, connection_id, cluster_uuid, server_uuid):
         result = rac_client.get_server_info(cluster_uuid, server_uuid)
         
         if result['success']:
+            # Парсим вывод и извлекаем структурированные данные (только первый сервер)
+            server = _parse_server_info(result['output'])
+            
             return JsonResponse({
                 'success': True,
-                'output': result['output']
+                'output': result['output'],  # Оставляем для обратной совместимости
+                'server': server  # Структурированные данные
             }, json_dumps_params={'ensure_ascii': False})
         else:
             return JsonResponse({

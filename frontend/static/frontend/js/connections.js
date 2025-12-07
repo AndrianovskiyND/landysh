@@ -2002,17 +2002,23 @@ function openCreateInfobaseModal(connectionId, clusterUuid) {
             <div class="modal-body">
                 <form id="createInfobaseForm">
                     <div class="info-card">
-                        <h4>📊 Основная информация</h4>
+                        <h4>📊 Основная информация 1С</h4>
                         <div class="form-row">
                             <label>Имя информационной базы (обязательно):</label>
                             <input type="text" id="infobaseName" name="name" required placeholder="Название базы">
                         </div>
                         <div class="form-row">
+                            <label>Описание:</label>
+                            <input type="text" id="infobaseDescr" name="descr" placeholder="Описание информационной базы">
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <h4>📊 Основная информация СУБД</h4>
+                        <div class="form-row">
                             <label>Тип СУБД (обязательно):</label>
                             <select id="infobaseDbms" name="dbms" required>
-                                <option value="">Выберите СУБД</option>
+                                <option value="PostgreSQL" selected>PostgreSQL</option>
                                 <option value="MSSQLServer">MS SQL Server</option>
-                                <option value="PostgreSQL">PostgreSQL</option>
                                 <option value="IBMDB2">IBM DB2</option>
                                 <option value="OracleDatabase">Oracle Database</option>
                             </select>
@@ -2026,8 +2032,12 @@ function openCreateInfobaseModal(connectionId, clusterUuid) {
                             <input type="text" id="infobaseDbName" name="db_name" required placeholder="Имя БД">
                         </div>
                         <div class="form-row">
-                            <label>Идентификатор национальных настроек (обязательно):</label>
-                            <input type="text" id="infobaseLocale" name="locale" required placeholder="ru_RU" value="ru_RU">
+                            <label>Имя администратора БД:</label>
+                            <input type="text" id="infobaseDbUser" name="db_user" placeholder="sa">
+                        </div>
+                        <div class="form-row">
+                            <label>Пароль администратора БД:</label>
+                            <input type="password" id="infobaseDbPwd" name="db_pwd" placeholder="Пароль">
                         </div>
                     </div>
                     <div class="info-card">
@@ -2040,26 +2050,10 @@ function openCreateInfobaseModal(connectionId, clusterUuid) {
                             </select>
                         </div>
                         <div class="form-row">
-                            <label>Имя администратора БД:</label>
-                            <input type="text" id="infobaseDbUser" name="db_user" placeholder="sa">
-                        </div>
-                        <div class="form-row">
-                            <label>Пароль администратора БД:</label>
-                            <input type="password" id="infobaseDbPwd" name="db_pwd" placeholder="Пароль">
-                        </div>
-                        <div class="form-row">
-                            <label>Описание:</label>
-                            <textarea id="infobaseDescr" name="descr" rows="3" placeholder="Описание информационной базы"></textarea>
-                        </div>
-                        <div class="form-row">
-                            <label>Уровень безопасности:</label>
-                            <input type="number" id="infobaseSecurityLevel" name="security_level" value="0" min="0">
-                        </div>
-                        <div class="form-row">
                             <label>Блокировка регламентных заданий:</label>
                             <select id="infobaseScheduledJobsDeny" name="scheduled_jobs_deny">
-                                <option value="off">Разрешено</option>
-                                <option value="on">Запрещено</option>
+                                <option value="off">Выключена</option>
+                                <option value="on">Включена</option>
                             </select>
                         </div>
                         <div class="form-row">
@@ -2068,6 +2062,14 @@ function openCreateInfobaseModal(connectionId, clusterUuid) {
                                 <option value="allow">Разрешена</option>
                                 <option value="deny">Запрещена</option>
                             </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Идентификатор национальных настроек (обязательно):</label>
+                            <input type="text" id="infobaseLocale" name="locale" required placeholder="ru_RU" value="ru_RU">
+                        </div>
+                        <div class="form-row">
+                            <label>Уровень безопасности:</label>
+                            <input type="number" id="infobaseSecurityLevel" name="security_level" value="0" min="0">
                         </div>
                     </div>
                     <div class="form-actions" style="margin-top: 1.5rem;">
@@ -2080,6 +2082,44 @@ function openCreateInfobaseModal(connectionId, clusterUuid) {
     `;
     
     document.body.appendChild(modal);
+    
+    // Автозаполнение при вводе имени информационной базы
+    const nameInput = document.getElementById('infobaseName');
+    const descrInput = document.getElementById('infobaseDescr');
+    const dbNameInput = document.getElementById('infobaseDbName');
+    
+    if (nameInput && descrInput && dbNameInput) {
+        let isUserTyping = false;
+        let lastValue = '';
+        
+        nameInput.addEventListener('input', (e) => {
+            const currentValue = e.target.value.trim();
+            
+            // Если пользователь только начал вводить или изменил значение
+            if (!isUserTyping || currentValue !== lastValue) {
+                // Автозаполняем описание
+                if (currentValue && !descrInput.value) {
+                    descrInput.value = `Владелец:`;
+                }
+                
+                // Автозаполняем имя базы данных
+                if (currentValue && !dbNameInput.value) {
+                    dbNameInput.value = currentValue;
+                }
+                
+                lastValue = currentValue;
+            }
+        });
+        
+        // Отслеживаем ручное редактирование полей
+        descrInput.addEventListener('focus', () => {
+            isUserTyping = true;
+        });
+        
+        dbNameInput.addEventListener('focus', () => {
+            isUserTyping = true;
+        });
+    }
 }
 
 /**
@@ -2164,6 +2204,43 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
             return;
         }
         
+        const infobase = data.infobase || {};
+        const infobaseData = infobase.data || {};
+        
+        // Получаем имя информационной базы
+        let infobaseNameValue = infobase.name || '';
+        if (infobaseNameValue) {
+            infobaseNameValue = infobaseNameValue.replace(/^"|"$/g, '').trim();
+        }
+        if (!infobaseNameValue) {
+            infobaseNameValue = infobaseData.name || 'Информационная база';
+        }
+        const displayName = infobaseNameValue;
+        
+        // Получаем значения полей
+        const getValue = (key) => {
+            // Пробуем разные варианты ключей
+            return infobaseData[key] || 
+                   infobaseData[key.replace(/-/g, '_')] || 
+                   infobaseData[key.replace(/_/g, '-')] ||
+                   '';
+        };
+        
+        // Получаем описание (может быть в разных полях)
+        const getDescr = () => {
+            return getValue('descr') || 
+                   getValue('description') || 
+                   infobaseData['descr'] || 
+                   infobaseData['description'] || 
+                   '';
+        };
+        
+        // Блокировка регламентных заданий
+        const scheduledJobsDeny = getValue('scheduled-jobs-deny') || 'off';
+        
+        // Блокировка сеансов
+        const sessionsDeny = getValue('sessions-deny') || 'off';
+        
         // Удаляем предыдущее модальное окно если есть
         const existingModal = document.getElementById('infobasePropertiesModal');
         if (existingModal) {
@@ -2176,17 +2253,74 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
         modal.innerHTML = `
             <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
                 <div class="modal-header">
-                    <h3>📋 Свойства информационной базы</h3>
+                    <h3>📁 Свойства информационной базы: ${escapeHtml(displayName)}</h3>
                     <button class="modal-close-btn" onclick="closeInfobasePropertiesModal()">×</button>
                 </div>
                 <div class="modal-body">
-                    <div class="info-card">
-                        <h4>📊 Информация</h4>
-                        <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(data.output || 'Нет данных')}</pre>
-                    </div>
-                    <div class="form-actions" style="margin-top: 1.5rem;">
-                        <button type="button" class="btn btn-secondary" onclick="closeInfobasePropertiesModal()">Закрыть</button>
-                    </div>
+                    <form id="infobasePropertiesForm">
+                        <div class="info-card">
+                            <h4>📊 Основная информация 1С</h4>
+                            <div class="form-row">
+                                <label>UUID информационной базы:</label>
+                                <input type="text" class="readonly-field" value="${escapeHtml(infobase.uuid || infobaseUuid)}" readonly>
+                            </div>
+                            <div class="form-row">
+                                <label>Имя информационной базы:</label>
+                                <input type="text" id="infobaseName" name="name" value="${escapeHtml(infobaseNameValue)}">
+                            </div>
+                            <div class="form-row">
+                                <label>Описание:</label>
+                                <input type="text" id="infobaseDescr" name="descr" value="${escapeHtml(getDescr())}">
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <h4>📊 Основная информация СУБД</h4>
+                            <div class="form-row">
+                                <label>Тип СУБД:</label>
+                                <input type="text" class="readonly-field" value="${escapeHtml(getValue('dbms') || '')}" readonly>
+                            </div>
+                            <div class="form-row">
+                                <label>Сервер баз данных:</label>
+                                <input type="text" class="readonly-field" value="${escapeHtml(getValue('db-server') || '')}" readonly>
+                            </div>
+                            <div class="form-row">
+                                <label>Имя базы данных:</label>
+                                <input type="text" class="readonly-field" value="${escapeHtml(getValue('db-name') || '')}" readonly>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <h4>⚙️ Дополнительные параметры</h4>
+                            <div class="form-row">
+                                <label>Блокировка регламентных заданий:</label>
+                                <select id="infobaseScheduledJobsDeny" name="scheduled_jobs_deny">
+                                    <option value="off" ${scheduledJobsDeny === 'off' ? 'selected' : ''}>Выключена</option>
+                                    <option value="on" ${scheduledJobsDeny === 'on' ? 'selected' : ''}>Включена</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label>Блокировка сеансов:</label>
+                                <select id="infobaseSessionsDeny" name="sessions_deny">
+                                    <option value="off" ${sessionsDeny === 'off' ? 'selected' : ''}>Выключена</option>
+                                    <option value="on" ${sessionsDeny === 'on' ? 'selected' : ''}>Включена</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label>Выдача лицензий:</label>
+                                <select id="infobaseLicenseDistribution" name="license_distribution">
+                                    <option value="allow" ${getValue('license-distribution') === 'allow' ? 'selected' : ''}>Разрешена</option>
+                                    <option value="deny" ${getValue('license-distribution') === 'deny' ? 'selected' : ''}>Запрещена</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label>Уровень безопасности:</label>
+                                <input type="number" id="infobaseSecurityLevel" name="security_level" value="${getValue('security-level') || '0'}" min="0">
+                            </div>
+                        </div>
+                        <div class="form-actions" style="margin-top: 1.5rem;">
+                            <button type="button" class="btn btn-secondary" onclick="closeInfobasePropertiesModal()">Отмена</button>
+                            <button type="button" class="btn btn-primary" onclick="saveInfobaseProperties('${connectionId}', '${clusterUuid}', '${infobaseUuid}')">Сохранить</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         `;
@@ -2194,6 +2328,58 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
         document.body.appendChild(modal);
     } catch (error) {
         showNotification('❌ Ошибка загрузки свойств информационной базы: ' + error.message, true);
+    }
+}
+
+/**
+ * Сохраняет свойства информационной базы
+ */
+async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
+    const form = document.getElementById('infobasePropertiesForm');
+    if (!form) return;
+    
+    const formData = new FormData(form);
+    const data = {
+        infobase_uuid: infobaseUuid
+    };
+    
+    // Собираем данные формы
+    for (let [key, value] of formData.entries()) {
+        if (value) {
+            data[key] = value;
+        }
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch(`/api/clusters/infobases/${connectionId}/${clusterUuid}/update/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Параметры информационной базы успешно обновлены', false);
+            closeInfobasePropertiesModal();
+            // Обновляем дерево
+            const clusterId = `cluster-${connectionId}-${clusterUuid}`;
+            const sectionId = `infobases-${clusterId}`;
+            await loadInfobasesIntoTree(connectionId, clusterUuid, sectionId);
+        } else {
+            showNotification('❌ Ошибка обновления информационной базы: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка сохранения: ' + error.message, true);
     }
 }
 
@@ -2208,14 +2394,107 @@ function closeInfobasePropertiesModal() {
 }
 
 /**
- * Удаляет информационную базу
+ * Показывает модальное окно выбора варианта удаления информационной базы
  */
-async function deleteInfobase(connectionId, clusterUuid, infobaseUuid, infobaseName) {
+function showDeleteInfobaseModal(connectionId, clusterUuid, infobaseUuid, infobaseName) {
     closeContextMenu();
     
-    if (!confirm(`Вы уверены, что хотите удалить информационную базу "${infobaseName}"?`)) {
-        return;
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('deleteInfobaseModal');
+    if (existingModal) {
+        existingModal.remove();
     }
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'deleteInfobaseModal';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>🗑️ Удаление информационной базы</h3>
+                <button class="modal-close-btn" onclick="closeDeleteInfobaseModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="info-card">
+                    <h4>📋 Выберите вариант удаления</h4>
+                    <p style="margin-bottom: 1rem;">Информационная база: <strong>${escapeHtml(infobaseName)}</strong></p>
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <label style="display: flex; align-items: start; gap: 0.75rem; cursor: pointer; padding: 1rem; border: 2px solid #ddd; border-radius: 6px; transition: all 0.2s;">
+                            <input type="radio" name="deleteType" value="default" checked style="margin-top: 0.25rem;">
+                            <div style="flex: 1;">
+                                <strong>Удалить без удаления на СУБД</strong>
+                                <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem;">Информационная база будет удалена из кластера, но база данных на сервере СУБД останется</p>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: start; gap: 0.75rem; cursor: pointer; padding: 1rem; border: 2px solid #ddd; border-radius: 6px; transition: all 0.2s;">
+                            <input type="radio" name="deleteType" value="clear" style="margin-top: 0.25rem;">
+                            <div style="flex: 1;">
+                                <strong>Очистить базу данных</strong>
+                                <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem;">Информационная база будет удалена из кластера, база данных на СУБД будет очищена</p>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: start; gap: 0.75rem; cursor: pointer; padding: 1rem; border: 2px solid #ddd; border-radius: 6px; transition: all 0.2s;">
+                            <input type="radio" name="deleteType" value="drop" style="margin-top: 0.25rem;">
+                            <div style="flex: 1;">
+                                <strong>Удалить базу данных на сервере СУБД</strong>
+                                <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 0.9rem;">Информационная база будет удалена из кластера, база данных будет полностью удалена с сервера СУБД</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closeDeleteInfobaseModal()">Отмена</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmDeleteInfobase(${connectionId}, '${clusterUuid}', '${infobaseUuid}', '${escapeHtml(infobaseName).replace(/'/g, "\\'")}')">Удалить</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Добавляем стили для hover эффекта
+    const labels = modal.querySelectorAll('label');
+    labels.forEach(label => {
+        label.addEventListener('mouseenter', () => {
+            label.style.borderColor = 'var(--primary-color)';
+            label.style.background = '#fff5f5';
+        });
+        label.addEventListener('mouseleave', () => {
+            label.style.borderColor = '#ddd';
+            label.style.background = 'transparent';
+        });
+    });
+}
+
+/**
+ * Закрывает модальное окно удаления информационной базы
+ */
+function closeDeleteInfobaseModal() {
+    const modal = document.getElementById('deleteInfobaseModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Подтверждает удаление информационной базы
+ */
+async function confirmDeleteInfobase(connectionId, clusterUuid, infobaseUuid, infobaseName) {
+    const modal = document.getElementById('deleteInfobaseModal');
+    if (!modal) return;
+    
+    const selectedType = modal.querySelector('input[name="deleteType"]:checked')?.value || 'default';
+    
+    let dropDatabase = false;
+    let clearDatabase = false;
+    
+    if (selectedType === 'drop') {
+        dropDatabase = true;
+    } else if (selectedType === 'clear') {
+        clearDatabase = true;
+    }
+    
+    closeDeleteInfobaseModal();
     
     try {
         const csrfToken = getCSRFToken();
@@ -2231,7 +2510,9 @@ async function deleteInfobase(connectionId, clusterUuid, infobaseUuid, infobaseN
                 'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({
-                infobase_uuid: infobaseUuid
+                infobase_uuid: infobaseUuid,
+                drop_database: dropDatabase,
+                clear_database: clearDatabase
             })
         });
         
@@ -2239,14 +2520,23 @@ async function deleteInfobase(connectionId, clusterUuid, infobaseUuid, infobaseN
         
         if (result.success) {
             showNotification('✅ Информационная база успешно удалена', false);
-            // Перезагружаем список информационных баз
-            await loadInfobases(connectionId, clusterUuid);
+            // Обновляем дерево, остаёмся в иерархии
+            const clusterId = `cluster-${connectionId}-${clusterUuid}`;
+            const sectionId = `infobases-${clusterId}`;
+            await loadInfobasesIntoTree(connectionId, clusterUuid, sectionId);
         } else {
             showNotification('❌ Ошибка удаления: ' + (result.error || 'Неизвестная ошибка'), true);
         }
     } catch (error) {
         showNotification('❌ Ошибка удаления: ' + error.message, true);
     }
+}
+
+/**
+ * Удаляет информационную базу (старая функция, теперь вызывает модальное окно)
+ */
+function deleteInfobase(connectionId, clusterUuid, infobaseUuid, infobaseName) {
+    showDeleteInfobaseModal(connectionId, clusterUuid, infobaseUuid, infobaseName);
 }
 
 // ============================================
@@ -2301,7 +2591,7 @@ function openCreateServerModal(connectionId, clusterUuid) {
                         <div class="form-row">
                             <label>Вариант использования:</label>
                             <select id="serverUsing" name="using">
-                                <option value="normal">Обычный сервер</option>
+                                <option value="normal">Рабочий сервер</option>
                                 <option value="main">Центральный сервер</option>
                             </select>
                         </div>
@@ -2421,6 +2711,27 @@ async function openServerProperties(connectionId, clusterUuid, serverUuid) {
             return;
         }
         
+        const server = data.server || {};
+        const serverData = server.data || {};
+        
+        // Получаем имя сервера
+        let serverNameValue = server.name || '';
+        if (serverNameValue) {
+            serverNameValue = serverNameValue.replace(/^"|"$/g, '').trim();
+        }
+        if (!serverNameValue) {
+            serverNameValue = serverData.name || server.host || 'Рабочий сервер';
+        }
+        const displayName = serverNameValue;
+        
+        // Получаем значения полей
+        const getValue = (key) => {
+            return serverData[key] || serverData[key.replace(/-/g, '_')] || '';
+        };
+        
+        const usingValue = getValue('using') || 'normal';
+        const usingText = usingValue === 'main' ? 'Центральный сервер' : 'Рабочий сервер';
+        
         // Удаляем предыдущее модальное окно если есть
         const existingModal = document.getElementById('serverPropertiesModal');
         if (existingModal) {
@@ -2433,17 +2744,100 @@ async function openServerProperties(connectionId, clusterUuid, serverUuid) {
         modal.innerHTML = `
             <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
                 <div class="modal-header">
-                    <h3>📋 Свойства рабочего сервера</h3>
+                    <h3>⚙️ Свойства рабочего сервера: ${escapeHtml(displayName)}</h3>
                     <button class="modal-close-btn" onclick="closeServerPropertiesModal()">×</button>
                 </div>
                 <div class="modal-body">
-                    <div class="info-card">
-                        <h4>📊 Информация</h4>
-                        <pre style="background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(data.output || 'Нет данных')}</pre>
-                    </div>
-                    <div class="form-actions" style="margin-top: 1.5rem;">
-                        <button type="button" class="btn btn-secondary" onclick="closeServerPropertiesModal()">Закрыть</button>
-                    </div>
+                    <form id="serverPropertiesForm">
+                        <div class="info-card">
+                            <h4>📊 Основная информация</h4>
+                            <div class="form-row">
+                                <label>UUID сервера:</label>
+                                <input type="text" class="readonly-field" value="${escapeHtml(server.uuid || serverUuid)}" readonly>
+                            </div>
+                            <div class="form-row">
+                                <label>Имя хоста агента:</label>
+                                <input type="text" class="readonly-field" value="${escapeHtml(getValue('agent-host') || server.host || '')}" readonly>
+                            </div>
+                            <div class="form-row">
+                                <label>Порт агента:</label>
+                                <input type="text" class="readonly-field" value="${escapeHtml(getValue('agent-port') || '')}" readonly>
+                            </div>
+                            <div class="form-row">
+                                <label>Наименование:</label>
+                                <input type="text" id="serverName" name="name" value="${escapeHtml(serverNameValue)}">
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <h4>⚙️ Параметры сервера</h4>
+                            <div class="form-row">
+                                <label>Вариант использования:</label>
+                                <select id="serverUsing" name="using">
+                                    <option value="normal" ${usingValue === 'normal' ? 'selected' : ''}>Рабочий сервер</option>
+                                    <option value="main" ${usingValue === 'main' ? 'selected' : ''}>Центральный сервер</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label>Диапазон портов:</label>
+                                <input type="text" id="serverPortRange" name="port_range" value="${escapeHtml(getValue('port-range') || '')}" placeholder="1560:1591">
+                            </div>
+                            <div class="form-row">
+                                <label>Максимальное количество информационных баз на рабочий процесс:</label>
+                                <input type="number" id="serverInfobasesLimit" name="infobases_limit" value="${getValue('infobases-limit') || '0'}" min="0">
+                            </div>
+                            <div class="form-row">
+                                <label>Предел использования памяти (КБ):</label>
+                                <input type="number" id="serverMemoryLimit" name="memory_limit" value="${getValue('memory-limit') || '0'}" min="0">
+                            </div>
+                            <div class="form-row">
+                                <label>Максимальное количество соединений на рабочий процесс:</label>
+                                <input type="number" id="serverConnectionsLimit" name="connections_limit" value="${getValue('connections-limit') || '0'}" min="0">
+                            </div>
+                            <div class="form-row">
+                                <label>Вариант размещения менеджеров сервисов:</label>
+                                <select id="serverDedicateManagers" name="dedicate_managers">
+                                    <option value="none" ${getValue('dedicate-managers') === 'none' ? 'selected' : ''}>В одном менеджере</option>
+                                    <option value="all" ${getValue('dedicate-managers') === 'all' ? 'selected' : ''}>В отдельных менеджерах</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label>Максимальный объем памяти рабочих процессов (байты):</label>
+                                <input type="number" id="serverSafeWorkingProcessesMemoryLimit" name="safe_working_processes_memory_limit" value="${getValue('safe-working-processes-memory-limit') || '0'}" min="0">
+                            </div>
+                            <div class="form-row">
+                                <label>Безопасный расход памяти за один вызов (байты):</label>
+                                <input type="number" id="serverSafeCallMemoryLimit" name="safe_call_memory_limit" value="${getValue('safe-call-memory-limit') || '0'}" min="0">
+                            </div>
+                            <div class="form-row">
+                                <label>Максимальный объем памяти процессов (байты):</label>
+                                <input type="number" id="serverCriticalTotalMemory" name="critical_total_memory" value="${getValue('critical-total-memory') || '0'}" min="0">
+                            </div>
+                            <div class="form-row">
+                                <label>Допустимый объем памяти процессов (байты):</label>
+                                <input type="number" id="serverTemporaryAllowedTotalMemory" name="temporary_allowed_total_memory" value="${getValue('temporary-allowed-total-memory') || '0'}" min="0">
+                            </div>
+                            <div class="form-row">
+                                <label>Предел превышения допустимого объема памяти (секунды):</label>
+                                <input type="number" id="serverTemporaryAllowedTotalMemoryTimeLimit" name="temporary_allowed_total_memory_time_limit" value="${getValue('temporary-allowed-total-memory-time-limit') || '0'}" min="0">
+                            </div>
+                            <div class="form-row">
+                                <label>Номер порта главного менеджера кластера:</label>
+                                <input type="number" id="serverClusterPort" name="cluster_port" value="${getValue('cluster-port') || '1541'}" min="1" max="65535">
+                            </div>
+                            <div class="form-row">
+                                <label>Имя службы (SPN):</label>
+                                <input type="text" id="serverServicePrincipalName" name="service_principal_name" value="${escapeHtml(getValue('service-principal-name') || '')}">
+                            </div>
+                            <div class="form-row">
+                                <label>Расписание перезапуска:</label>
+                                <input type="text" id="serverRestartSchedule" name="restart_schedule" value="${escapeHtml(getValue('restart-schedule') || '')}">
+                            </div>
+                        </div>
+                        <div class="form-actions" style="margin-top: 1.5rem;">
+                            <button type="button" class="btn btn-secondary" onclick="closeServerPropertiesModal()">Отмена</button>
+                            <button type="button" class="btn btn-primary" onclick="saveServerProperties('${connectionId}', '${clusterUuid}', '${serverUuid}')">Сохранить</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         `;
@@ -2451,6 +2845,56 @@ async function openServerProperties(connectionId, clusterUuid, serverUuid) {
         document.body.appendChild(modal);
     } catch (error) {
         showNotification('❌ Ошибка загрузки свойств рабочего сервера: ' + error.message, true);
+    }
+}
+
+/**
+ * Сохраняет свойства рабочего сервера
+ */
+async function saveServerProperties(connectionId, clusterUuid, serverUuid) {
+    const form = document.getElementById('serverPropertiesForm');
+    if (!form) return;
+    
+    const formData = new FormData(form);
+    const data = {};
+    
+    // Собираем данные формы
+    for (let [key, value] of formData.entries()) {
+        if (value) {
+            data[key] = value;
+        }
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            return;
+        }
+        
+        const response = await fetch(`/api/clusters/servers/${connectionId}/${clusterUuid}/${serverUuid}/update/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Параметры рабочего сервера успешно обновлены', false);
+            closeServerPropertiesModal();
+            // Обновляем дерево
+            const clusterId = `cluster-${connectionId}-${clusterUuid}`;
+            const sectionId = `servers-${clusterId}`;
+            await loadServersIntoTree(connectionId, clusterUuid, sectionId);
+        } else {
+            showNotification('❌ Ошибка обновления рабочего сервера: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка сохранения: ' + error.message, true);
     }
 }
 

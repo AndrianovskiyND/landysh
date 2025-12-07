@@ -64,8 +64,14 @@ class RACClient:
                 if isinstance(data_bytes, str):
                     return data_bytes
                 
-                # Все возможные кодировки для Windows
-                all_encodings = ['cp866', 'cp1251', 'utf-8', 'latin1']
+                # Определяем список кодировок в зависимости от ОС
+                if sys.platform == 'win32':
+                    # Windows: cp866 (DOS), cp1251 (Windows), utf-8, latin1
+                    all_encodings = ['cp866', 'cp1251', 'utf-8', 'latin1']
+                else:
+                    # Linux (РЕД ОС, CentOS и т.д.): utf-8, cp1251 (на случай), latin1
+                    all_encodings = ['utf-8', 'cp1251', 'latin1']
+                
                 best_decoded = None
                 best_score = 0
                 
@@ -88,7 +94,7 @@ class RACClient:
                 
                 # Если нашли вариант с кириллицей - возвращаем его
                 if best_decoded and best_score > 0:
-                    logger.debug(f"Decoded with {best_score} cyrillic characters")
+                    logger.debug(f"Decoded with {best_score} cyrillic characters using {encoding if 'encoding' in locals() else 'unknown'}")
                     return best_decoded
                 
                 # Возвращаем лучший вариант или строковое представление
@@ -376,9 +382,16 @@ class RACClient:
         for key, value in kwargs.items():
             if key in param_mapping and value is not None:
                 param_name = param_mapping[key]
-                if isinstance(value, bool):
+                
+                # Специальная обработка для --create-database (это флаг без значения)
+                if key == 'create_database':
+                    if value is True:
+                        args.append(param_name)  # Добавляем только флаг без значения
+                elif isinstance(value, bool):
                     value = 'on' if value else 'off'
-                args.append(f'{param_name}={value}')
+                    args.append(f'{param_name}={value}')
+                else:
+                    args.append(f'{param_name}={value}')
         
         return self._execute_command(args)
     

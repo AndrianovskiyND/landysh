@@ -1371,7 +1371,7 @@ async function openSessionsModal(connectionId, clusterUuid, infobaseUuid = null)
             <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 1rem;">
                 <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                     <input type="text" id="sessionsSearch" placeholder="🔍 Поиск..." style="flex: 1; min-width: 200px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                    <button class="btn btn-secondary" onclick="toggleSessionsColumnFilter()" title="Фильтр столбцов">📊 Столбцы</button>
+                    <button class="btn btn-secondary" onclick="toggleSessionsColumnFilter()" title="Фильтр столбцов">🔍 Фильтр</button>
                     <button class="btn btn-secondary" onclick="exportSessionsToExcel()" title="Выгрузить в Excel">📥 Excel</button>
                     <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                         <input type="checkbox" id="sessionsIncludeLicenses">
@@ -1526,14 +1526,11 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
                 <span>Выбрать все</span>
             </label>
         </div>
-        <table id="sessionsTable" style="width: 100%; border-collapse: collapse; background: white;">
+        <table id="sessionsTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: auto;">
             <thead>
                 <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; width: 40px;">
+                    <th style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; width: 40px;">
                         <input type="checkbox" id="selectAllSessionsHeader" onchange="toggleSelectAllSessions()">
-                    </th>
-                    <th style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer; white-space: nowrap;" onclick="sortSessionsTable('session')">
-                        UUID сеанса ↕️
                     </th>
     `;
     
@@ -1543,20 +1540,28 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
         Object.keys(session.data || {}).forEach(key => allKeys.add(key));
     });
     
+    // Добавляем UUID сеанса в список ключей для управления через фильтр
+    allKeys.add('session');
     const sortedKeys = Array.from(allKeys).sort();
     
     // Получаем сохраненное состояние видимости столбцов
-    // Если состояние не сохранено, создаем Set со всеми столбцами (кроме UUID, который всегда видим)
+    // По умолчанию UUID выключен, остальные включены
     if (!window._sessionsVisibleColumns) {
-        window._sessionsVisibleColumns = new Set(sortedKeys);
+        window._sessionsVisibleColumns = new Set(sortedKeys.filter(k => k !== 'session'));
     }
     const visibleColumns = window._sessionsVisibleColumns;
     
     // Добавляем заголовки только для видимых столбцов
     sortedKeys.forEach(key => {
         if (visibleColumns.has(key)) {
-            html += `<th class="resizable-column" style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer; white-space: nowrap; min-width: 150px; position: relative;" onclick="sortSessionsTable('${key}')" data-column="${key}">
-                <span>${escapeHtml(key)} ↕️</span>
+            html += `<th class="resizable-column" style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; min-width: 120px; position: relative; vertical-align: top;">
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <div style="text-align: center; font-size: 0.85rem; cursor: pointer;" onclick="sortSessionsTable('${key}')" title="Сортировать">↕️</div>
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterSessionsColumn('${key}', this.value)" data-column="${key}">
+                    </div>
+                    <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'session' ? 'UUID сеанса' : key)}</div>
+                </div>
                 <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
             </th>`;
         }
@@ -1610,11 +1615,19 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
             if (e.target.type === 'checkbox' || e.target.closest('input[type="checkbox"]')) {
                 return;
             }
+            // Если клик по resize handle или по полю поиска - не открываем модальное окно
+            if (e.target.classList.contains('resize-handle') || e.target.closest('.resize-handle') || 
+                e.target.classList.contains('column-search-input') || e.target.closest('.column-search-input')) {
+                return;
+            }
             // Иначе открываем модальное окно с детальной информацией
             const uuid = row.getAttribute('data-session-uuid');
             openSessionInfoModal(connectionId, clusterUuid, uuid);
         });
     });
+    
+    // Добавляем обработчики для изменения размера столбцов
+    initColumnResize('#sessionsTable');
     
     // Сохраняем данные для фильтрации и сортировки
     window._sessionsData = sessions;
@@ -1990,23 +2003,32 @@ function exportSessionsToExcel() {
             headers.push(key);
         }
     });
-    csv += headers.map(h => `"${h.replace(/"/g, '""')}"`).join('\t') + '\n';
+    // Используем точку с запятой как разделитель для лучшей совместимости с Excel
+    const separator = ';';
+    
+    csv += headers.map(h => h.replace(/"/g, '""')).join(separator) + '\n';
     
     // Данные
     sessions.forEach(session => {
         const row = [];
         if (visibleColumns.has('session')) {
-            row.push(`"${session.uuid.replace(/"/g, '""')}"`);
+            row.push(String(session.uuid || ''));
         }
         sortedKeys.forEach(key => {
             if (key !== 'session' && visibleColumns.has(key)) {
                 const value = session.data[key] || '';
-                // Экранируем кавычки и заменяем переносы строк на пробелы
-                const cleanValue = value.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '').replace(/\t/g, ' ');
-                row.push(`"${cleanValue}"`);
+                // Заменяем переносы строк на пробелы
+                const cleanValue = String(value).replace(/\n/g, ' ').replace(/\r/g, '');
+                row.push(cleanValue);
             }
         });
-        csv += row.join('\t') + '\n';
+        csv += row.map(cell => {
+            // Если ячейка содержит разделитель, кавычки или перенос строки - оборачиваем в кавычки
+            if (cell.includes(separator) || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
+                return `"${String(cell).replace(/"/g, '""')}"`;
+            }
+            return cell;
+        }).join(separator) + '\n';
     });
     
     // Создаем blob и скачиваем
@@ -2049,18 +2071,19 @@ function updateSessionsColumnFilterList() {
     const sessions = window._sessionsData || [];
     if (sessions.length === 0) return;
     
-    // Собираем все уникальные ключи (UUID сеанса не включаем, он всегда видим)
+    // Собираем все уникальные ключи (включая UUID сеанса)
     const allKeys = new Set();
     sessions.forEach(session => {
         Object.keys(session.data || {}).forEach(key => allKeys.add(key));
     });
+    allKeys.add('session');
     
     const sortedKeys = Array.from(allKeys).sort();
     
     // Получаем сохраненное состояние видимости столбцов
-    // Если состояние не сохранено, создаем Set со всеми столбцами (кроме UUID, который всегда видим)
+    // По умолчанию UUID выключен, остальные включены
     if (!window._sessionsVisibleColumns) {
-        window._sessionsVisibleColumns = new Set(sortedKeys);
+        window._sessionsVisibleColumns = new Set(sortedKeys.filter(k => k !== 'session'));
     }
     const visibleColumns = window._sessionsVisibleColumns;
     
@@ -2076,15 +2099,60 @@ function updateSessionsColumnFilterList() {
     
     sortedKeys.forEach(key => {
         const isVisible = visibleColumns.has(key);
+        const displayName = key === 'session' ? 'UUID сеанса' : key;
         html += `
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                 <input type="checkbox" class="session-column-checkbox" data-column="${key}" ${isVisible ? 'checked' : ''} onchange="toggleSessionsColumn('${key}', this.checked)">
-                <span>${escapeHtml(key)}</span>
+                <span>${escapeHtml(displayName)}</span>
             </label>
         `;
     });
     
     filterList.innerHTML = html;
+}
+
+/**
+ * Переключает выбор всех столбцов сеансов
+ */
+function toggleAllSessionsColumns(selectAll) {
+    const sessions = window._sessionsData || [];
+    if (sessions.length === 0) return;
+    
+    // Собираем все уникальные ключи (включая UUID сеанса)
+    const allKeys = new Set();
+    sessions.forEach(session => {
+        Object.keys(session.data || {}).forEach(key => allKeys.add(key));
+    });
+    allKeys.add('session');
+    
+    const sortedKeys = Array.from(allKeys).sort();
+    
+    if (!window._sessionsVisibleColumns) {
+        window._sessionsVisibleColumns = new Set();
+    }
+    
+    if (selectAll) {
+        // Добавляем все столбцы
+        sortedKeys.forEach(key => window._sessionsVisibleColumns.add(key));
+    } else {
+        // Удаляем все столбцы
+        sortedKeys.forEach(key => window._sessionsVisibleColumns.delete(key));
+    }
+    
+    // Обновляем чекбоксы в фильтре
+    document.querySelectorAll('.session-column-checkbox').forEach(checkbox => {
+        checkbox.checked = selectAll;
+    });
+    
+    // Перерисовываем таблицу
+    const connectionId = window._currentSessionsConnectionId;
+    const clusterUuid = window._currentSessionsClusterUuid;
+    
+    if (connectionId && clusterUuid) {
+        const sessions = window._sessionsData || [];
+        renderSessionsTable(sessions, connectionId, clusterUuid);
+        filterSessionsTable(); // Применяем фильтр если есть
+    }
 }
 
 /**
@@ -3802,7 +3870,7 @@ async function openProcessesModal(connectionId, clusterUuid, serverUuid = null) 
             <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 1rem;">
                 <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                     <input type="text" id="processesSearch" placeholder="🔍 Поиск..." style="flex: 1; min-width: 200px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                    <button class="btn btn-secondary" onclick="toggleProcessesColumnFilter()" title="Фильтр столбцов">📊 Столбцы</button>
+                    <button class="btn btn-secondary" onclick="toggleProcessesColumnFilter()" title="Фильтр столбцов">🔍 Фильтр</button>
                     <button class="btn btn-secondary" onclick="exportProcessesToExcel()" title="Выгрузить в Excel">📥 Excel</button>
                     <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                         <input type="checkbox" id="processesIncludeLicenses">
@@ -4126,18 +4194,19 @@ function updateProcessesColumnFilterList() {
     const processes = window._processesData || [];
     if (processes.length === 0) return;
     
-    // Собираем все уникальные ключи
+    // Собираем все уникальные ключи (включая UUID процесса)
     const allKeys = new Set();
     processes.forEach(process => {
         Object.keys(process.data || {}).forEach(key => allKeys.add(key));
     });
+    allKeys.add('process');
     
     const sortedKeys = Array.from(allKeys).sort();
     
     // Получаем сохраненное состояние видимости столбцов
-    // Если состояние не сохранено, создаем Set со всеми столбцами
+    // По умолчанию UUID выключен, остальные включены
     if (!window._processesVisibleColumns) {
-        window._processesVisibleColumns = new Set(sortedKeys);
+        window._processesVisibleColumns = new Set(sortedKeys.filter(k => k !== 'process'));
     }
     const visibleColumns = window._processesVisibleColumns;
     
@@ -4153,10 +4222,11 @@ function updateProcessesColumnFilterList() {
     
     sortedKeys.forEach(key => {
         const isVisible = visibleColumns.has(key);
+        const displayName = key === 'process' ? 'UUID процесса' : key;
         html += `
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                 <input type="checkbox" class="process-column-checkbox" data-column="${key}" ${isVisible ? 'checked' : ''} onchange="toggleProcessesColumn('${key}', this.checked)">
-                <span>${escapeHtml(key)}</span>
+                <span>${escapeHtml(displayName)}</span>
             </label>
         `;
     });
@@ -4367,7 +4437,7 @@ function exportProcessesToExcel() {
     allKeys.add('process');
     const sortedKeys = Array.from(allKeys).sort().filter(key => visibleColumns.has(key));
     
-    // Создаем TSV данные (tab-separated для лучшей совместимости с Excel)
+    // Создаем CSV данные
     let csv = '\uFEFF'; // BOM для правильной кодировки UTF-8 в Excel
     
     // Заголовки (включаем UUID если он видим)
@@ -4380,31 +4450,41 @@ function exportProcessesToExcel() {
             headers.push(key);
         }
     });
-    csv += headers.map(h => `"${h.replace(/"/g, '""')}"`).join('\t') + '\n';
+    
+    // Используем точку с запятой как разделитель для лучшей совместимости с Excel
+    const separator = ';';
+    
+    csv += headers.map(h => h.replace(/"/g, '""')).join(separator) + '\n';
     
     // Данные
     processes.forEach(process => {
         const row = [];
         if (visibleColumns.has('process')) {
-            row.push(`"${process.uuid.replace(/"/g, '""')}"`);
+            row.push(String(process.uuid || ''));
         }
         sortedKeys.forEach(key => {
             if (key !== 'process' && visibleColumns.has(key)) {
                 const value = process.data[key] || '';
-                // Экранируем кавычки и заменяем переносы строк на пробелы
-                const cleanValue = value.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '').replace(/\t/g, ' ');
-                row.push(`"${cleanValue}"`);
+                // Заменяем переносы строк на пробелы
+                const cleanValue = String(value).replace(/\n/g, ' ').replace(/\r/g, '');
+                row.push(cleanValue);
             }
         });
-        csv += row.join('\t') + '\n';
+        csv += row.map(cell => {
+            // Если ячейка содержит разделитель, кавычки или перенос строки - оборачиваем в кавычки
+            if (cell.includes(separator) || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
+                return `"${String(cell).replace(/"/g, '""')}"`;
+            }
+            return cell;
+        }).join(separator) + '\n';
     });
     
-    // Создаем blob и скачиваем (используем tab-separated для лучшей совместимости с Excel)
-    const blob = new Blob([csv], { type: 'text/tab-separated-values;charset=utf-8;' });
+    // Создаем blob и скачиваем (CSV формат для Excel)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `processes_${new Date().toISOString().split('T')[0]}.tsv`);
+    link.setAttribute('download', `processes_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -4443,12 +4523,13 @@ async function openManagersModal(connectionId, clusterUuid) {
             <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 1rem;">
                 <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                     <input type="text" id="managersSearch" placeholder="🔍 Поиск..." style="flex: 1; min-width: 200px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                    <button class="btn btn-secondary" onclick="toggleManagersColumnFilter()" title="Фильтр столбцов">📊 Столбцы</button>
+                    <button class="btn btn-secondary" onclick="toggleManagersColumnFilter()" title="Фильтр столбцов">🔍 Фильтр</button>
                     <button class="btn btn-secondary" onclick="exportManagersToExcel()" title="Выгрузить в Excel">📥 Excel</button>
                     <button class="btn btn-secondary" onclick="refreshManagersTable(${connectionId}, '${clusterUuid}')">🔄 Обновить</button>
                 </div>
-                <div id="managersColumnFilter" style="display: none; position: absolute; background: white; border: 1px solid #ddd; border-radius: 4px; padding: 1rem; z-index: 10003; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 400px; overflow-y: auto; right: 1rem; top: 4rem;">
-                    <div id="managersColumnFilterList"></div>
+                <div id="managersColumnFilter" style="display: none; margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 6px; max-height: 200px; overflow-y: auto;">
+                    <div style="font-weight: 600; margin-bottom: 0.5rem;">Выберите столбцы для отображения:</div>
+                    <div id="managersColumnFilterList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;"></div>
                 </div>
                 <div id="managersTableContainer" style="flex: 1; overflow: auto;">
                     <div style="text-align: center; padding: 2rem;">
@@ -4545,29 +4626,34 @@ function renderManagersTable(managers, connectionId, clusterUuid) {
         Object.keys(manager.data || {}).forEach(key => allKeys.add(key));
     });
     
+    // Добавляем UUID менеджера в список ключей для управления через фильтр
+    allKeys.add('manager');
     const sortedKeys = Array.from(allKeys).sort();
     
     // Получаем сохраненное состояние видимости столбцов
+    // По умолчанию UUID выключен, остальные включены
     if (!window._managersVisibleColumns) {
-        window._managersVisibleColumns = new Set(sortedKeys);
+        window._managersVisibleColumns = new Set(sortedKeys.filter(k => k !== 'manager'));
     }
     const visibleColumns = window._managersVisibleColumns;
     
     let html = `
-        <table id="managersTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: fixed;">
+        <table id="managersTable" style="width: 100%; border-collapse: collapse; background: white; table-layout: auto;">
             <thead>
                 <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
-                    <th class="resizable-column" style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer; white-space: nowrap; min-width: 200px; position: relative;" onclick="sortManagersTable('manager')" data-column="manager">
-                        <span>UUID менеджера ↕️</span>
-                        <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
-                    </th>
     `;
     
     // Добавляем заголовки только для видимых столбцов
     sortedKeys.forEach(key => {
         if (visibleColumns.has(key)) {
-            html += `<th class="resizable-column" style="padding: 0.75rem; text-align: left; border: 1px solid #ddd; cursor: pointer; white-space: nowrap; min-width: 150px; position: relative;" onclick="sortManagersTable('${key}')" data-column="${key}">
-                <span>${escapeHtml(key)} ↕️</span>
+            html += `<th class="resizable-column" style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; min-width: 120px; position: relative; vertical-align: top;">
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <div style="text-align: center; font-size: 0.85rem; cursor: pointer;" onclick="sortManagersTable('${key}')" title="Сортировать">↕️</div>
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterManagersColumn('${key}', this.value)" data-column="${key}">
+                    </div>
+                    <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'manager' ? 'UUID менеджера' : key)}</div>
+                </div>
                 <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
             </th>`;
         }
@@ -4582,18 +4668,21 @@ function renderManagersTable(managers, connectionId, clusterUuid) {
     managers.forEach((manager, index) => {
         html += `
             <tr class="manager-row" data-manager-uuid="${manager.uuid}" data-index="${index}" style="cursor: pointer;">
-                <td style="padding: 0.75rem; border: 1px solid #ddd; font-family: monospace; font-size: 0.85rem; white-space: nowrap;">${escapeHtml(manager.uuid)}</td>
         `;
         
         sortedKeys.forEach(key => {
             if (visibleColumns.has(key)) {
-                const value = manager.data[key] || '';
+                let value = '';
+                if (key === 'manager') {
+                    value = manager.uuid;
+                } else {
+                    value = manager.data[key] || '';
+                }
                 
                 // Добавляем tooltip для длинных значений
-                const displayValue = value.length > 50 ? value.substring(0, 50) + '...' : value;
-                const titleAttr = value.length > 50 ? `title="${escapeHtml(value)}"` : '';
+                const titleAttr = value ? `title="${escapeHtml(value)}"` : '';
                 
-                html += `<td style="padding: 0.75rem; border: 1px solid #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;" ${titleAttr}>${escapeHtml(displayValue)}</td>`;
+                html += `<td style="padding: 0.5rem; border: 1px solid #ddd; word-wrap: break-word; white-space: normal; max-width: 300px; font-size: 0.9rem;" ${titleAttr} data-column="${key}">${escapeHtml(value)}</td>`;
             }
         });
         
@@ -4964,7 +5053,7 @@ function exportManagersToExcel() {
     allKeys.add('manager');
     const sortedKeys = Array.from(allKeys).sort().filter(key => visibleColumns.has(key));
     
-    // Создаем TSV данные (tab-separated для лучшей совместимости с Excel)
+    // Создаем CSV данные
     let csv = '\uFEFF'; // BOM для правильной кодировки UTF-8 в Excel
     
     // Заголовки (включаем UUID если он видим)
@@ -4977,31 +5066,40 @@ function exportManagersToExcel() {
             headers.push(key);
         }
     });
-    csv += headers.map(h => `"${h.replace(/"/g, '""')}"`).join('\t') + '\n';
+    // Используем точку с запятой как разделитель для лучшей совместимости с Excel
+    const separator = ';';
+    
+    csv += headers.map(h => h.replace(/"/g, '""')).join(separator) + '\n';
     
     // Данные
     managers.forEach(manager => {
         const row = [];
         if (visibleColumns.has('manager')) {
-            row.push(`"${manager.uuid.replace(/"/g, '""')}"`);
+            row.push(String(manager.uuid || ''));
         }
         sortedKeys.forEach(key => {
             if (key !== 'manager' && visibleColumns.has(key)) {
                 const value = manager.data[key] || '';
-                // Экранируем кавычки и заменяем переносы строк на пробелы
-                const cleanValue = value.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '').replace(/\t/g, ' ');
-                row.push(`"${cleanValue}"`);
+                // Заменяем переносы строк на пробелы
+                const cleanValue = String(value).replace(/\n/g, ' ').replace(/\r/g, '');
+                row.push(cleanValue);
             }
         });
-        csv += row.join('\t') + '\n';
+        csv += row.map(cell => {
+            // Если ячейка содержит разделитель, кавычки или перенос строки - оборачиваем в кавычки
+            if (cell.includes(separator) || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
+                return `"${String(cell).replace(/"/g, '""')}"`;
+            }
+            return cell;
+        }).join(separator) + '\n';
     });
     
-    // Создаем blob и скачиваем (используем tab-separated для лучшей совместимости с Excel)
-    const blob = new Blob([csv], { type: 'text/tab-separated-values;charset=utf-8;' });
+    // Создаем blob и скачиваем (CSV формат для Excel)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `managers_${new Date().toISOString().split('T')[0]}.tsv`);
+    link.setAttribute('download', `managers_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();

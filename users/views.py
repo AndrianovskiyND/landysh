@@ -1,4 +1,5 @@
 import json
+import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
@@ -6,6 +7,8 @@ from django.contrib.auth.models import User
 from django.contrib.auth import update_session_auth_hash
 from core.models import Profile
 from .models import UserGroup
+
+logger = logging.getLogger(__name__)
 
 # ============================================
 # Вспомогательные функции
@@ -405,22 +408,44 @@ def update_group(request):
         try:
             profile = Profile.objects.get(user=request.user)
             if not profile.is_admin():
-                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'}, json_dumps_params={'ensure_ascii': False})
             
             data = json.loads(request.body)
             group_id = data.get('group_id')
             new_name = data.get('new_name')
             
-            group = UserGroup.objects.get(id=group_id)
+            # Валидация данных
+            if not group_id:
+                return JsonResponse({'success': False, 'error': 'group_id не указан'}, json_dumps_params={'ensure_ascii': False})
+            
+            if not new_name or not new_name.strip():
+                return JsonResponse({'success': False, 'error': 'Название группы не может быть пустым'}, json_dumps_params={'ensure_ascii': False})
+            
+            # Преобразуем group_id в int, если это строка
+            try:
+                group_id = int(group_id)
+            except (ValueError, TypeError):
+                return JsonResponse({'success': False, 'error': 'Неверный формат group_id'}, json_dumps_params={'ensure_ascii': False})
+            
+            # Получаем группу
+            try:
+                group = UserGroup.objects.get(id=group_id)
+            except UserGroup.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'Группа не найдена'}, json_dumps_params={'ensure_ascii': False})
+            
+            # Обновляем название
+            new_name = new_name.strip()
             group.name = new_name
             group.save()
             
-            return JsonResponse({'success': True})
+            return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            import traceback
+            logger.error(f"Error updating group: {e}\n{traceback.format_exc()}")
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
     
-    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt

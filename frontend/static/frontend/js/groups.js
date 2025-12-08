@@ -247,35 +247,98 @@ async function createGroup() {
 // ============================================
 
 function editGroupName(groupId, currentName) {
+    // Функция escapeHtml может быть не определена, определяем её если нужно
+    if (typeof escapeHtml === 'undefined') {
+        window.escapeHtml = function(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        };
+    }
+    
+    // Экранируем имя для безопасного использования в HTML
+    const escapedName = escapeHtml(currentName);
+    
     const modalHtml = `
         <div class="modal-overlay" id="editGroupModal">
             <div class="modal" style="max-width: 400px;">
                 <div class="modal-header">
                     <h3>Изменение группы</h3>
-                    <button class="modal-close-btn" onclick="closeModal('editGroupModal')">×</button>
+                    <button class="modal-close-btn" id="closeEditGroupModal">×</button>
                 </div>
                 <div class="modal-body">
                     <div class="edit-form">
                         <div class="form-row">
                             <label for="editGroupName">Название группы</label>
-                            <input type="text" id="editGroupName" value="${currentName}">
+                            <input type="text" id="editGroupName" value="${escapedName}">
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn" onclick="closeModal('editGroupModal')">Отмена</button>
-                    <button class="btn btn-primary" onclick="saveGroupName(${groupId}, ${JSON.stringify(currentName)})">Сохранить</button>
+                    <button class="btn" id="cancelEditGroup">Отмена</button>
+                    <button class="btn btn-primary" id="saveEditGroup">Сохранить</button>
                 </div>
             </div>
         </div>
     `;
     
-    document.getElementById('modal-container').innerHTML = modalHtml;
-    document.getElementById('editGroupName').focus();
+    const modalContainer = document.getElementById('modal-container');
+    if (!modalContainer) {
+        console.error('Modal container not found');
+        return;
+    }
+    
+    modalContainer.innerHTML = modalHtml;
+    
+    // Добавляем обработчики событий
+    const modal = document.getElementById('editGroupModal');
+    const closeBtn = document.getElementById('closeEditGroupModal');
+    const cancelBtn = document.getElementById('cancelEditGroup');
+    const saveBtn = document.getElementById('saveEditGroup');
+    const nameInput = document.getElementById('editGroupName');
+    
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => closeModal('editGroupModal'));
+    }
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => closeModal('editGroupModal'));
+    }
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            saveGroupName(groupId, currentName);
+        });
+    }
+    if (nameInput) {
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                saveGroupName(groupId, currentName);
+            }
+        });
+        nameInput.focus();
+        nameInput.select();
+    }
 }
 
 async function saveGroupName(groupId, originalName) {
-    const newName = document.getElementById('editGroupName').value.trim();
+    console.log('saveGroupName called:', { groupId, originalName });
+    
+    // Находим элементы формы
+    const modal = document.getElementById('editGroupModal');
+    if (!modal) {
+        console.error('Modal not found');
+        showNotification('❌ Модальное окно не найдено', true);
+        return;
+    }
+    
+    const newNameInput = modal.querySelector('#editGroupName');
+    if (!newNameInput) {
+        console.error('Input field not found');
+        showNotification('❌ Поле ввода не найдено', true);
+        return;
+    }
+    
+    const newName = newNameInput.value.trim();
+    console.log('New name:', newName);
     
     if (!newName) {
         showNotification('❌ Введите название группы', true);
@@ -284,16 +347,38 @@ async function saveGroupName(groupId, originalName) {
     
     // Если имя не изменилось - просто закрываем окно
     if (newName === originalName) {
+        console.log('Name unchanged, closing modal');
         closeModal('editGroupModal');
         return;
     }
     
+    // Блокируем кнопку сохранения
+    const saveButton = modal.querySelector('.btn-primary');
+    const originalButtonText = saveButton ? saveButton.textContent : 'Сохранить';
+    if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = 'Сохранение...';
+    }
+    
     try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            console.error('CSRF token not found');
+            showNotification('❌ Ошибка: CSRF токен не найден', true);
+            if (saveButton) {
+                saveButton.disabled = false;
+                saveButton.textContent = originalButtonText;
+            }
+            return;
+        }
+        
+        console.log('Sending request:', { group_id: groupId, new_name: newName });
+        
         const response = await fetch('/api/users/groups/update/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({
                 group_id: groupId,
@@ -301,17 +386,37 @@ async function saveGroupName(groupId, originalName) {
             })
         });
         
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('HTTP error response:', errorText);
+            throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+        }
+        
         const result = await response.json();
+        console.log('Response data:', result);
         
         if (result.success) {
-            showNotification('✅ Группа обновлена');
+            showNotification('✅ Группа обновлена', false);
             closeModal('editGroupModal');
-            showGroupManagement();
+            // Перезагружаем список групп
+            await showGroupManagement();
         } else {
-            showNotification('❌ Ошибка: ' + result.error, true);
+            console.error('Server returned error:', result.error);
+            showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), true);
+            if (saveButton) {
+                saveButton.disabled = false;
+                saveButton.textContent = originalButtonText;
+            }
         }
     } catch (error) {
+        console.error('Error saving group name:', error);
         showNotification('❌ Ошибка: ' + error.message, true);
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.textContent = originalButtonText;
+        }
     }
 }
 

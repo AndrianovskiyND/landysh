@@ -563,6 +563,202 @@ def get_clusters(request, connection_id):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 @login_required
 def get_sessions(request, connection_id):
     """Получает список сеансов для подключения"""
@@ -629,6 +825,202 @@ def get_sessions(request, connection_id):
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -721,6 +1113,202 @@ def get_session_info(request, connection_id, cluster_uuid):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 def _parse_session_info(output):
     """Парсит вывод команды session info и извлекает информацию об одном сеансе"""
     session = None
@@ -780,6 +1368,202 @@ def get_processes(request, connection_id):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 @login_required
 def get_process_info(request, connection_id, cluster_uuid):
     """Получает информацию о процессе"""
@@ -800,6 +1584,259 @@ def get_process_info(request, connection_id, cluster_uuid):
                 'success': True,
                 'process': process_info,
                 'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+def _parse_rule_info(output):
+    """Парсит вывод команды rule info и извлекает информацию об одном правиле"""
+    rule = None
+    if not output:
+        return rule
+    
+    lines = output.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            # Убираем кавычки, если они есть
+            if value and ((value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'"))):
+                value = value[1:-1]
+            
+            if key == 'rule':
+                if rule is None:
+                    rule = {
+                        'uuid': value,
+                        'data': {}
+                    }
+            elif rule:
+                rule['data'][key] = value
+    
+    return rule
+
+@login_required
+def get_rule_info(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Получает информацию о требовании назначения"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_info(cluster_uuid, server_uuid, rule_uuid)
+        
+        if result['success']:
+            # Парсим вывод и извлекаем структурированные данные
+            rule = _parse_rule_info(result['output'])
+            return JsonResponse({
+                'success': True,
+                'output': result['output'],
+                'rule': rule
             }, json_dumps_params={'ensure_ascii': False})
         else:
             return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
@@ -907,6 +1944,202 @@ def get_managers(request, connection_id):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 @login_required
 def get_manager_info(request, connection_id, cluster_uuid):
     """Получает информацию о менеджере"""
@@ -934,6 +2167,202 @@ def get_manager_info(request, connection_id, cluster_uuid):
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 def get_infobases(request, connection_id):
@@ -963,6 +2392,202 @@ def get_infobases(request, connection_id):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 @login_required
 def get_servers(request, connection_id):
     """Получает список рабочих серверов для подключения"""
@@ -990,6 +2615,202 @@ def get_servers(request, connection_id):
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 def get_cluster_details(request, connection_id, cluster_uuid):
@@ -1027,6 +2848,202 @@ def get_cluster_details(request, connection_id, cluster_uuid):
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1092,6 +3109,202 @@ def update_cluster(request, connection_id, cluster_uuid):
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1165,6 +3378,202 @@ def insert_cluster(request, connection_id):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 @login_required
 @csrf_exempt
 def remove_cluster(request, connection_id, cluster_uuid):
@@ -1194,6 +3603,202 @@ def remove_cluster(request, connection_id, cluster_uuid):
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
 
 # ============================================
 # Endpoints для работы с информационными базами
@@ -1229,6 +3834,202 @@ def get_infobase_info(request, connection_id, cluster_uuid):
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1296,6 +4097,202 @@ def create_infobase(request, connection_id, cluster_uuid):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 @login_required
 @csrf_exempt
 def update_infobase(request, connection_id, cluster_uuid):
@@ -1345,6 +4342,202 @@ def update_infobase(request, connection_id, cluster_uuid):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 @login_required
 @csrf_exempt
 def drop_infobase(request, connection_id, cluster_uuid):
@@ -1390,6 +4583,202 @@ def drop_infobase(request, connection_id, cluster_uuid):
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 # ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
 # Endpoints для работы с рабочими серверами
 # ============================================
 
@@ -1421,6 +4810,202 @@ def get_server_info(request, connection_id, cluster_uuid, server_uuid):
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1471,6 +5056,202 @@ def insert_server(request, connection_id, cluster_uuid):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 @login_required
 @csrf_exempt
 def update_server(request, connection_id, cluster_uuid, server_uuid):
@@ -1512,6 +5293,202 @@ def update_server(request, connection_id, cluster_uuid, server_uuid):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 @login_required
 @csrf_exempt
 def remove_server(request, connection_id, cluster_uuid, server_uuid):
@@ -1540,3 +5517,199 @@ def remove_server(request, connection_id, cluster_uuid, server_uuid):
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Требования назначения функциональности (ТНФ)
+# ============================================
+
+def _parse_rule_list(output):
+    """Парсит вывод команды rule list и извлекает информацию о правилах"""
+    rules = []
+    if not output:
+        return rules
+    
+    lines = output.strip().split('\n')
+    current_rule = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            # Пустая строка - разделитель между правилами
+            if current_rule:
+                rules.append(current_rule)
+                current_rule = None
+            continue
+        
+        if ':' in line:
+            parts = line.split(':', 1)
+            key = parts[0].strip()
+            value = parts[1].strip() if len(parts) > 1 else ''
+            
+            if key == 'rule':
+                # Начало нового правила
+                if current_rule:
+                    rules.append(current_rule)
+                current_rule = {
+                    'uuid': value,
+                    'data': {}
+                }
+            elif current_rule:
+                current_rule['data'][key] = value
+    
+    if current_rule:
+        rules.append(current_rule)
+    
+    return rules
+
+@login_required
+def get_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Получает список требований назначения функциональности для сервера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        
+        rac_client = RACClient(connection)
+        result = rac_client.get_rule_list(cluster_uuid, server_uuid)
+        
+        if result['success']:
+            rules = _parse_rule_list(result['output'])
+            return JsonResponse({
+                'success': True,
+                'rules': rules,
+                'output': result['output']
+            }, json_dumps_params={'ensure_ascii': False})
+        else:
+            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_rule(request, connection_id, cluster_uuid, server_uuid):
+    """Создает новое требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Обновляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            position = data.get('position', 0)
+            kwargs = {}
+            
+            if 'object_type' in data:
+                kwargs['object_type'] = data['object_type']
+            if 'infobase_name' in data:
+                kwargs['infobase_name'] = data['infobase_name']
+            if 'rule_type' in data:
+                # Преобразуем из русского в английский
+                rule_type_map = {'Авто': 'auto', 'Назначать': 'always', 'Не назначать': 'never'}
+                kwargs['rule_type'] = rule_type_map.get(data['rule_type'], data['rule_type'])
+            if 'application_ext' in data:
+                kwargs['application_ext'] = data['application_ext']
+            if 'priority' in data:
+                kwargs['priority'] = data['priority']
+            
+            rac_client = RACClient(connection)
+            result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
+    """Удаляет требование назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def apply_rules(request, connection_id, cluster_uuid, server_uuid):
+    """Применяет требования назначения"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            full = data.get('full', True)
+            
+            rac_client = RACClient(connection)
+            result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})

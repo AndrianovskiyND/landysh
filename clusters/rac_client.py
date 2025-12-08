@@ -790,3 +790,100 @@ class RACClient:
             f'--server={server_uuid}'
         ]
         return self._execute_command(args)
+    
+    # ============================================
+    # Методы для работы с требованиями назначения функциональности (ТНФ)
+    # ============================================
+    
+    def get_rule_list(self, cluster_uuid, server_uuid):
+        """Получает список требований назначения функциональности для сервера"""
+        args = [
+            'rule', 'list',
+            f'--cluster={cluster_uuid}',
+            f'--server={server_uuid}'
+        ]
+        return self._execute_command(args)
+    
+    def get_rule_info(self, cluster_uuid, server_uuid, rule_uuid):
+        """Получает информацию о требовании назначения"""
+        args = [
+            'rule', 'info',
+            f'--cluster={cluster_uuid}',
+            f'--server={server_uuid}',
+            f'--rule={rule_uuid}'
+        ]
+        return self._execute_command(args)
+    
+    def insert_rule(self, cluster_uuid, server_uuid, position, **kwargs):
+        """Вставляет новое требование назначения в список"""
+        args = [
+            'rule', 'insert',
+            f'--cluster={cluster_uuid}',
+            f'--server={server_uuid}',
+            f'--position={position}'
+        ]
+        
+        # Маппинг параметров
+        param_mapping = {
+            'object_type': '--object-type',
+            'infobase_name': '--infobase-name',
+            'rule_type': '--rule-type',  # auto|always|never
+            'application_ext': '--application-ext',
+            'priority': '--priority',
+        }
+        
+        for key, value in kwargs.items():
+            if key in param_mapping and value is not None:
+                param_name = param_mapping[key]
+                args.append(f'{param_name}={value}')
+        
+        return self._execute_command(args)
+    
+    def update_rule(self, cluster_uuid, server_uuid, rule_uuid, position, **kwargs):
+        """Обновляет параметры существующего требования назначения"""
+        args = [
+            'rule', 'update',
+            f'--cluster={cluster_uuid}',
+            f'--server={server_uuid}',
+            f'--rule={rule_uuid}',
+            f'--position={position}'
+        ]
+        
+        # Маппинг параметров
+        param_mapping = {
+            'object_type': '--object-type',
+            'infobase_name': '--infobase-name',
+            'rule_type': '--rule-type',  # auto|always|never
+            'application_ext': '--application-ext',
+            'priority': '--priority',
+        }
+        
+        for key, value in kwargs.items():
+            if key in param_mapping and value is not None:
+                param_name = param_mapping[key]
+                args.append(f'{param_name}={value}')
+        
+        return self._execute_command(args)
+    
+    def remove_rule(self, cluster_uuid, server_uuid, rule_uuid):
+        """Удаляет требование назначения"""
+        args = [
+            'rule', 'remove',
+            f'--cluster={cluster_uuid}',
+            f'--server={server_uuid}',
+            f'--rule={rule_uuid}'
+        ]
+        return self._execute_command(args)
+    
+    def apply_rules(self, cluster_uuid, server_uuid, full=True):
+        """Применяет требования назначения"""
+        args = [
+            'rule', 'apply',
+            f'--cluster={cluster_uuid}',
+            f'--server={server_uuid}'
+        ]
+        if full:
+            args.append('--full')
+        else:
+            args.append('--partial')
+        return self._execute_command(args)

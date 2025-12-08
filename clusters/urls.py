@@ -29,4 +29,11 @@ urlpatterns = [
     path('servers/<int:connection_id>/<str:cluster_uuid>/insert/', views.insert_server, name='insert_server'),
     path('servers/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/update/', views.update_server, name='update_server'),
     path('servers/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/remove/', views.remove_server, name='remove_server'),
+    # Требования назначения функциональности (ТНФ)
+    path('rules/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/', views.get_rules, name='get_rules'),
+    path('rules/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/<str:rule_uuid>/info/', views.get_rule_info, name='get_rule_info'),
+    path('rules/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/create/', views.create_rule, name='create_rule'),
+    path('rules/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/<str:rule_uuid>/update/', views.update_rule, name='update_rule'),
+    path('rules/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/<str:rule_uuid>/delete/', views.delete_rule, name='delete_rule'),
+    path('rules/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/apply/', views.apply_rules, name='apply_rules'),
 ]

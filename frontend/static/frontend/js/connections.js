@@ -3146,6 +3146,9 @@ function showServerContextMenu(event, connectionId, clusterUuid, serverUuid, ser
         <div class="context-menu-item" onclick="openServerProperties(${connectionId}, '${clusterUuid}', '${serverUuid}'); closeContextMenu();">
             📋 Свойства
         </div>
+        <div class="context-menu-item" onclick="openRulesModal(${connectionId}, '${clusterUuid}', '${serverUuid}', '${escapeHtml(serverName).replace(/'/g, "\\'")}'); closeContextMenu();">
+            📐 ТНФ
+        </div>
         <div class="context-menu-item" onclick="openProcessesModal(${connectionId}, '${clusterUuid}', '${serverUuid}'); closeContextMenu();">
             🔄 Процессы
         </div>

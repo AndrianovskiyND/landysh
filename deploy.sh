@@ -142,10 +142,10 @@ Type=simple
 User=root
 
 # Явно указываем русскую локаль для systemd
-Environment="LANG=ru_RU.UTF-8"
-Environment="LC_ALL=ru_RU.UTF-8"
-Environment="LC_CTYPE=ru_RU.UTF-8"
-Environment="LC_MESSAGES=ru_RU.UTF-8"
+Environment="LANG=ru_RU.utf8"
+Environment="LC_ALL=ru_RU.utf8"
+Environment="LC_CTYPE=ru_RU.utf8"
+Environment="LC_MESSAGES=ru_RU.utf8"
 
 # Для Python
 Environment="PYTHONIOENCODING=utf-8"

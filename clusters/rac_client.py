@@ -50,10 +50,22 @@ class RACClient:
             else:
                 encodings_to_try = ['utf-8']
             
+            # Подготавливаем переменные окружения для subprocess
+            # Явно устанавливаем кодировку для Linux, чтобы RAC выводил в правильной кодировке
+            env = os.environ.copy()
+            if sys.platform != 'win32':
+                # Для Linux явно устанавливаем UTF-8, но RAC может все равно выводить в cp1251
+                # Используем ru_RU.utf8 (строчными), так как это стандартное имя локали в Linux
+                env['LANG'] = 'ru_RU.utf8'
+                env['LC_ALL'] = 'ru_RU.utf8'
+                env['LC_CTYPE'] = 'ru_RU.utf8'
+                env['PYTHONIOENCODING'] = 'utf-8'
+            
             # Запускаем команду без text=True, чтобы получить байты
             result = subprocess.run(
                 cmd_args,
                 capture_output=True,
+                env=env,
                 timeout=30  # 30 секунд таймаут
             )
             
@@ -148,7 +160,28 @@ class RACClient:
                 # Декодируем ошибку с правильной кодировкой
                 # Сначала пробуем stderr, если пусто - пробуем stdout
                 error_bytes = result.stderr if result.stderr else result.stdout
-                error_text = decode_text(error_bytes)
+                
+                # Логируем сырые байты для отладки (первые 200 байт)
+                if error_bytes:
+                    logger.debug(f"Raw error bytes (first 200): {error_bytes[:200]}")
+                    # Для Linux сразу пробуем cp1251 для ошибок, так как RAC часто выводит ошибки в cp1251
+                    if sys.platform != 'win32':
+                        try:
+                            # Пробуем cp1251 напрямую для ошибок на Linux
+                            cp1251_text = error_bytes.decode('cp1251', errors='replace')
+                            cp1251_cyrillic = sum(1 for char in cp1251_text if '\u0400' <= char <= '\u04FF')
+                            if cp1251_cyrillic > 0:
+                                logger.info(f"Error decoded directly as cp1251 with {cp1251_cyrillic} cyrillic characters")
+                                error_text = cp1251_text
+                            else:
+                                error_text = decode_text(error_bytes)
+                        except (UnicodeDecodeError, LookupError):
+                            error_text = decode_text(error_bytes)
+                    else:
+                        error_text = decode_text(error_bytes)
+                else:
+                    error_text = "Unknown error (no error output)"
+                
                 # Логируем с правильной кодировкой
                 logger.error(f"RAC command failed: {error_text}")
                 return {'success': False, 'error': error_text}
@@ -282,9 +315,19 @@ class RACClient:
             else:
                 encodings_to_try = ['utf-8']
             
+            # Подготавливаем переменные окружения для subprocess
+            env = os.environ.copy()
+            if sys.platform != 'win32':
+                # Используем ru_RU.utf8 (строчными), так как это стандартное имя локали в Linux
+                env['LANG'] = 'ru_RU.utf8'
+                env['LC_ALL'] = 'ru_RU.utf8'
+                env['LC_CTYPE'] = 'ru_RU.utf8'
+                env['PYTHONIOENCODING'] = 'utf-8'
+            
             result = subprocess.run(
                 cmd_args,
                 capture_output=True,
+                env=env,
                 timeout=30
             )
             
@@ -376,7 +419,28 @@ class RACClient:
             
             if result.returncode != 0:
                 error_bytes = result.stderr if result.stderr else result.stdout
-                error_text = decode_text(error_bytes)
+                
+                # Логируем сырые байты для отладки (первые 200 байт)
+                if error_bytes:
+                    logger.debug(f"Raw error bytes (first 200): {error_bytes[:200]}")
+                    # Для Linux сразу пробуем cp1251 для ошибок, так как RAC часто выводит ошибки в cp1251
+                    if sys.platform != 'win32':
+                        try:
+                            # Пробуем cp1251 напрямую для ошибок на Linux
+                            cp1251_text = error_bytes.decode('cp1251', errors='replace')
+                            cp1251_cyrillic = sum(1 for char in cp1251_text if '\u0400' <= char <= '\u04FF')
+                            if cp1251_cyrillic > 0:
+                                logger.info(f"Error decoded directly as cp1251 with {cp1251_cyrillic} cyrillic characters")
+                                error_text = cp1251_text
+                            else:
+                                error_text = decode_text(error_bytes)
+                        except (UnicodeDecodeError, LookupError):
+                            error_text = decode_text(error_bytes)
+                    else:
+                        error_text = decode_text(error_bytes)
+                else:
+                    error_text = "Unknown error (no error output)"
+                
                 logger.error(f"RAC command failed: {error_text}")
                 return {'success': False, 'error': error_text}
             

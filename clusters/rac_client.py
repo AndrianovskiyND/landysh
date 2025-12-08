@@ -8,6 +8,34 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def fix_broken_encoding(text):
+    """
+    Исправляет текст, который был неправильно декодирован (CP1251 прочитанная как UTF-8).
+    Например: "РќРµРґРѕС‚Р°С‚РѕС‡РЅРѕ" -> "Недостаточно"
+    """
+    if not text or not isinstance(text, str):
+        return text
+    
+    # Проверяем на признаки "битой" кодировки
+    broken_chars = ['Р', 'С', 'Рµ', 'РЅ', 'Рѕ', 'Р°', 'РІ', 'Рё', 'Р»', 'Рј', 'РЅ', 'Рѕ', 'Рї', 'СЂ', 'СЃ', 'С‚', 'Сѓ', 'С„', 'С…', 'С†', 'С‡', 'С€', 'С‰', 'СЉ', 'С‹', 'СЊ', 'СЌ', 'СЋ', 'СЏ']
+    broken_count = sum(1 for char in text if char in broken_chars)
+    cyrillic_count = sum(1 for char in text if '\u0400' <= char <= '\u04FF')
+    
+    # Если есть "битые" символы и нет правильной кириллицы - пытаемся исправить
+    if broken_count > 0 and cyrillic_count == 0:
+        try:
+            # Кодируем обратно в байты как UTF-8, затем декодируем как CP1251
+            fixed_bytes = text.encode('utf-8', errors='replace')
+            fixed_text = fixed_bytes.decode('cp1251', errors='replace')
+            fixed_cyrillic = sum(1 for char in fixed_text if '\u0400' <= char <= '\u04FF')
+            if fixed_cyrillic > 0:
+                logger.info(f"Fixed broken encoding: {broken_count} broken chars -> {fixed_cyrillic} cyrillic chars")
+                return fixed_text
+        except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
+            pass
+    
+    return text
+
 class RACClient:
     def __init__(self, server_connection):
         self.server_connection = server_connection
@@ -164,16 +192,41 @@ class RACClient:
                 # Логируем сырые байты для отладки (первые 200 байт)
                 if error_bytes:
                     logger.debug(f"Raw error bytes (first 200): {error_bytes[:200]}")
-                    # Для Linux сразу пробуем cp1251 для ошибок, так как RAC часто выводит ошибки в cp1251
+                    # Для Linux используем улучшенную логику декодирования
                     if sys.platform != 'win32':
+                        # Сначала пробуем декодировать как UTF-8, чтобы проверить на "битую" кодировку
                         try:
-                            # Пробуем cp1251 напрямую для ошибок на Linux
-                            cp1251_text = error_bytes.decode('cp1251', errors='replace')
-                            cp1251_cyrillic = sum(1 for char in cp1251_text if '\u0400' <= char <= '\u04FF')
-                            if cp1251_cyrillic > 0:
-                                logger.info(f"Error decoded directly as cp1251 with {cp1251_cyrillic} cyrillic characters")
-                                error_text = cp1251_text
+                            utf8_decoded = error_bytes.decode('utf-8', errors='replace')
+                            # Проверяем на признаки "битой" кодировки (CP1251, прочитанная как UTF-8)
+                            broken_chars = ['Р', 'С', 'Рµ', 'РЅ', 'Рѕ', 'Р°', 'РІ', 'Рё', 'Р»', 'Рј', 'РЅ', 'Рѕ', 'Рї', 'СЂ', 'СЃ', 'С‚', 'Сѓ', 'С„', 'С…', 'С†', 'С‡', 'С€', 'С‰', 'СЉ', 'С‹', 'СЊ', 'СЌ', 'СЋ', 'СЏ']
+                            broken_count = sum(1 for char in utf8_decoded if char in broken_chars)
+                            utf8_cyrillic = sum(1 for char in utf8_decoded if '\u0400' <= char <= '\u04FF')
+                            
+                            # Если есть "битые" символы и нет кириллицы - это CP1251, прочитанная как UTF-8
+                            if broken_count > 0 and utf8_cyrillic == 0:
+                                # Пробуем декодировать как CP1251
+                                try:
+                                    cp1251_text = error_bytes.decode('cp1251', errors='replace')
+                                    cp1251_cyrillic = sum(1 for char in cp1251_text if '\u0400' <= char <= '\u04FF')
+                                    if cp1251_cyrillic > 0:
+                                        logger.info(f"Error fixed: decoded as cp1251 with {cp1251_cyrillic} cyrillic characters (found {broken_count} broken utf-8 chars)")
+                                        error_text = cp1251_text
+                                    else:
+                                        # Пробуем koi8-r
+                                        try:
+                                            koi8_text = error_bytes.decode('koi8-r', errors='replace')
+                                            koi8_cyrillic = sum(1 for char in koi8_text if '\u0400' <= char <= '\u04FF')
+                                            if koi8_cyrillic > 0:
+                                                logger.info(f"Error decoded as koi8-r with {koi8_cyrillic} cyrillic characters")
+                                                error_text = koi8_text
+                                            else:
+                                                error_text = decode_text(error_bytes)
+                                        except (UnicodeDecodeError, LookupError):
+                                            error_text = decode_text(error_bytes)
+                                except (UnicodeDecodeError, LookupError):
+                                    error_text = decode_text(error_bytes)
                             else:
+                                # Нет признаков "битой" кодировки, используем стандартное декодирование
                                 error_text = decode_text(error_bytes)
                         except (UnicodeDecodeError, LookupError):
                             error_text = decode_text(error_bytes)
@@ -181,6 +234,9 @@ class RACClient:
                         error_text = decode_text(error_bytes)
                 else:
                     error_text = "Unknown error (no error output)"
+                
+                # Проверяем и исправляем "битую" кодировку, если ошибка уже была неправильно декодирована
+                error_text = fix_broken_encoding(error_text)
                 
                 # Логируем с правильной кодировкой
                 logger.error(f"RAC command failed: {error_text}")
@@ -423,16 +479,41 @@ class RACClient:
                 # Логируем сырые байты для отладки (первые 200 байт)
                 if error_bytes:
                     logger.debug(f"Raw error bytes (first 200): {error_bytes[:200]}")
-                    # Для Linux сразу пробуем cp1251 для ошибок, так как RAC часто выводит ошибки в cp1251
+                    # Для Linux используем улучшенную логику декодирования
                     if sys.platform != 'win32':
+                        # Сначала пробуем декодировать как UTF-8, чтобы проверить на "битую" кодировку
                         try:
-                            # Пробуем cp1251 напрямую для ошибок на Linux
-                            cp1251_text = error_bytes.decode('cp1251', errors='replace')
-                            cp1251_cyrillic = sum(1 for char in cp1251_text if '\u0400' <= char <= '\u04FF')
-                            if cp1251_cyrillic > 0:
-                                logger.info(f"Error decoded directly as cp1251 with {cp1251_cyrillic} cyrillic characters")
-                                error_text = cp1251_text
+                            utf8_decoded = error_bytes.decode('utf-8', errors='replace')
+                            # Проверяем на признаки "битой" кодировки (CP1251, прочитанная как UTF-8)
+                            broken_chars = ['Р', 'С', 'Рµ', 'РЅ', 'Рѕ', 'Р°', 'РІ', 'Рё', 'Р»', 'Рј', 'РЅ', 'Рѕ', 'Рї', 'СЂ', 'СЃ', 'С‚', 'Сѓ', 'С„', 'С…', 'С†', 'С‡', 'С€', 'С‰', 'СЉ', 'С‹', 'СЊ', 'СЌ', 'СЋ', 'СЏ']
+                            broken_count = sum(1 for char in utf8_decoded if char in broken_chars)
+                            utf8_cyrillic = sum(1 for char in utf8_decoded if '\u0400' <= char <= '\u04FF')
+                            
+                            # Если есть "битые" символы и нет кириллицы - это CP1251, прочитанная как UTF-8
+                            if broken_count > 0 and utf8_cyrillic == 0:
+                                # Пробуем декодировать как CP1251
+                                try:
+                                    cp1251_text = error_bytes.decode('cp1251', errors='replace')
+                                    cp1251_cyrillic = sum(1 for char in cp1251_text if '\u0400' <= char <= '\u04FF')
+                                    if cp1251_cyrillic > 0:
+                                        logger.info(f"Error fixed: decoded as cp1251 with {cp1251_cyrillic} cyrillic characters (found {broken_count} broken utf-8 chars)")
+                                        error_text = cp1251_text
+                                    else:
+                                        # Пробуем koi8-r
+                                        try:
+                                            koi8_text = error_bytes.decode('koi8-r', errors='replace')
+                                            koi8_cyrillic = sum(1 for char in koi8_text if '\u0400' <= char <= '\u04FF')
+                                            if koi8_cyrillic > 0:
+                                                logger.info(f"Error decoded as koi8-r with {koi8_cyrillic} cyrillic characters")
+                                                error_text = koi8_text
+                                            else:
+                                                error_text = decode_text(error_bytes)
+                                        except (UnicodeDecodeError, LookupError):
+                                            error_text = decode_text(error_bytes)
+                                except (UnicodeDecodeError, LookupError):
+                                    error_text = decode_text(error_bytes)
                             else:
+                                # Нет признаков "битой" кодировки, используем стандартное декодирование
                                 error_text = decode_text(error_bytes)
                         except (UnicodeDecodeError, LookupError):
                             error_text = decode_text(error_bytes)
@@ -440,6 +521,9 @@ class RACClient:
                         error_text = decode_text(error_bytes)
                 else:
                     error_text = "Unknown error (no error output)"
+                
+                # Проверяем и исправляем "битую" кодировку, если ошибка уже была неправильно декодирована
+                error_text = fix_broken_encoding(error_text)
                 
                 logger.error(f"RAC command failed: {error_text}")
                 return {'success': False, 'error': error_text}
@@ -875,12 +959,17 @@ class RACClient:
         ]
         return self._execute_command(args)
     
-    def apply_rules(self, cluster_uuid, server_uuid, full=True):
-        """Применяет требования назначения"""
+    def apply_rules(self, cluster_uuid, server_uuid=None, full=True):
+        """Применяет требования назначения
+        
+        Args:
+            cluster_uuid: UUID кластера (обязательный)
+            server_uuid: UUID сервера (не используется, оставлен для совместимости)
+            full: True для полного применения, False для частичного
+        """
         args = [
             'rule', 'apply',
-            f'--cluster={cluster_uuid}',
-            f'--server={server_uuid}'
+            f'--cluster={cluster_uuid}'
         ]
         if full:
             args.append('--full')

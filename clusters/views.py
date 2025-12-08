@@ -4,7 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from .models import ServerConnection
 from users.models import UserGroup
-from .rac_client import RACClient
+from .rac_client import RACClient, fix_broken_encoding
 
 @login_required
 def server_connections(request):
@@ -623,7 +623,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -661,7 +662,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -701,7 +703,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -724,7 +727,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -750,7 +754,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -819,7 +824,8 @@ def get_sessions(request, connection_id):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -886,7 +892,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -924,7 +931,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -964,7 +972,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -987,7 +996,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1013,7 +1023,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1106,7 +1117,8 @@ def get_session_info(request, connection_id, cluster_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1173,7 +1185,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1211,7 +1224,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1251,7 +1265,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1274,7 +1289,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1300,7 +1316,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1361,7 +1378,8 @@ def get_processes(request, connection_id):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1428,7 +1446,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1466,7 +1485,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1506,7 +1526,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1529,7 +1550,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1555,7 +1577,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1586,7 +1609,8 @@ def get_process_info(request, connection_id, cluster_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1653,7 +1677,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1691,7 +1716,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1731,7 +1757,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1754,7 +1781,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1780,7 +1808,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1839,7 +1868,8 @@ def get_rule_info(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
                 'rule': rule
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -1937,7 +1967,8 @@ def get_managers(request, connection_id):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2004,7 +2035,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2042,7 +2074,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2082,7 +2115,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2105,7 +2139,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2131,7 +2166,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2161,7 +2197,8 @@ def get_manager_info(request, connection_id, cluster_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2228,7 +2265,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2266,7 +2304,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2306,7 +2345,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2329,7 +2369,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2355,7 +2396,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2385,7 +2427,8 @@ def get_infobases(request, connection_id):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2452,7 +2495,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2490,7 +2534,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2530,7 +2575,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2553,7 +2599,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2579,7 +2626,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2609,7 +2657,8 @@ def get_servers(request, connection_id):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2676,7 +2725,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2714,7 +2764,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2754,7 +2805,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2777,7 +2829,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2803,7 +2856,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2909,7 +2963,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2947,7 +3002,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -2987,7 +3043,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3010,7 +3067,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3036,7 +3094,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3170,7 +3229,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3208,7 +3268,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3248,7 +3309,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3271,7 +3333,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3297,7 +3360,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3438,7 +3502,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3476,7 +3541,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3516,7 +3582,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3539,7 +3606,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3565,7 +3633,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3664,7 +3733,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3702,7 +3772,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3742,7 +3813,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3765,7 +3837,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3791,7 +3864,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3825,15 +3899,19 @@ def get_infobase_info(request, connection_id, cluster_uuid):
                 'infobase': infobase  # Структурированные данные
             }, json_dumps_params={'ensure_ascii': False})
         else:
+            error_msg = result.get('error', 'Ошибка получения информации')
+            # Исправляем "битую" кодировку, если ошибка уже была неправильно декодирована
+            error_msg = fix_broken_encoding(error_msg)
             return JsonResponse({
                 'success': False,
-                'error': result.get('error', 'Ошибка получения информации')
+                'error': error_msg
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+        error_msg = fix_broken_encoding(str(e))
+        return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
 
 # ============================================
 # Требования назначения функциональности (ТНФ)
@@ -3895,7 +3973,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3933,7 +4012,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3973,7 +4053,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -3996,7 +4077,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4022,7 +4104,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4157,7 +4240,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4195,7 +4279,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4235,7 +4320,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4258,7 +4344,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4284,7 +4371,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4402,7 +4490,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4440,7 +4529,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4480,7 +4570,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4503,7 +4594,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4529,7 +4621,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4642,7 +4735,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4680,7 +4774,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4720,7 +4815,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4743,7 +4839,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4769,7 +4866,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4871,7 +4969,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4909,7 +5008,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4949,7 +5049,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4972,7 +5073,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -4998,7 +5100,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5116,7 +5219,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5154,7 +5258,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5194,7 +5299,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5217,7 +5323,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5243,7 +5350,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5353,7 +5461,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5391,7 +5500,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5431,7 +5541,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5454,7 +5565,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5480,7 +5592,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5578,7 +5691,8 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
                 'output': result['output']
             }, json_dumps_params={'ensure_ascii': False})
         else:
-            return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+            error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5616,7 +5730,8 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5656,7 +5771,8 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5679,7 +5795,8 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
@@ -5705,7 +5822,8 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             if result['success']:
                 return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
             else:
-                return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
+                error_msg = fix_broken_encoding(result['error'])
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
                 
         except ServerConnection.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})

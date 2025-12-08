@@ -69,8 +69,9 @@ class RACClient:
                     # Windows: cp866 (DOS), cp1251 (Windows), utf-8, latin1
                     all_encodings = ['cp866', 'cp1251', 'utf-8', 'latin1']
                 else:
-                    # Linux (РЕД ОС, CentOS и т.д.): utf-8, cp1251, koi8-r, cp866, latin1
-                    all_encodings = ['utf-8', 'cp1251', 'koi8-r', 'cp866', 'latin1']
+                    # Linux (РЕД ОС, CentOS и т.д.): пробуем cp1251 в первую очередь, так как RAC часто использует cp1251
+                    # Затем utf-8, koi8-r, cp866, latin1
+                    all_encodings = ['cp1251', 'utf-8', 'koi8-r', 'cp866', 'latin1']
                 
                 best_decoded = None
                 best_score = 0
@@ -78,22 +79,50 @@ class RACClient:
                 broken_utf8_decoded = None
                 broken_utf8_score = 0
                 
+                # Сначала пробуем декодировать как utf-8, чтобы проверить на "битую" кодировку
+                try:
+                    utf8_decoded = data_bytes.decode('utf-8', errors='replace')
+                    broken_chars = ['Р', 'С', 'Рµ', 'РЅ', 'Рѕ', 'Р°', 'РІ', 'Рё', 'Р»', 'Рј', 'РЅ', 'Рѕ', 'Рї', 'СЂ', 'СЃ', 'С‚', 'Сѓ', 'С„', 'С…', 'С†', 'С‡', 'С€', 'С‰', 'СЉ', 'С‹', 'СЊ', 'СЌ', 'СЋ', 'СЏ']
+                    broken_count = sum(1 for char in utf8_decoded if char in broken_chars)
+                    utf8_cyrillic = sum(1 for char in utf8_decoded if '\u0400' <= char <= '\u04FF')
+                    
+                    # Если много "битых" символов и нет кириллицы - это явно cp1251, прочитанная как utf-8
+                    # Снижаем порог до 1 для более агрессивного обнаружения
+                    if broken_count > 0 and utf8_cyrillic == 0:
+                        broken_utf8_decoded = utf8_decoded
+                        broken_utf8_score = broken_count
+                        logger.debug(f"Detected broken encoding: {broken_count} broken chars, trying cp1251 first")
+                except (UnicodeDecodeError, LookupError):
+                    pass
+                
+                # Если обнаружена "битая" кодировка - сразу пробуем cp1251
+                if broken_utf8_decoded and broken_utf8_score > 0:
+                    try:
+                        cp1251_decoded = data_bytes.decode('cp1251', errors='replace')
+                        cp1251_cyrillic = sum(1 for char in cp1251_decoded if '\u0400' <= char <= '\u04FF')
+                        if cp1251_cyrillic > 0:
+                            logger.info(f"Fixed broken encoding: decoded as cp1251 with {cp1251_cyrillic} cyrillic characters (found {broken_utf8_score} broken utf-8 chars)")
+                            return cp1251_decoded
+                    except (UnicodeDecodeError, LookupError):
+                        pass
+                    
+                    # Пробуем koi8-r для Linux
+                    if sys.platform != 'win32':
+                        try:
+                            koi8_decoded = data_bytes.decode('koi8-r', errors='replace')
+                            koi8_cyrillic = sum(1 for char in koi8_decoded if '\u0400' <= char <= '\u04FF')
+                            if koi8_cyrillic > 0:
+                                logger.info(f"Fixed broken encoding: decoded as koi8-r with {koi8_cyrillic} cyrillic characters")
+                                return koi8_decoded
+                        except (UnicodeDecodeError, LookupError):
+                            pass
+                
                 # Пробуем каждую кодировку
                 for encoding in all_encodings:
                     try:
                         decoded = data_bytes.decode(encoding, errors='replace')
                         # Подсчитываем количество кириллических символов
                         cyrillic_count = sum(1 for char in decoded if '\u0400' <= char <= '\u04FF')
-                        
-                        # Проверяем на "битую" кодировку (когда cp1251 читается как utf-8)
-                        # Признак: много символов типа Р, С, Рµ, РЅ и т.д. (это cp1251, прочитанная как utf-8)
-                        broken_chars = ['Р', 'С', 'Рµ', 'РЅ', 'Рѕ', 'Р°', 'РІ', 'Рё', 'Р»', 'Рј', 'РЅ', 'Рѕ', 'Рї', 'СЂ', 'СЃ', 'С‚', 'Сѓ', 'С„', 'С…', 'С†', 'С‡', 'С€', 'С‰', 'СЉ', 'С‹', 'СЊ', 'СЌ', 'СЋ', 'СЏ']
-                        broken_count = sum(1 for char in decoded if char in broken_chars)
-                        
-                        # Если utf-8 декодирование дало много "битых" символов - это признак того, что это cp1251
-                        if encoding == 'utf-8' and broken_count > 3 and cyrillic_count == 0:
-                            broken_utf8_decoded = decoded
-                            broken_utf8_score = broken_count
                         
                         # Если есть кириллица, это хороший признак
                         if cyrillic_count > best_score:
@@ -111,30 +140,6 @@ class RACClient:
                 if best_decoded and best_score > 0:
                     logger.debug(f"Decoded with {best_score} cyrillic characters using {best_encoding}")
                     return best_decoded
-                
-                # Если нет кириллицы, но есть признаки "битой" кодировки - пробуем перекодировать
-                if broken_utf8_decoded and broken_utf8_score > 3:
-                    # Обнаружена "битая" кодировка - пробуем cp1251 и koi8-r
-                    try:
-                        # Пробуем декодировать как cp1251
-                        cp1251_decoded = data_bytes.decode('cp1251', errors='replace')
-                        cp1251_cyrillic = sum(1 for char in cp1251_decoded if '\u0400' <= char <= '\u04FF')
-                        if cp1251_cyrillic > 0:
-                            logger.debug(f"Fixed broken encoding: decoded as cp1251 with {cp1251_cyrillic} cyrillic characters (found {broken_utf8_score} broken utf-8 chars)")
-                            return cp1251_decoded
-                    except (UnicodeDecodeError, LookupError):
-                        pass
-                    
-                    # Пробуем koi8-r для Linux
-                    if sys.platform != 'win32':
-                        try:
-                            koi8_decoded = data_bytes.decode('koi8-r', errors='replace')
-                            koi8_cyrillic = sum(1 for char in koi8_decoded if '\u0400' <= char <= '\u04FF')
-                            if koi8_cyrillic > 0:
-                                logger.debug(f"Fixed broken encoding: decoded as koi8-r with {koi8_cyrillic} cyrillic characters")
-                                return koi8_decoded
-                        except (UnicodeDecodeError, LookupError):
-                            pass
                 
                 # Возвращаем лучший вариант или строковое представление
                 return best_decoded if best_decoded else str(data_bytes)
@@ -295,8 +300,9 @@ class RACClient:
                     # Windows: cp866 (DOS), cp1251 (Windows), utf-8, latin1
                     all_encodings = ['cp866', 'cp1251', 'utf-8', 'latin1']
                 else:
-                    # Linux (РЕД ОС, CentOS и т.д.): utf-8, cp1251, koi8-r, cp866, latin1
-                    all_encodings = ['utf-8', 'cp1251', 'koi8-r', 'cp866', 'latin1']
+                    # Linux (РЕД ОС, CentOS и т.д.): пробуем cp1251 в первую очередь, так как RAC часто использует cp1251
+                    # Затем utf-8, koi8-r, cp866, latin1
+                    all_encodings = ['cp1251', 'utf-8', 'koi8-r', 'cp866', 'latin1']
                 
                 best_decoded = None
                 best_score = 0
@@ -304,43 +310,29 @@ class RACClient:
                 broken_utf8_decoded = None
                 broken_utf8_score = 0
                 
-                for encoding in all_encodings:
-                    try:
-                        decoded = data_bytes.decode(encoding, errors='replace')
-                        cyrillic_count = sum(1 for char in decoded if '\u0400' <= char <= '\u04FF')
-                        
-                        # Проверяем на "битую" кодировку (когда cp1251 читается как utf-8)
-                        broken_chars = ['Р', 'С', 'Рµ', 'РЅ', 'Рѕ', 'Р°', 'РІ', 'Рё', 'Р»', 'Рј', 'РЅ', 'Рѕ', 'Рї', 'СЂ', 'СЃ', 'С‚', 'Сѓ', 'С„', 'С…', 'С†', 'С‡', 'С€', 'С‰', 'СЉ', 'С‹', 'СЊ', 'СЌ', 'СЋ', 'СЏ']
-                        broken_count = sum(1 for char in decoded if char in broken_chars)
-                        
-                        # Если utf-8 декодирование дало много "битых" символов - это признак того, что это cp1251
-                        if encoding == 'utf-8' and broken_count > 3 and cyrillic_count == 0:
-                            broken_utf8_decoded = decoded
-                            broken_utf8_score = broken_count
-                        
-                        if cyrillic_count > best_score:
-                            best_decoded = decoded
-                            best_score = cyrillic_count
-                            best_encoding = encoding
-                        elif best_decoded is None:
-                            best_decoded = decoded
-                            best_encoding = encoding
-                    except (UnicodeDecodeError, LookupError):
-                        continue
+                # Сначала пробуем декодировать как utf-8, чтобы проверить на "битую" кодировку
+                try:
+                    utf8_decoded = data_bytes.decode('utf-8', errors='replace')
+                    broken_chars = ['Р', 'С', 'Рµ', 'РЅ', 'Рѕ', 'Р°', 'РІ', 'Рё', 'Р»', 'Рј', 'РЅ', 'Рѕ', 'Рї', 'СЂ', 'СЃ', 'С‚', 'Сѓ', 'С„', 'С…', 'С†', 'С‡', 'С€', 'С‰', 'СЉ', 'С‹', 'СЊ', 'СЌ', 'СЋ', 'СЏ']
+                    broken_count = sum(1 for char in utf8_decoded if char in broken_chars)
+                    utf8_cyrillic = sum(1 for char in utf8_decoded if '\u0400' <= char <= '\u04FF')
+                    
+                    # Если много "битых" символов и нет кириллицы - это явно cp1251, прочитанная как utf-8
+                    # Снижаем порог до 1 для более агрессивного обнаружения
+                    if broken_count > 0 and utf8_cyrillic == 0:
+                        broken_utf8_decoded = utf8_decoded
+                        broken_utf8_score = broken_count
+                        logger.debug(f"Detected broken encoding: {broken_count} broken chars, trying cp1251 first")
+                except (UnicodeDecodeError, LookupError):
+                    pass
                 
-                if best_decoded and best_score > 0:
-                    logger.debug(f"Decoded with {best_score} cyrillic characters using {best_encoding}")
-                    return best_decoded
-                
-                # Если нет кириллицы, но есть признаки "битой" кодировки - пробуем перекодировать
-                if broken_utf8_decoded and broken_utf8_score > 3:
-                    # Обнаружена "битая" кодировка - пробуем cp1251 и koi8-r
+                # Если обнаружена "битая" кодировка - сразу пробуем cp1251
+                if broken_utf8_decoded and broken_utf8_score > 0:
                     try:
-                        # Пробуем декодировать как cp1251
                         cp1251_decoded = data_bytes.decode('cp1251', errors='replace')
                         cp1251_cyrillic = sum(1 for char in cp1251_decoded if '\u0400' <= char <= '\u04FF')
                         if cp1251_cyrillic > 0:
-                            logger.debug(f"Fixed broken encoding: decoded as cp1251 with {cp1251_cyrillic} cyrillic characters (found {broken_utf8_score} broken utf-8 chars)")
+                            logger.info(f"Fixed broken encoding: decoded as cp1251 with {cp1251_cyrillic} cyrillic characters (found {broken_utf8_score} broken utf-8 chars)")
                             return cp1251_decoded
                     except (UnicodeDecodeError, LookupError):
                         pass
@@ -351,10 +343,34 @@ class RACClient:
                             koi8_decoded = data_bytes.decode('koi8-r', errors='replace')
                             koi8_cyrillic = sum(1 for char in koi8_decoded if '\u0400' <= char <= '\u04FF')
                             if koi8_cyrillic > 0:
-                                logger.debug(f"Fixed broken encoding: decoded as koi8-r with {koi8_cyrillic} cyrillic characters")
+                                logger.info(f"Fixed broken encoding: decoded as koi8-r with {koi8_cyrillic} cyrillic characters")
                                 return koi8_decoded
                         except (UnicodeDecodeError, LookupError):
                             pass
+                
+                # Пробуем каждую кодировку
+                for encoding in all_encodings:
+                    try:
+                        decoded = data_bytes.decode(encoding, errors='replace')
+                        # Подсчитываем количество кириллических символов
+                        cyrillic_count = sum(1 for char in decoded if '\u0400' <= char <= '\u04FF')
+                        
+                        # Если есть кириллица, это хороший признак
+                        if cyrillic_count > best_score:
+                            best_decoded = decoded
+                            best_score = cyrillic_count
+                            best_encoding = encoding
+                        elif best_decoded is None:
+                            # Если кириллицы нет, но декодирование прошло - сохраняем как запасной вариант
+                            best_decoded = decoded
+                            best_encoding = encoding
+                    except (UnicodeDecodeError, LookupError):
+                        continue
+                
+                # Если нашли вариант с кириллицей - возвращаем его
+                if best_decoded and best_score > 0:
+                    logger.debug(f"Decoded with {best_score} cyrillic characters using {best_encoding}")
+                    return best_decoded
                 
                 return best_decoded if best_decoded else str(data_bytes)
             

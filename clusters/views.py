@@ -559,9 +559,9 @@ def get_clusters(request, connection_id):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 def get_sessions(request, connection_id):
@@ -626,9 +626,9 @@ def get_sessions(request, connection_id):
             return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -717,9 +717,9 @@ def get_session_info(request, connection_id, cluster_uuid):
             return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 def _parse_session_info(output):
     """Парсит вывод команды session info и извлекает информацию об одном сеансе"""
@@ -776,9 +776,9 @@ def get_processes(request, connection_id):
             return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 def get_process_info(request, connection_id, cluster_uuid):
@@ -805,9 +805,9 @@ def get_process_info(request, connection_id, cluster_uuid):
             return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 def _parse_manager_list(output):
     """Парсит вывод команды manager list и извлекает информацию о менеджерах"""
@@ -903,9 +903,9 @@ def get_managers(request, connection_id):
             return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 def get_manager_info(request, connection_id, cluster_uuid):
@@ -931,9 +931,9 @@ def get_manager_info(request, connection_id, cluster_uuid):
             return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 def get_infobases(request, connection_id):
@@ -959,9 +959,9 @@ def get_infobases(request, connection_id):
             return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 def get_servers(request, connection_id):
@@ -987,9 +987,9 @@ def get_servers(request, connection_id):
             return JsonResponse({'success': False, 'error': result['error']}, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 def get_cluster_details(request, connection_id, cluster_uuid):
@@ -1024,9 +1024,9 @@ def get_cluster_details(request, connection_id, cluster_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1089,9 +1089,9 @@ def update_cluster(request, connection_id, cluster_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1161,9 +1161,9 @@ def insert_cluster(request, connection_id):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1191,9 +1191,9 @@ def remove_cluster(request, connection_id, cluster_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 # ============================================
 # Endpoints для работы с информационными базами
@@ -1226,9 +1226,9 @@ def get_infobase_info(request, connection_id, cluster_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1292,9 +1292,9 @@ def create_infobase(request, connection_id, cluster_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1341,9 +1341,9 @@ def update_infobase(request, connection_id, cluster_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1385,9 +1385,9 @@ def drop_infobase(request, connection_id, cluster_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 # ============================================
 # Endpoints для работы с рабочими серверами
@@ -1418,9 +1418,9 @@ def get_server_info(request, connection_id, cluster_uuid, server_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1467,9 +1467,9 @@ def insert_server(request, connection_id, cluster_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1508,9 +1508,9 @@ def update_server(request, connection_id, cluster_uuid, server_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
 @login_required
 @csrf_exempt
@@ -1537,6 +1537,6 @@ def remove_server(request, connection_id, cluster_uuid, server_uuid):
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Connection not found'})
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})

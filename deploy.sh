@@ -89,24 +89,46 @@ python manage.py makemigrations --noinput
 python manage.py migrate --noinput
 echo -e "${GREEN}✓ Миграции выполнены${NC}"
 
-# Создание суперпользователя
-echo -e "${YELLOW}Создание суперпользователя...${NC}"
-# Проверяем, существует ли уже пользователь
-if python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); print('EXISTS' if User.objects.filter(username='$ADMIN_USERNAME').exists() else 'NOT_EXISTS')" 2>/dev/null | grep -q "EXISTS"; then
-    echo -e "${YELLOW}Пользователь '$ADMIN_USERNAME' уже существует, пропускаем создание${NC}"
-else
-    # Создаем суперпользователя через Django shell
-    python manage.py shell << EOF
+# Создание суперпользователя и профиля
+echo -e "${YELLOW}Создание суперпользователя и профиля...${NC}"
+python manage.py shell << EOF
 from django.contrib.auth import get_user_model
+from core.models import Profile
 User = get_user_model()
-if not User.objects.filter(username='$ADMIN_USERNAME').exists():
-    User.objects.create_superuser('$ADMIN_USERNAME', '', '$ADMIN_PASSWORD')
+
+# Создаем или получаем пользователя
+try:
+    user = User.objects.get(username='$ADMIN_USERNAME')
+    print('Пользователь уже существует')
+    # Обновляем пароль на всякий случай
+    user.set_password('$ADMIN_PASSWORD')
+    user.is_staff = True
+    user.is_superuser = True
+    user.save()
+    print('Пароль и права обновлены')
+except User.DoesNotExist:
+    user = User.objects.create_superuser('$ADMIN_USERNAME', '', '$ADMIN_PASSWORD')
     print('Суперпользователь создан')
-else:
-    print('Суперпользователь уже существует')
+
+# СОЗДАЕМ ИЛИ ОБНОВЛЯЕМ ПРОФИЛЬ С РОЛЬЮ ADMIN
+try:
+    profile = Profile.objects.get(user=user)
+    profile.role = 'admin'
+    profile.save()
+    print('Профиль обновлен, роль установлена: admin')
+except Profile.DoesNotExist:
+    profile = Profile.objects.create(user=user, role='admin')
+    print('Профиль создан с ролью: admin')
+
+# Проверяем
+print(f'Проверка:')
+print(f'Логин: {user.username}')
+print(f'Пароль: $ADMIN_PASSWORD')
+print(f'Роль профиля: {profile.role}')
+print(f'profile.is_admin(): {profile.is_admin()}')
 EOF
-    echo -e "${GREEN}✓ Суперпользователь создан (логин: $ADMIN_USERNAME, пароль: $ADMIN_PASSWORD)${NC}"
-fi
+
+echo -e "${GREEN}✓ Суперпользователь и профиль созданы (логин: $ADMIN_USERNAME, пароль: $ADMIN_PASSWORD)${NC}"
 
 # Создание systemd сервиса
 echo -e "${YELLOW}Создание systemd сервиса...${NC}"
@@ -154,6 +176,16 @@ systemctl start "$SERVICE_NAME"
 sleep 2
 if systemctl is-active --quiet "$SERVICE_NAME"; then
     echo -e "${GREEN}✓ Сервис успешно запущен${NC}"
+    
+    # Дополнительная проверка через 3 секунды
+    sleep 3
+    echo -e "${YELLOW}Проверка работы приложения...${NC}"
+    if curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/ | grep -q "200\|302\|301"; then
+        echo -e "${GREEN}✓ Приложение отвечает на запросы${NC}"
+    else
+        echo -e "${YELLOW}⚠ Приложение запущено, но не отвечает на запросы. Проверьте логи.${NC}"
+    fi
+    
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}Развертывание завершено успешно!${NC}"
     echo -e "${GREEN}========================================${NC}"
@@ -167,4 +199,3 @@ else
     echo -e "${YELLOW}Проверьте логи: journalctl -u $SERVICE_NAME${NC}"
     exit 1
 fi
-

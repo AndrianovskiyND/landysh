@@ -25,3 +25,6 @@ staticfiles/
 # OS
 .DS_Store
 Thumbs.db
+
+# DEV Scripts
+push.ps1

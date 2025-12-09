@@ -60,10 +60,11 @@ function renderSystemSettings(settings) {
             <div class="info-card" style="margin-bottom: 1rem;">
                 <h4 style="border-bottom-color: var(--primary-color);">📝 Настройки кодировок</h4>
                 <div class="edit-form">
-                    <div style="margin-bottom: 1rem; padding: 0.75rem; background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 4px; font-size: 0.9rem;">
+                    <div style="margin-bottom: 1rem; padding: 0.75rem; background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 4px; font-size: 0.9rem;" data-current-os="${settings.current_os || 'Unknown'}">
                         <strong>🖥️ Текущая система:</strong> Сервер работает на <strong>${settings.current_os || 'Неизвестно'}</strong>
                     </div>
                     
+                    ${settings.current_os === 'Windows' ? `
                     <div class="form-row">
                         <label>Кодировка для Windows</label>
                         <select id="encoding_windows">
@@ -75,7 +76,9 @@ function renderSystemSettings(settings) {
                         </select>
                         <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Основная кодировка для декодирования вывода RAC на Windows. Если декодирование не удается, система попробует другие кодировки автоматически.</small>
                     </div>
+                    ` : ''}
                     
+                    ${settings.current_os === 'Linux' ? `
                     <div class="form-row">
                         <label>Кодировка для Linux</label>
                         <select id="encoding_linux">
@@ -87,6 +90,7 @@ function renderSystemSettings(settings) {
                         </select>
                         <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Основная кодировка для декодирования вывода RAC на Linux. Если декодирование не удается, система попробует другие кодировки автоматически.</small>
                     </div>
+                    ` : ''}
                     
                     <div style="margin-top: 1rem; padding: 0.75rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; font-size: 0.9rem;">
                         <strong>💡 Совет:</strong> Попробуйте разные кодировки, если видите некорректное отображение текста. Система автоматически попробует другие кодировки, если выбранная не подходит.
@@ -159,10 +163,12 @@ function renderSystemSettings(settings) {
  * Сохранить системные настройки
  */
 async function saveSystemSettings() {
+    // Получаем текущую ОС из настроек (нужно получить из DOM или сохранить при загрузке)
+    const currentOsElement = document.querySelector('[data-current-os]');
+    const currentOs = currentOsElement ? currentOsElement.getAttribute('data-current-os') : null;
+    
     const settings = {
         rac_path: document.getElementById('rac_path').value,
-        encoding_windows: document.getElementById('encoding_windows').value.trim(),
-        encoding_linux: document.getElementById('encoding_linux').value.trim(),
         password_min_length: document.getElementById('password_min_length').value,
         password_complexity: document.getElementById('password_complexity').value,
         password_expiry_days: document.getElementById('password_expiry_days').value,
@@ -170,15 +176,27 @@ async function saveSystemSettings() {
         password_lockout_days: document.getElementById('password_lockout_days').value,
     };
     
-    // Валидация кодировок (теперь это просто выбор из списка, но проверим на всякий случай)
+    // Добавляем настройки кодировки только для текущей ОС
     const validEncodings = ['utf-8', 'cp1251', 'cp866', 'koi8-r', 'latin1'];
-    if (!validEncodings.includes(settings.encoding_windows)) {
-        showNotification('❌ Неверная кодировка для Windows', true);
-        return;
-    }
-    if (!validEncodings.includes(settings.encoding_linux)) {
-        showNotification('❌ Неверная кодировка для Linux', true);
-        return;
+    
+    if (currentOs === 'Windows') {
+        const encodingWindowsEl = document.getElementById('encoding_windows');
+        if (encodingWindowsEl) {
+            settings.encoding_windows = encodingWindowsEl.value.trim();
+            if (!validEncodings.includes(settings.encoding_windows)) {
+                showNotification('❌ Неверная кодировка для Windows', true);
+                return;
+            }
+        }
+    } else if (currentOs === 'Linux') {
+        const encodingLinuxEl = document.getElementById('encoding_linux');
+        if (encodingLinuxEl) {
+            settings.encoding_linux = encodingLinuxEl.value.trim();
+            if (!validEncodings.includes(settings.encoding_linux)) {
+                showNotification('❌ Неверная кодировка для Linux', true);
+                return;
+            }
+        }
     }
     
     try {

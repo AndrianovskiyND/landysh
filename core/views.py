@@ -79,8 +79,28 @@ def force_password_change(request):
     except Profile.DoesNotExist:
         return redirect('/')
     
+    # Получаем информацию о политике паролей для отображения
+    subject_to_policy = profile.subject_to_password_policy
+    policy_info = None
+    
+    if subject_to_policy:
+        min_length = SystemSettings.get_setting('password_min_length', '8')
+        complexity = SystemSettings.get_setting('password_complexity', 'medium')
+        
+        complexity_text = {
+            'low': 'Низкая (только буквы и цифры)',
+            'medium': 'Средняя (буквы, цифры или спецсимволы)',
+            'high': 'Высокая (обязательны заглавные и строчные буквы, цифры и спецсимволы)'
+        }.get(complexity, 'Средняя')
+        
+        policy_info = {
+            'min_length': min_length,
+            'complexity': complexity_text,
+            'complexity_code': complexity
+        }
+    
     if request.method == 'POST':
-        form = ForcePasswordChangeForm(request.POST)
+        form = ForcePasswordChangeForm(request.POST, user=request.user)
         if form.is_valid():
             # Устанавливаем новый пароль
             new_password = form.cleaned_data['new_password1']
@@ -96,6 +116,10 @@ def force_password_change(request):
             
             return redirect('/')
     else:
-        form = ForcePasswordChangeForm()
+        form = ForcePasswordChangeForm(user=request.user)
     
-    return render(request, 'registration/force_password_change.html', {'form': form})
+    return render(request, 'registration/force_password_change.html', {
+        'form': form,
+        'subject_to_policy': subject_to_policy,
+        'policy_info': policy_info
+    })

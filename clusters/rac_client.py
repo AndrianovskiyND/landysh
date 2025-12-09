@@ -13,23 +13,60 @@ def fix_broken_encoding(text):
     Исправляет текст, который был неправильно декодирован (CP1251 прочитанная как UTF-8).
     Например: "РќРµРґРѕС‚Р°С‚РѕС‡РЅРѕ" -> "Недостаточно"
     """
-    if not text or not isinstance(text, str):
+    if not text:
         return text
     
+    # Если это байты, сначала декодируем
+    if isinstance(text, bytes):
+        # Пробуем разные кодировки для байтов
+        for encoding in ['cp1251', 'koi8-r', 'utf-8', 'cp866']:
+            try:
+                decoded = text.decode(encoding, errors='replace')
+                cyrillic_count = sum(1 for char in decoded if '\u0400' <= char <= '\u04FF')
+                if cyrillic_count > 0:
+                    return decoded
+            except (UnicodeDecodeError, LookupError):
+                continue
+        # Если ничего не подошло, пробуем UTF-8 с заменой
+        return text.decode('utf-8', errors='replace')
+    
+    if not isinstance(text, str):
+        return str(text)
+    
     # Проверяем на признаки "битой" кодировки
-    broken_chars = ['Р', 'С', 'Рµ', 'РЅ', 'Рѕ', 'Р°', 'РІ', 'Рё', 'Р»', 'Рј', 'РЅ', 'Рѕ', 'Рї', 'СЂ', 'СЃ', 'С‚', 'Сѓ', 'С„', 'С…', 'С†', 'С‡', 'С€', 'С‰', 'СЉ', 'С‹', 'СЊ', 'СЌ', 'СЋ', 'СЏ']
-    broken_count = sum(1 for char in text if char in broken_chars)
+    # Расширенный список "битых" символов
+    broken_patterns = [
+        'Рќ', 'Рµ', 'Рґ', 'Рѕ', 'С‚', 'Р°', 'С‚Рѕ', 'С‡РЅРѕ', 'РїСЂР°РІ', 
+        'РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ', 'РЅР°', 'РёРЅС„РѕСЂРјР°С†РёРѕРЅРЅСѓСЋ', 'Р±Р°Р·Сѓ'
+    ]
+    broken_count = sum(1 for pattern in broken_patterns if pattern in text)
     cyrillic_count = sum(1 for char in text if '\u0400' <= char <= '\u04FF')
     
+    # Также проверяем на отдельные "битые" символы
+    broken_chars = ['Р', 'С']
+    broken_chars_count = sum(1 for char in text if char in broken_chars)
+    
     # Если есть "битые" символы и нет правильной кириллицы - пытаемся исправить
-    if broken_count > 0 and cyrillic_count == 0:
+    if (broken_count > 0 or broken_chars_count > 3) and cyrillic_count == 0:
         try:
             # Кодируем обратно в байты как UTF-8, затем декодируем как CP1251
             fixed_bytes = text.encode('utf-8', errors='replace')
             fixed_text = fixed_bytes.decode('cp1251', errors='replace')
             fixed_cyrillic = sum(1 for char in fixed_text if '\u0400' <= char <= '\u04FF')
             if fixed_cyrillic > 0:
-                logger.info(f"Fixed broken encoding: {broken_count} broken chars -> {fixed_cyrillic} cyrillic chars")
+                logger.info(f"Fixed broken encoding: {broken_count} broken patterns, {broken_chars_count} broken chars -> {fixed_cyrillic} cyrillic chars")
+                return fixed_text
+        except (UnicodeEncodeError, UnicodeDecodeError, LookupError) as e:
+            logger.debug(f"Failed to fix broken encoding: {e}")
+            pass
+        
+        # Пробуем koi8-r
+        try:
+            fixed_bytes = text.encode('utf-8', errors='replace')
+            fixed_text = fixed_bytes.decode('koi8-r', errors='replace')
+            fixed_cyrillic = sum(1 for char in fixed_text if '\u0400' <= char <= '\u04FF')
+            if fixed_cyrillic > 0:
+                logger.info(f"Fixed broken encoding with koi8-r: {fixed_cyrillic} cyrillic chars")
                 return fixed_text
         except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
             pass
@@ -188,6 +225,12 @@ class RACClient:
                 # Декодируем ошибку с правильной кодировкой
                 # Сначала пробуем stderr, если пусто - пробуем stdout
                 error_bytes = result.stderr if result.stderr else result.stdout
+                
+                # Если ошибка уже пришла как строка (не байты), сразу исправляем кодировку
+                if isinstance(error_bytes, str):
+                    error_text = fix_broken_encoding(error_bytes)
+                    logger.error(f"RAC command failed (string error): {error_text}")
+                    return {'success': False, 'error': error_text}
                 
                 # Логируем сырые байты для отладки (первые 200 байт)
                 if error_bytes:

@@ -132,33 +132,63 @@ echo -e "${GREEN}✓ Суперпользователь и профиль соз
 
 # Создание systemd сервиса
 echo -e "${YELLOW}Создание systemd сервиса...${NC}"
-cat > "$SERVICE_FILE" << EOF
+
+# Проверяем, есть ли готовый файл сервиса в проекте
+if [ -f "$PROJECT_DIR/django-landysh.service" ]; then
+    echo -e "${YELLOW}Используется готовый файл сервиса из проекта...${NC}"
+    cp "$PROJECT_DIR/django-landysh.service" "$SERVICE_FILE"
+else
+    # Создаем файл сервиса с правильными настройками локали
+    cat > "$SERVICE_FILE" << EOF
 [Unit]
-Description=Django Landysh App
+Description=Django Landysh Application
 After=network.target
 
 [Service]
 Type=simple
 User=root
 
-# Явно указываем русскую локаль для systemd
-Environment="LANG=ru_RU.utf8"
-Environment="LC_ALL=ru_RU.utf8"
-Environment="LC_CTYPE=ru_RU.utf8"
-Environment="LC_MESSAGES=ru_RU.utf8"
+# Критически важные настройки локали для корректной работы с RAC
+# Устанавливаем русскую локаль UTF-8 для всех категорий
+Environment="LANG=ru_RU.UTF-8"
+Environment="LC_ALL=ru_RU.UTF-8"
+Environment="LC_CTYPE=ru_RU.UTF-8"
+Environment="LC_MESSAGES=ru_RU.UTF-8"
+Environment="LC_NUMERIC=ru_RU.UTF-8"
+Environment="LC_TIME=ru_RU.UTF-8"
+Environment="LC_COLLATE=ru_RU.UTF-8"
+Environment="LC_MONETARY=ru_RU.UTF-8"
+Environment="LC_PAPER=ru_RU.UTF-8"
+Environment="LC_NAME=ru_RU.UTF-8"
+Environment="LC_ADDRESS=ru_RU.UTF-8"
+Environment="LC_TELEPHONE=ru_RU.UTF-8"
+Environment="LC_MEASUREMENT=ru_RU.UTF-8"
+Environment="LC_IDENTIFICATION=ru_RU.UTF-8"
 
-# Для Python
+# Настройки для Python - принудительно UTF-8
 Environment="PYTHONIOENCODING=utf-8"
 Environment="PYTHONUTF8=1"
+Environment="PYTHONLEGACYWINDOWSSTDIO=utf-8"
 
+# Настройки для корректной работы с subprocess и RAC
+# Убеждаемся, что все команды выполняются с правильной локалью
+Environment="LANGUAGE=ru_RU:ru"
+Environment="CHARSET=UTF-8"
+
+# Рабочая директория
 WorkingDirectory=$PROJECT_DIR
+
+# Команда запуска
 ExecStart=$VENV_DIR/bin/python manage.py runserver 0.0.0.0:8000
+
+# Перезапуск при сбое
 Restart=on-failure
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
+fi
 
 echo -e "${GREEN}✓ Systemd сервис создан${NC}"
 

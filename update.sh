@@ -90,6 +90,14 @@ if python manage.py help collectstatic &> /dev/null; then
     echo -e "${GREEN}✓ Статические файлы собраны${NC}"
 fi
 
+# Обновление файла systemd сервиса, если он изменился в проекте
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+if [ -f "$PROJECT_DIR/django-landysh.service" ]; then
+    echo -e "${YELLOW}Обновление файла systemd сервиса...${NC}"
+    cp "$PROJECT_DIR/django-landysh.service" "$SERVICE_FILE"
+    echo -e "${GREEN}✓ Файл сервиса обновлен${NC}"
+fi
+
 # Перезагрузка systemd (на случай изменения конфигурации сервиса)
 echo -e "${YELLOW}Перезагрузка systemd...${NC}"
 systemctl daemon-reload

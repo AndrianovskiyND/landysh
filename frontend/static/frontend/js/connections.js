@@ -719,6 +719,7 @@ async function deleteSelectedConnections(connections) {
             groupsInfo[groupId] = {
                 name: conn.group_name,
                 members_count: conn.group_members_count,
+                total_connections_in_group: conn.user_connections_in_group || 0, // Используем поле из backend
                 connections: []
             };
         }
@@ -733,8 +734,7 @@ async function deleteSelectedConnections(connections) {
     const groupsToLeave = [];
     
     Object.values(groupsInfo).forEach(groupInfo => {
-        const groupId = groupInfo.connections[0].group_id;
-        const totalConnectionsInGroup = connections.filter(c => c.group_id === groupId).length;
+        const totalConnectionsInGroup = groupInfo.total_connections_in_group; // Используем значение из backend
         const selectedInGroup = groupInfo.connections.length;
         
         // Если удаляются все подключения группы
@@ -775,12 +775,12 @@ async function deleteSelectedConnections(connections) {
     const protectedConnectionIds = new Set(); // ID подключений, которые НЕ нужно удалять
     
     Object.values(groupsInfo).forEach(groupInfo => {
-        const groupId = groupInfo.connections[0].group_id;
-        const totalConnectionsInGroup = connections.filter(c => c.group_id === groupId).length;
+        const totalConnectionsInGroup = groupInfo.total_connections_in_group; // Используем значение из backend
         const selectedInGroup = groupInfo.connections.length;
         
         // Если удаляются все подключения группы и в группе 2+ участников
         if (selectedInGroup === totalConnectionsInGroup && groupInfo.members_count > 1) {
+            const groupId = groupInfo.connections[0].group_id; // Получаем ID группы из первого подключения
             const connectionIds = groupInfo.connections.map(c => c.id);
             groupsToProtect.push({
                 groupId: groupId,

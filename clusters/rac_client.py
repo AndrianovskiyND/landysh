@@ -97,11 +97,32 @@ class RACClient:
         # Формируем базовые аргументы
         cmd_args = [self.rac_path] + args + [connection_str]
         
-        # Добавляем аутентификацию если есть
-        if self.server_connection.cluster_admin:
-            cmd_args.insert(1, f'--cluster-user={self.server_connection.cluster_admin}')
-            if self.server_connection.cluster_password:
-                cmd_args.insert(2, f'--cluster-pwd={self.server_connection.cluster_password}')
+        # Добавляем аутентификацию только для команд, которые её поддерживают
+        # Команда 'cluster list' НЕ поддерживает параметры --cluster-user и --cluster-pwd
+        # Проверяем, не является ли это командой 'cluster list'
+        is_cluster_list = len(args) >= 2 and args[0] == 'cluster' and args[1] == 'list'
+        
+        # Добавляем аутентификацию только если это НЕ cluster list
+        if not is_cluster_list and self.server_connection.cluster_admin:
+            # Параметры --cluster-user и --cluster-pwd должны идти ПОСЛЕ --cluster=...
+            # Ищем позицию параметра --cluster= в аргументах
+            cluster_param_index = None
+            for i, arg in enumerate(cmd_args):
+                if arg.startswith('--cluster='):
+                    cluster_param_index = i
+                    break
+            
+            if cluster_param_index is not None:
+                # Вставляем после --cluster=
+                insert_pos = cluster_param_index + 1
+                cmd_args.insert(insert_pos, f'--cluster-user={self.server_connection.cluster_admin}')
+                if self.server_connection.cluster_password:
+                    cmd_args.insert(insert_pos + 1, f'--cluster-pwd={self.server_connection.cluster_password}')
+            else:
+                # Если параметра --cluster= нет, вставляем в начало (для обратной совместимости)
+                cmd_args.insert(1, f'--cluster-user={self.server_connection.cluster_admin}')
+                if self.server_connection.cluster_password:
+                    cmd_args.insert(2, f'--cluster-pwd={self.server_connection.cluster_password}')
         
         # Логируем маскированную команду
         masked_cmd = self._mask_sensitive_data(' '.join(cmd_args))

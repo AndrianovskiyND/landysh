@@ -30,7 +30,20 @@
 <script src="{% static 'frontend/js/statistics.js' %}"></script>
 <script src="{% static 'frontend/js/users.js' %}"></script>
 <script src="{% static 'frontend/js/groups.js' %}"></script>
-<script src="{% static 'frontend/js/connections.js' %}"></script>
+
+{# Модули для работы с подключениями (разбиты на части для лучшей поддерживаемости) #}
+<script src="{% static 'frontend/js/connections-utils.js' %}"></script>
+<script src="{% static 'frontend/js/connections-core.js' %}"></script>
+<script src="{% static 'frontend/js/connections-clusters.js' %}"></script>
+<script src="{% static 'frontend/js/connections-infobases.js' %}"></script>
+<script src="{% static 'frontend/js/connections-servers.js' %}"></script>
+<script src="{% static 'frontend/js/connections-sessions.js' %}"></script>
+<script src="{% static 'frontend/js/connections-processes.js' %}"></script>
+<script src="{% static 'frontend/js/connections-managers.js' %}"></script>
+<script src="{% static 'frontend/js/connections-agents.js' %}"></script>
+<script src="{% static 'frontend/js/connections-admins.js' %}"></script>
+<script src="{% static 'frontend/js/connections.js' %}"></script> {# Основной файл с остальным функционалом (модальные окна, таблицы, детальные функции) #}
+
 <script src="{% static 'frontend/js/rules.js' %}"></script>
 <script src="{% static 'frontend/js/settings.js' %}"></script>
 <script src="{% static 'frontend/js/app.js' %}"></script>

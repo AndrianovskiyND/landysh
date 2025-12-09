@@ -1,1728 +1,68 @@
 /**
  * Управление подключениями - Ландыш
  * Работа с подключениями к серверам 1С
+ * 
+ * Примечание: Функции для работы с подключениями перенесены в connections-core.js:
+ * - loadConnections
+ * - renderConnectionsTree
+ * - updateConnectionSelection
+ * - toggleSelectAllConnections
+ * - openConnectionModal
+ * - openConnectionEditModal
+ * - toggleAgentAuthFields
+ * - saveConnection
+ * - closeConnectionModal
+ * - createConnection
+ * - deleteSelectedConnections
+ * 
+ * Переменные connectionSelectionMode и selectedConnections также определены в connections-core.js
  */
 
 // ============================================
-// Загрузка и отображение подключений
+// Функции для работы с информационными базами, серверами, сеансами и процессами
 // ============================================
 
-/**
- * Загрузить список подключений
- */
-async function loadConnections() {
-    try {
-        const response = await fetch('/api/clusters/connections/');
-        const data = await response.json();
-        
-        if (data.connections) {
-            renderConnectionsTree(data.connections);
-        }
-    } catch (error) {
-        showNotification('Ошибка загрузки подключений: ' + error.message, true);
-    }
-}
+// Примечание: Функции для работы с инфобазами находятся в connections-infobases.js
+// Примечание: Функции для работы с серверами находятся в connections-servers.js
+// Примечание: Функции для работы с сеансами и процессами пока остаются здесь
+// (модули connections-sessions.js и connections-processes.js еще не заполнены)
 
-// Режим выбора подключений для массового удаления
-let connectionSelectionMode = false;
-let selectedConnections = new Set();
-
-/**
- * Отрисовать дерево подключений в боковой панели
- * @param {Array} connections - Массив подключений
- */
-function renderConnectionsTree(connections) {
-    const treeContainer = document.getElementById('connectionsTree');
-    if (!treeContainer) return;
-    
-    // Очищаем контейнер, но сохраняем кнопку выбора
-    const existingButton = treeContainer.querySelector('.connection-select-button');
-    treeContainer.innerHTML = '';
-    
-    // Добавляем кнопку выбора/отмены выбора
-    const selectButton = document.createElement('button');
-    selectButton.className = 'btn btn-secondary connection-select-button';
-    selectButton.style.width = '100%';
-    selectButton.style.marginBottom = '1rem';
-    selectButton.textContent = connectionSelectionMode ? 'Отменить выбор' : 'Выбрать для удаления';
-    selectButton.onclick = () => {
-        connectionSelectionMode = !connectionSelectionMode;
-        selectedConnections.clear();
-        renderConnectionsTree(connections);
-    };
-    treeContainer.appendChild(selectButton);
-    
-    // Если режим выбора - добавляем чекбокс "Выбрать все"
-    if (connectionSelectionMode) {
-        const selectAllContainer = document.createElement('div');
-        selectAllContainer.style.marginBottom = '0.5rem';
-        selectAllContainer.innerHTML = `
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem;">
-                <input type="checkbox" id="selectAllConnections" onchange="toggleSelectAllConnections()">
-                <span>Выбрать все</span>
-            </label>
-        `;
-        treeContainer.appendChild(selectAllContainer);
-        
-        // Кнопка удаления выбранных
-        const deleteButton = document.createElement('button');
-        deleteButton.className = 'btn btn-danger';
-        deleteButton.style.width = '100%';
-        deleteButton.style.marginBottom = '1rem';
-        deleteButton.textContent = `Удалить выбранные (0)`;
-        deleteButton.id = 'deleteSelectedConnections';
-        deleteButton.onclick = () => deleteSelectedConnections(connections);
-        deleteButton.disabled = true;
-        treeContainer.appendChild(deleteButton);
-    }
-    
-    connections.forEach(conn => {
-        const node = document.createElement('div');
-        node.className = 'tree-node';
-        node.style.position = 'relative';
-        
-        if (connectionSelectionMode) {
-            // Режим выбора - показываем чекбокс
-            node.innerHTML = `
-                <label style="display: flex; align-items: center; gap: 0.75rem; width: 100%; cursor: pointer;">
-                    <input type="checkbox" class="connection-checkbox" value="${conn.id}" 
-                           onchange="updateConnectionSelection(${conn.id}, this.checked)">
-                    <div style="flex: 1;">
-                        <strong>${conn.display_name}</strong>
-                        <div style="font-size: 0.8rem; color: #666;">${conn.server_host}:${conn.ras_port}</div>
-                    </div>
-                </label>
-            `;
-        } else {
-            // Обычный режим - показываем кнопки редактирования
-            node.innerHTML = `
-                <div style="flex: 1; cursor: pointer;">
-                    <strong>${conn.display_name}</strong>
-                    <div style="font-size: 0.8rem; color: #666;">${conn.server_host}:${conn.ras_port}</div>
-                </div>
-                <button class="btn btn-sm" onclick="event.stopPropagation(); openConnectionEditModal(${conn.id})" 
-                        style="padding: 0.25rem 0.5rem; margin: 0; background: transparent; border: none; color: #666; cursor: pointer; font-size: 1rem;"
-                        title="Редактировать">
-                    ⚙️
-                </button>
-            `;
-            node.style.display = 'flex';
-            node.style.alignItems = 'center';
-            node.style.justifyContent = 'space-between';
-            
-            // Клик на подключение - выполняет команду
-            const connectionPart = node.querySelector('div');
-            connectionPart.onclick = () => loadConnectionData(conn.id, conn.display_name);
-        }
-        
-        treeContainer.appendChild(node);
-    });
-}
-
-/**
- * Обновить выбор подключения
- */
-function updateConnectionSelection(connectionId, isSelected) {
-    if (isSelected) {
-        selectedConnections.add(connectionId);
-    } else {
-        selectedConnections.delete(connectionId);
-    }
-    
-    // Обновляем чекбокс "Выбрать все"
-    const selectAll = document.getElementById('selectAllConnections');
-    if (selectAll) {
-        const allCheckboxes = document.querySelectorAll('.connection-checkbox');
-        selectAll.checked = allCheckboxes.length > 0 && Array.from(allCheckboxes).every(cb => cb.checked);
-    }
-    
-    // Обновляем кнопку удаления
-    const deleteButton = document.getElementById('deleteSelectedConnections');
-    if (deleteButton) {
-        const count = selectedConnections.size;
-        deleteButton.textContent = `Удалить выбранные (${count})`;
-        deleteButton.disabled = count === 0;
-    }
-}
-
-/**
- * Выбрать/снять выбор всех подключений
- */
-function toggleSelectAllConnections() {
-    const selectAll = document.getElementById('selectAllConnections');
-    if (!selectAll) return;
-    
-    const checkboxes = document.querySelectorAll('.connection-checkbox');
-    
-    checkboxes.forEach(cb => {
-        const connectionId = parseInt(cb.value);
-        cb.checked = selectAll.checked;
-        if (selectAll.checked) {
-            selectedConnections.add(connectionId);
-        } else {
-            selectedConnections.delete(connectionId);
-        }
-    });
-    
-    // Обновляем кнопку удаления
-    const deleteButton = document.getElementById('deleteSelectedConnections');
-    if (deleteButton) {
-        const count = selectedConnections.size;
-        deleteButton.textContent = `Удалить выбранные (${count})`;
-        deleteButton.disabled = count === 0;
-    }
-}
-
-// ============================================
-// Модальное окно для добавления/редактирования подключения
-// ============================================
-
-/**
- * Открыть модальное окно для добавления подключения
- */
-function openConnectionModal() {
-    openConnectionEditModal(null);
-}
-
-/**
- * Открыть модальное окно для редактирования подключения
- * @param {number|null} connectionId - ID подключения (null для создания нового)
- */
-async function openConnectionEditModal(connectionId) {
-    let connectionData = null;
-    
-    // Если редактирование - загружаем данные подключения
-    if (connectionId) {
-        try {
-            const response = await fetch('/api/clusters/connections/');
-            const data = await response.json();
-            connectionData = data.connections.find(c => c.id === connectionId);
-        } catch (error) {
-            showNotification('❌ Ошибка загрузки данных подключения: ' + error.message, true);
-            return;
-        }
-    }
-    
-    const modalHtml = `
-        <div class="modal-overlay" id="connectionModal">
-            <div class="modal" style="max-width: 600px;">
-                <div class="modal-header">
-                    <h3>${connectionId ? '⚙️ Редактирование подключения' : '➕ Добавить подключение'}</h3>
-                    <button class="modal-close-btn" onclick="closeConnectionModal()">×</button>
-                </div>
-                <div class="modal-body">
-                    <!-- Основные настройки -->
-                    <div class="info-card" style="margin-bottom: 1rem;">
-                        <h4 style="border-bottom-color: var(--primary-color);">🔧 Основные настройки</h4>
-                        <div class="edit-form">
-                            <div class="form-row">
-                                <label for="modalDisplayName">Отображаемое имя *</label>
-                                <input type="text" id="modalDisplayName" value="${connectionData?.display_name || ''}" placeholder="Первый сервер проекта...">
-                            </div>
-                            <div class="form-row">
-                                <label for="modalServerHost">Сервер *</label>
-                                <input type="text" id="modalServerHost" value="${connectionData?.server_host || ''}" placeholder="server_ro01.com">
-                            </div>
-                            <div class="form-row">
-                                <label for="modalRasPort">Порт RAS *</label>
-                                <input type="number" id="modalRasPort" value="${connectionData?.ras_port || '1545'}" placeholder="1545">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Учетные данные агента кластера -->
-                    <div class="info-card" style="margin-bottom: 1rem;">
-                        <h4 style="border-bottom-color: var(--primary-color);">🤖 Агент кластера</h4>
-                        <div class="edit-form">
-                            <div class="form-row checkbox-row" style="margin-top: 0.5rem;">
-                                <input type="checkbox" id="modalUseAgentAuth" ${connectionData?.agent_user ? 'checked' : ''} onchange="toggleAgentAuthFields()">
-                                <label for="modalUseAgentAuth" style="font-weight: normal; text-transform: none; letter-spacing: normal;">Использовать УЗ агента кластера</label>
-                            </div>
-                            <div id="agentAuthFields" style="display: ${connectionData?.agent_user ? 'block' : 'none'};">
-                                <div class="form-row">
-                                    <label for="modalAgentUser">Логин агента</label>
-                                    <input type="text" id="modalAgentUser" value="${connectionData?.agent_user || ''}" placeholder="agent">
-                                </div>
-                                <div class="form-row">
-                                    <label for="modalAgentPassword">Пароль агента</label>
-                                    <input type="password" id="modalAgentPassword" value="" placeholder="••••••••">
-                                    <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">${connectionId ? 'Оставьте пустым, чтобы не изменять' : 'Введите пароль'}</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="closeConnectionModal()">Отмена</button>
-                    <button class="btn btn-primary" onclick="saveConnection(${connectionId || 'null'})">
-                        ${connectionId ? '💾 Сохранить изменения' : '➕ Создать'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const container = document.getElementById('modal-container');
-    container.insertAdjacentHTML('beforeend', modalHtml);
-    
-    // Инициализируем состояние полей УЗ при загрузке модального окна
-    if (connectionData?.agent_user) {
-        toggleAgentAuthFields();
-    }
-}
-
-/**
- * Переключить отображение полей УЗ админа кластера
- */
-function toggleClusterAuthFields() {
-    const checkbox = document.getElementById('modalUseClusterAuth');
-    const fieldsContainer = document.getElementById('clusterAuthFields');
-    const adminInput = document.getElementById('modalClusterAdmin');
-    const passwordInput = document.getElementById('modalClusterPassword');
-    
-    if (!checkbox || !fieldsContainer || !adminInput || !passwordInput) {
-        return;
-    }
-    
-    if (checkbox.checked) {
-        fieldsContainer.style.display = 'block';
-        adminInput.disabled = false;
-        passwordInput.disabled = false;
-    } else {
-        fieldsContainer.style.display = 'none';
-        adminInput.disabled = true;
-        passwordInput.disabled = true;
-        // Очищаем поля при скрытии
-        adminInput.value = '';
-        passwordInput.value = '';
-    }
-}
-
-/**
- * Переключить отображение полей УЗ агента кластера
- */
-function toggleAgentAuthFields() {
-    const checkbox = document.getElementById('modalUseAgentAuth');
-    const fieldsContainer = document.getElementById('agentAuthFields');
-    const agentUserInput = document.getElementById('modalAgentUser');
-    const agentPasswordInput = document.getElementById('modalAgentPassword');
-    
-    if (!checkbox || !fieldsContainer || !agentUserInput || !agentPasswordInput) {
-        return;
-    }
-    
-    if (checkbox.checked) {
-        fieldsContainer.style.display = 'block';
-        agentUserInput.disabled = false;
-        agentPasswordInput.disabled = false;
-    } else {
-        fieldsContainer.style.display = 'none';
-        agentUserInput.disabled = false;
-        agentPasswordInput.disabled = false;
-        // Очищаем поля при скрытии
-        agentUserInput.value = '';
-        agentPasswordInput.value = '';
-    }
-}
-
-/**
- * Сохранить подключение (создать или обновить)
- */
-async function saveConnection(connectionId) {
-    try {
-        const displayNameEl = document.getElementById('modalDisplayName');
-        const serverHostEl = document.getElementById('modalServerHost');
-        const rasPortEl = document.getElementById('modalRasPort');
-        
-        if (!displayNameEl || !serverHostEl || !rasPortEl) {
-            showNotification('❌ Ошибка: Не найдены элементы формы. Попробуйте обновить страницу.', true);
-            return;
-        }
-        
-        const displayName = displayNameEl.value;
-        const serverHost = serverHostEl.value;
-        const rasPort = rasPortEl.value;
-        const useAgentAuth = document.getElementById('modalUseAgentAuth')?.checked || false;
-        const agentUser = useAgentAuth ? (document.getElementById('modalAgentUser')?.value || '') : '';
-        const agentPassword = useAgentAuth ? (document.getElementById('modalAgentPassword')?.value || '') : '';
-    
-        if (!displayName || !serverHost || !rasPort) {
-            showNotification('❌ Заполните обязательные поля: Отображаемое имя, Сервер и Порт RAS', true);
-            return;
-        }
-        
-        const connectionData = {
-            display_name: displayName,
-            server_host: serverHost,
-            ras_port: parseInt(rasPort),
-            agent_user: useAgentAuth ? (agentUser || '') : ''
-        };
-        
-        // Пароль агента добавляем только если галочка включена и указан пароль
-        if (useAgentAuth && agentPassword) {
-            connectionData.agent_password = agentPassword;
-        } else if (!useAgentAuth && connectionId) {
-            // Если галочка снята при редактировании - очищаем пароль
-            connectionData.agent_password = '';
-        }
-        
-        const csrfToken = getCSRFToken();
-        if (!csrfToken) {
-            showNotification('❌ Ошибка: CSRF токен не найден. Обновите страницу.', true);
-            return;
-        }
-        
-        let response;
-        if (connectionId) {
-            // Обновление существующего подключения
-            response = await fetch(`/api/clusters/connections/update/${connectionId}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify(connectionData)
-            });
-        } else {
-            // Создание нового подключения - пароли добавляем только если галочки включены
-            if (useClusterAuth && clusterPassword) {
-                connectionData.cluster_password = clusterPassword;
-            }
-            if (useAgentAuth && agentPassword) {
-                connectionData.agent_password = agentPassword;
-            }
-            response = await fetch('/api/clusters/connections/create/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify(connectionData)
-            });
-        }
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification(`✅ Подключение ${connectionId ? 'обновлено' : 'создано'} успешно`);
-            closeConnectionModal();
-            loadConnections();
-            if (window.loadStatistics) {
-                loadStatistics();
-            }
-        } else {
-            showNotification('❌ Ошибка: ' + result.error, true);
-        }
-    } catch (error) {
-        showNotification('❌ Ошибка: ' + error.message, true);
-    }
-}
-
-function closeConnectionModal() {
-    const modal = document.getElementById('connectionModal');
-    if (modal) {
-        modal.classList.add('modal-closing');
-        setTimeout(() => modal.remove(), 200);
-    }
-}
+// Примечание: Все функции для работы с подключениями (renderConnectionsTree, updateConnectionSelection,
+// toggleSelectAllConnections, openConnectionModal, openConnectionEditModal, toggleAgentAuthFields,
+// saveConnection, closeConnectionModal) перенесены в connections-core.js
 
 // ============================================
 // Модальное окно для редактирования администратора кластера
 // ============================================
 
-/**
- * Получить ключ для localStorage для учетных данных администратора кластера
- */
-function getClusterAdminStorageKey(connectionId, clusterUuid) {
-    return `cluster_admin_${connectionId}_${clusterUuid}`;
-}
+// Примечание: Функции для работы с администратором кластера перенесены в connections-core.js:
+// - getClusterAdminStorageKey
+// - saveClusterAdminToStorage
+// - loadClusterAdminFromStorage
+// - openClusterAdminModal
+// - toggleClusterAdminAuthFields
+// - saveClusterAdminSettings
+// - closeClusterAdminModal
+// - getClusterAdminCredentials
+// - addClusterAdminParams
 
-/**
- * Сохранить учетные данные администратора кластера в localStorage
- */
-function saveClusterAdminToStorage(connectionId, clusterUuid, admin, password) {
-    const key = getClusterAdminStorageKey(connectionId, clusterUuid);
-    const data = {
-        admin: admin || '',
-        password: password || ''
-    };
-    localStorage.setItem(key, JSON.stringify(data));
-}
+// Примечание: Функция createConnection также перенесена в connections-core.js
 
-/**
- * Загрузить учетные данные администратора кластера из localStorage
- */
-function loadClusterAdminFromStorage(connectionId, clusterUuid) {
-    const key = getClusterAdminStorageKey(connectionId, clusterUuid);
-    const stored = localStorage.getItem(key);
-    if (stored) {
-        try {
-            return JSON.parse(stored);
-        } catch (e) {
-            return { admin: '', password: '' };
-        }
-    }
-    return { admin: '', password: '' };
-}
+// Примечание: Функция loadConnectionData перенесена в connections-clusters.js
 
-/**
- * Открыть модальное окно для редактирования администратора кластера
- */
-async function openClusterAdminModal(connectionId, clusterUuid, clusterName) {
-    // Загружаем сохраненные данные из localStorage
-    let storedData = loadClusterAdminFromStorage(connectionId, clusterUuid);
-    
-    // Если данных нет в localStorage, но есть в подключении - переносим для первого кластера
-    if (!storedData.admin) {
-        try {
-            const connResponse = await fetch('/api/clusters/connections/');
-            const connData = await connResponse.json();
-            const connection = connData.connections?.find(c => c.id === connectionId);
-            
-            // Проверяем, это первый кластер?
-            const clustersResponse = await fetch(`/api/clusters/clusters/${connectionId}/`);
-            const clustersData = await clustersResponse.json();
-            let clusters = clustersData.clusters || [];
-            if (clusters.length === 0 && clustersData.output) {
-                // Парсим вывод вручную если структурированных данных нет
-                clusters = parseClusterList(clustersData.output);
-            }
-            
-            // Если это первый кластер и в подключении есть администратор - переносим
-            if (clusters.length > 0 && clusters[0].uuid === clusterUuid && connection?.cluster_admin) {
-                storedData = {
-                    admin: connection.cluster_admin || '',
-                    password: '' // Пароль не хранится в подключении в открытом виде
-                };
-                // Сохраняем в localStorage
-                saveClusterAdminToStorage(connectionId, clusterUuid, storedData.admin, storedData.password);
-            }
-        } catch (error) {
-            console.error('Ошибка загрузки данных подключения:', error);
-        }
-    }
-    
-    const modalHtml = `
-        <div class="modal-overlay" id="clusterAdminModal">
-            <div class="modal" style="max-width: 500px;">
-                <div class="modal-header">
-                    <h3>⚙️ Администратор кластера: ${escapeHtml(clusterName)}</h3>
-                    <button class="modal-close-btn" onclick="closeClusterAdminModal()">×</button>
-                </div>
-                <div class="modal-body">
-                    <div class="info-card" style="margin-bottom: 1rem;">
-                        <h4 style="border-bottom-color: var(--secondary-color);">👤 Администратор кластера</h4>
-                        <div class="edit-form">
-                            <div class="form-row checkbox-row" style="margin-top: 0.5rem;">
-                                <input type="checkbox" id="clusterAdminUseAuth" ${storedData.admin ? 'checked' : ''} onchange="toggleClusterAdminAuthFields()">
-                                <label for="clusterAdminUseAuth" style="font-weight: normal; text-transform: none; letter-spacing: normal;">Использовать УЗ админа кластера</label>
-                            </div>
-                            <div id="clusterAdminAuthFields" style="display: ${storedData.admin ? 'block' : 'none'};">
-                                <div class="form-row">
-                                    <label for="clusterAdminName">Логин кластера</label>
-                                    <input type="text" id="clusterAdminName" value="${storedData.admin || ''}" placeholder="admin">
-                                </div>
-                                <div class="form-row">
-                                    <label for="clusterAdminPassword">Пароль кластера</label>
-                                    <input type="password" id="clusterAdminPassword" value="" placeholder="••••••••">
-                                    <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Оставьте пустым, чтобы не изменять</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="closeClusterAdminModal()">Отмена</button>
-                    <button class="btn btn-primary" onclick="saveClusterAdminSettings(${connectionId}, '${clusterUuid}')">
-                        💾 Сохранить
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const container = document.getElementById('modal-container');
-    container.insertAdjacentHTML('beforeend', modalHtml);
-    
-    // Инициализируем состояние полей при загрузке
-    if (storedData.admin) {
-        toggleClusterAdminAuthFields();
-    }
-}
+// Примечание: Функции parseClusterList, escapeHtml, formatRACOutput перенесены в connections-utils.js
 
-/**
- * Переключить отображение полей УЗ админа кластера
- */
-function toggleClusterAdminAuthFields() {
-    const checkbox = document.getElementById('clusterAdminUseAuth');
-    const fieldsContainer = document.getElementById('clusterAdminAuthFields');
-    const adminInput = document.getElementById('clusterAdminName');
-    const passwordInput = document.getElementById('clusterAdminPassword');
-    
-    if (!checkbox || !fieldsContainer || !adminInput || !passwordInput) {
-        return;
-    }
-    
-    if (checkbox.checked) {
-        fieldsContainer.style.display = 'block';
-        adminInput.disabled = false;
-        passwordInput.disabled = false;
-    } else {
-        fieldsContainer.style.display = 'none';
-        adminInput.disabled = false;
-        passwordInput.disabled = false;
-        // Очищаем поля при скрытии
-        adminInput.value = '';
-        passwordInput.value = '';
-    }
-}
+// Примечание: Функции parseClusterList, escapeHtml, formatRACOutput перенесены в connections-utils.js
 
-/**
- * Сохранить учетные данные администратора кластера
- */
-function saveClusterAdminSettings(connectionId, clusterUuid) {
-    const useAuth = document.getElementById('clusterAdminUseAuth')?.checked || false;
-    
-    // Если чекбокс выключен - просто очищаем данные
-    if (!useAuth) {
-        saveClusterAdminToStorage(connectionId, clusterUuid, '', '');
-        showNotification('✅ Учетные данные администратора кластера очищены', false);
-        closeClusterAdminModal();
-        
-        // Перезагружаем данные кластера, чтобы применить изменения
-        if (window._currentConnectionId == connectionId) {
-            loadConnectionData(connectionId);
-        }
-        return;
-    }
-    
-    // Если чекбокс включен - проверяем, что логин заполнен
-    const admin = document.getElementById('clusterAdminName')?.value || '';
-    const password = document.getElementById('clusterAdminPassword')?.value || '';
-    
-    if (!admin) {
-        showNotification('❌ Логин обязателен для заполнения', true);
-        return;
-    }
-    
-    // Сохраняем в localStorage
-    saveClusterAdminToStorage(connectionId, clusterUuid, admin, password);
-    showNotification('✅ Учетные данные администратора кластера сохранены', false);
-    
-    closeClusterAdminModal();
-    
-    // Перезагружаем данные кластера, чтобы применить изменения
-    if (window._currentConnectionId == connectionId) {
-        loadConnectionData(connectionId);
-    }
-}
+// Примечание: Функция deleteSelectedConnections перенесена в connections-core.js
 
-/**
- * Закрыть модальное окно администратора кластера
- */
-function closeClusterAdminModal() {
-    const modal = document.getElementById('clusterAdminModal');
-    if (modal) {
-        modal.classList.add('modal-closing');
-        setTimeout(() => modal.remove(), 200);
-    }
-}
+// Примечание: Функция setupClusterEventHandlers перенесена в connections-clusters.js
 
-/**
- * Получить учетные данные администратора кластера для использования в RAC командах
- */
-function getClusterAdminCredentials(connectionId, clusterUuid) {
-    return loadClusterAdminFromStorage(connectionId, clusterUuid);
-}
+// Примечание: Функции toggleClusterNode, toggleSectionNode, loadSectionData, loadClusterSection 
+// перенесены в connections-clusters.js
 
-/**
- * Добавить параметры администратора кластера к URL или body запроса
- */
-function addClusterAdminParams(url, connectionId, clusterUuid, method = 'GET') {
-    const credentials = getClusterAdminCredentials(connectionId, clusterUuid);
-    
-    if (method === 'GET') {
-        // Для GET запросов добавляем параметры в URL
-        if (!credentials.admin) {
-            return url; // Если нет данных - возвращаем URL как есть
-        }
-        const urlObj = new URL(url, window.location.origin);
-        urlObj.searchParams.set('cluster_admin', credentials.admin);
-        if (credentials.password) {
-            urlObj.searchParams.set('cluster_password', credentials.password);
-        }
-        // Возвращаем только путь с параметрами (без origin)
-        return urlObj.pathname + urlObj.search;
-    } else {
-        // Для POST/PUT/DELETE запросов возвращаем объект для добавления в body
-        const params = {};
-        if (credentials.admin) {
-            params.cluster_admin = credentials.admin;
-            if (credentials.password) {
-                params.cluster_password = credentials.password;
-            }
-        }
-        return params;
-    }
-}
-
-// ============================================
-// Создание подключения (старая функция - оставлена для совместимости)
-// ============================================
-
-/**
- * Создать новое подключение (устаревшая функция)
- */
-async function createConnection() {
-    const displayName = document.getElementById('displayName')?.value;
-    const serverHost = document.getElementById('serverHost')?.value;
-    const rasPort = document.getElementById('rasPort')?.value;
-    const clusterAdmin = document.getElementById('clusterAdmin')?.value;
-    const clusterPassword = document.getElementById('clusterPassword')?.value;
-    
-    if (!displayName || !serverHost || !rasPort) {
-        showNotification('Заполните обязательные поля: Отображаемое имя, Сервер и Порт RAS', true);
-        return;
-    }
-    
-    const connectionData = {
-        display_name: displayName,
-        server_host: serverHost,
-        ras_port: parseInt(rasPort),
-        cluster_admin: clusterAdmin || '',
-        cluster_password: clusterPassword || ''
-    };
-    
-    try {
-        const response = await fetch('/api/clusters/connections/create/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCSRFToken()
-            },
-            body: JSON.stringify(connectionData)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification('✅ Подключение успешно создано');
-            closeConnectionModal();
-            loadConnections();
-            if (window.loadStatistics) {
-                loadStatistics();
-            }
-        } else {
-            showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), true);
-        }
-    } catch (error) {
-        console.error('Ошибка сохранения подключения:', error);
-        showNotification('❌ Ошибка сохранения подключения: ' + (error.message || 'Неизвестная ошибка'), true);
-    }
-}
-
-// ============================================
-// Работа с данными подключения
-// ============================================
-
-/**
- * Загрузить данные подключения и выполнить команду RAC
- * @param {number} connectionId - ID подключения
- */
-async function loadConnectionData(connectionId, connectionName = null) {
-    const contentArea = document.getElementById('contentArea');
-    contentArea.innerHTML = '<div style="text-align: center; padding: 2rem;"><p>⏳ Загрузка кластеров...</p></div>';
-    
-    // Сохраняем connectionId для использования в контекстном меню
-    window._currentConnectionId = connectionId;
-    
-    // Если имя подключения не передано, получаем его из API
-    if (!connectionName) {
-        try {
-            const connResponse = await fetch('/api/clusters/connections/');
-            const connData = await connResponse.json();
-            if (connData.connections) {
-                const connection = connData.connections.find(c => c.id === connectionId);
-                if (connection) {
-                    connectionName = connection.display_name;
-                }
-            }
-        } catch (e) {
-            console.error('Ошибка загрузки имени подключения:', e);
-        }
-    }
-    
-    // Если имя всё ещё не найдено, используем значение по умолчанию
-    const displayConnectionName = connectionName || `Подключение ${connectionId}`;
-    
-    try {
-        const response = await fetch(`/api/clusters/clusters/${connectionId}/`);
-        const data = await response.json();
-        
-        if (data.success) {
-            // Используем структурированные данные если есть, иначе парсим вывод
-            let clusters = data.clusters || [];
-            
-            if (clusters.length === 0 && data.output) {
-                // Парсим вывод вручную если структурированных данных нет
-                clusters = parseClusterList(data.output);
-            }
-            
-            // Отображаем иерархическое дерево с подразделами
-            // Кнопка регистрации всегда видна, даже если кластеров нет
-            let clustersHTML = `
-                <div class="info-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h4 style="margin: 0;">📊 Кластеры: ${escapeHtml(displayConnectionName)}</h4>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn btn-secondary" onclick="showAgentsTable(${connectionId})">
-                                Агенты
-                            </button>
-                            <button class="btn btn-primary" onclick="openRegisterClusterModal(${connectionId})">
-                                + Регистрация нового кластера
-                            </button>
-                        </div>
-                    </div>
-            `;
-            
-            if (clusters.length === 0) {
-                clustersHTML += `
-                    <div style="padding: 1rem; text-align: center; color: #666;">
-                        <p>Кластеры не найдены</p>
-                    </div>
-                `;
-            } else {
-                clustersHTML += `<div class="clusters-tree">`;
-                
-                clusters.forEach((cluster, index) => {
-                const clusterName = cluster.name || `Кластер ${index + 1}`;
-                const clusterUuid = cluster.uuid || '';
-                const clusterId = `cluster-${connectionId}-${clusterUuid}`;
-                
-                clustersHTML += `
-                    <div class="cluster-tree-node" data-cluster-id="${clusterId}">
-                        <div class="cluster-header" 
-                             data-connection-id="${connectionId}" 
-                             data-cluster-uuid="${clusterUuid}"
-                             data-cluster-name="${escapeHtml(clusterName)}">
-                            <span class="tree-toggle" onclick="toggleClusterNode('${clusterId}')">▶</span>
-                            <span class="cluster-name">📊 ${escapeHtml(clusterName)}</span>
-                            <div style="margin-left: auto; display: flex; gap: 0.25rem;">
-                                <button class="btn btn-sm" 
-                                        onclick="event.stopPropagation(); openClusterAdminModal(${connectionId}, '${clusterUuid}', '${escapeHtml(clusterName).replace(/'/g, "\\'")}')"
-                                        style="padding: 0.25rem 0.5rem; font-size: 0.8rem; background: transparent; border: none; color: #666; cursor: pointer;"
-                                        title="Настройки администратора кластера">
-                                    ⚙️
-                                </button>
-                                <button class="btn btn-sm btn-danger" 
-                                        onclick="event.stopPropagation(); deleteCluster(${connectionId}, '${clusterUuid}', '${escapeHtml(clusterName).replace(/'/g, "\\'")}')"
-                                        style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">
-                                    🗑️
-                                </button>
-                            </div>
-                        </div>
-                        <div class="cluster-children" id="${clusterId}-children" style="display: none;">
-                            <div class="tree-item-section" data-section="infobases" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
-                                <span class="tree-toggle-section" data-section-id="infobases-${clusterId}">▶</span>
-                                <span class="tree-icon">📁</span>
-                                <span>Информационные базы</span>
-                            </div>
-                            <div class="tree-section-children" id="infobases-${clusterId}-children" style="display: none; margin-left: 1.5rem;">
-                                <div style="padding: 0.5rem; color: #666; font-style: italic;">Загрузка...</div>
-                            </div>
-                            <div class="tree-item-section" data-section="servers" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
-                                <span class="tree-toggle-section" data-section-id="servers-${clusterId}">▶</span>
-                                <span class="tree-icon">⚙️</span>
-                                <span>Рабочие серверы</span>
-                            </div>
-                            <div class="tree-section-children" id="servers-${clusterId}-children" style="display: none; margin-left: 1.5rem;">
-                                <div style="padding: 0.5rem; color: #666; font-style: italic;">Загрузка...</div>
-                            </div>
-                            <div class="tree-item-section" data-section="admins" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}"
-                                 oncontextmenu="showAdminsContextMenu(event, ${connectionId}, '${clusterUuid}'); return false;"
-                                 style="cursor: pointer;">
-                                <span class="tree-toggle-section" data-section-id="admins-${clusterId}">▶</span>
-                                <span class="tree-icon">👥</span>
-                                <span>Администраторы</span>
-                            </div>
-                            <div class="tree-section-children" id="admins-${clusterId}-children" style="display: none; margin-left: 1.5rem;">
-                                <div style="padding: 0.5rem; color: #666; font-style: italic;">Загрузка...</div>
-                            </div>
-                            <div class="tree-item" data-section="managers" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
-                                <span class="tree-icon">🏢</span>
-                                <span>Менеджеры кластера</span>
-                            </div>
-                            <div class="tree-item" data-section="processes" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
-                                <span class="tree-icon">🔄</span>
-                                <span>Рабочие процессы</span>
-                            </div>
-                            <div class="tree-item" data-section="sessions" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
-                                <span class="tree-icon">💺</span>
-                                <span>Сеансы</span>
-                            </div>
-                            <div class="tree-item" data-section="locks" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
-                                <span class="tree-icon">🔒</span>
-                                <span>Блокировки</span>
-                            </div>
-                            <div class="tree-item" data-section="connections" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
-                                <span class="tree-icon">🔗</span>
-                                <span>Соединения</span>
-                            </div>
-                            <div class="tree-item" data-section="security" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
-                                <span class="tree-icon">🛡️</span>
-                                <span>Профили безопасности</span>
-                            </div>
-                            <div class="tree-item" data-section="counters" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
-                                <span class="tree-icon">📊</span>
-                                <span>Счетчики потребления ресурсов</span>
-                            </div>
-                            <div class="tree-item" data-section="limits" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
-                                <span class="tree-icon">⚖️</span>
-                                <span>Ограничения потребления ресурсов</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                });
-                
-                clustersHTML += `</div>`;
-            }
-            
-            clustersHTML += '</div>';
-            contentArea.innerHTML = clustersHTML;
-            
-            // Добавляем обработчики событий через делегирование
-            setupClusterEventHandlers();
-            
-        } else {
-            // Обработка ошибок
-            let errorMessage = data.error || 'Неизвестная ошибка';
-            
-            // Проверяем, не связана ли ошибка с путём к RAC
-            if (errorMessage.includes('No such file') || errorMessage.includes('не найден')) {
-                errorMessage = `Путь к RAC не найден: ${data.rac_path || 'не указан'}`;
-            } else if (errorMessage.includes('Connection') || errorMessage.includes('подключ')) {
-                errorMessage = `Ошибка подключения: ${errorMessage}`;
-            }
-            
-            contentArea.innerHTML = `
-                <div class="info-card" style="border-left: 4px solid var(--primary-color);">
-                    <h4 style="color: var(--primary-color);">❌ Ошибка выполнения команды</h4>
-                    <p style="color: #721c24; margin: 0;">${errorMessage}</p>
-                </div>
-            `;
-        }
-    } catch (error) {
-        contentArea.innerHTML = `
-            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
-                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
-                <p style="color: #721c24; margin: 0;">Ошибка подключения: ${error.message}</p>
-            </div>
-        `;
-    }
-}
-
-/**
- * Парсит вывод cluster list в структурированный формат
- */
-function parseClusterList(output) {
-    const clusters = [];
-    if (!output) return clusters;
-    
-    const lines = output.trim().split('\n');
-    let currentCluster = null;
-    
-    for (let line of lines) {
-        line = line.trim();
-        if (!line) {
-            if (currentCluster) {
-                clusters.push(currentCluster);
-                currentCluster = null;
-            }
-            continue;
-        }
-        
-        if (line.includes(':')) {
-            const parts = line.split(':', 2);
-            const key = parts[0].trim();
-            const value = parts[1] ? parts[1].trim() : '';
-            
-            if (key === 'cluster') {
-                if (currentCluster) {
-                    clusters.push(currentCluster);
-                }
-                currentCluster = {
-                    uuid: value,
-                    name: '',
-                    data: {}
-                };
-            } else if (currentCluster) {
-                currentCluster.data[key] = value;
-                if (key === 'name') {
-                    currentCluster.name = value.replace(/^"|"$/g, '');
-                }
-            }
-        }
-    }
-    
-    if (currentCluster) {
-        clusters.push(currentCluster);
-    }
-    
-    return clusters;
-}
-
-/**
- * Экранирует HTML для безопасного отображения
- */
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-/**
- * Форматирует вывод RAC для читаемого отображения
- */
-function formatRACOutput(output) {
-    if (!output) return 'Нет данных';
-    
-    // Простое форматирование - можно улучшить в будущем
-    return output.trim();
-}
-
-/**
- * Удалить выбранные подключения
- */
-async function deleteSelectedConnections(connections) {
-    const selectedIds = Array.from(selectedConnections);
-    
-    if (selectedIds.length === 0) {
-        showNotification('❌ Выберите подключения для удаления', true);
-        return;
-    }
-    
-    // Получаем информацию о выбранных подключениях
-    const selectedConnectionsData = connections.filter(c => selectedIds.includes(c.id));
-    
-    // Группируем по группам для формирования сообщения
-    const groupsInfo = {};
-    selectedConnectionsData.forEach(conn => {
-        const groupId = conn.group_id;
-        if (!groupsInfo[groupId]) {
-            groupsInfo[groupId] = {
-                name: conn.group_name,
-                members_count: conn.group_members_count,
-                total_connections_in_group: conn.user_connections_in_group || 0, // Используем поле из backend
-                connections: []
-            };
-        }
-        groupsInfo[groupId].connections.push(conn);
-    });
-    
-    // Формируем сообщение
-    let message = `Вы уверены, что хотите удалить ${selectedIds.length} подключений?\n\n`;
-    
-    // Проверяем сценарии для каждой группы
-    const groupsToDelete = [];
-    const groupsToLeave = [];
-    
-    Object.values(groupsInfo).forEach(groupInfo => {
-        const totalConnectionsInGroup = groupInfo.total_connections_in_group; // Используем значение из backend
-        const selectedInGroup = groupInfo.connections.length;
-        
-        // Если удаляются все подключения группы
-        if (selectedInGroup === totalConnectionsInGroup) {
-            if (groupInfo.members_count === 1) {
-                groupsToDelete.push(groupInfo.name);
-            } else {
-                groupsToLeave.push({
-                    name: groupInfo.name,
-                    remaining: groupInfo.members_count - 1
-                });
-            }
-        }
-    });
-    
-    if (groupsToDelete.length > 0) {
-        if (groupsToDelete.length === 1) {
-            message += `⚠️ При удалении всех подключений группа "${groupsToDelete[0]}" будет удалена.\n\n`;
-        } else {
-            message += `⚠️ При удалении всех подключений группы "${groupsToDelete.join('", "')}" будут удалены.\n\n`;
-        }
-    }
-    
-    if (groupsToLeave.length > 0) {
-        groupsToLeave.forEach(g => {
-            message += `⚠️ Вы удаляете все подключения и будете исключены из группы "${g.name}", в которой останется ${g.remaining} участников.\n`;
-        });
-        message += '\n';
-    }
-    
-    if (!confirm(message)) {
-        return;
-    }
-    
-    // Проверяем, есть ли группы, где удаляются все подключения с 2+ участниками
-    // В таких случаях нужно использовать специальную логику
-    const groupsToProtect = [];
-    const protectedConnectionIds = new Set(); // ID подключений, которые НЕ нужно удалять
-    
-    Object.values(groupsInfo).forEach(groupInfo => {
-        const totalConnectionsInGroup = groupInfo.total_connections_in_group; // Используем значение из backend
-        const selectedInGroup = groupInfo.connections.length;
-        
-        // Если удаляются все подключения группы и в группе 2+ участников
-        if (selectedInGroup === totalConnectionsInGroup && groupInfo.members_count > 1) {
-            const groupId = groupInfo.connections[0].group_id; // Получаем ID группы из первого подключения
-            const connectionIds = groupInfo.connections.map(c => c.id);
-            groupsToProtect.push({
-                groupId: groupId,
-                groupName: groupInfo.name,
-                connectionIds: connectionIds,
-                remainingMembers: groupInfo.members_count - 1
-            });
-            // Добавляем ID подключений в защищённый список
-            connectionIds.forEach(id => protectedConnectionIds.add(id));
-        }
-    });
-    
-    // Если есть защищённые группы, обрабатываем их отдельно ПЕРЕД удалением
-    if (groupsToProtect.length > 0) {
-        const csrfToken = getCSRFToken();
-        if (!csrfToken) {
-            showNotification('❌ Ошибка: CSRF токен не найден. Обновите страницу.', true);
-            return;
-        }
-        
-        // Для защищённых групп: не удаляем подключения, только исключаем пользователя
-        for (const protectedGroup of groupsToProtect) {
-            try {
-                // Исключаем пользователя из группы через API назначения
-                const removeResponse = await fetch('/api/users/groups/assign/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: JSON.stringify({
-                        user_id: window.CURRENT_USER_ID,
-                        group_id: protectedGroup.groupId,
-                        action: 'remove'
-                    })
-                });
-                
-                if (removeResponse.ok) {
-                    const removeResult = await removeResponse.json();
-                    if (removeResult.success) {
-                        showNotification(`✅ Вы исключены из группы "${protectedGroup.groupName}". Подключения сохранены для ${protectedGroup.remainingMembers} участников.`);
-                    }
-                }
-            } catch (error) {
-                console.error('Ошибка исключения из группы:', error);
-                errors.push(`Ошибка исключения из группы "${protectedGroup.groupName}": ${error.message}`);
-            }
-        }
-    }
-    
-    // Удаляем только те подключения, которые НЕ в защищённых группах
-    const connectionsToDelete = selectedIds.filter(id => !protectedConnectionIds.has(id));
-    
-    // Если все подключения были защищены, просто обновляем список
-    if (connectionsToDelete.length === 0 && groupsToProtect.length > 0) {
-        showNotification('✅ Операция завершена. Вы исключены из групп, подключения сохранены для других участников.');
-        connectionSelectionMode = false;
-        selectedConnections.clear();
-        loadConnections();
-        if (window.loadStatistics) {
-            loadStatistics();
-        }
-        return;
-    }
-    
-    let successCount = 0;
-    let errorCount = 0;
-    const errors = [];
-    
-    for (const connectionId of connectionsToDelete) {
-        try {
-            const csrfToken = getCSRFToken();
-            if (!csrfToken) {
-                showNotification('❌ Ошибка: CSRF токен не найден. Обновите страницу.', true);
-                return;
-            }
-            
-            const response = await fetch(`/api/clusters/connections/delete/${connectionId}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                successCount++;
-            } else {
-                errorCount++;
-                errors.push(result.error || 'Неизвестная ошибка');
-            }
-        } catch (error) {
-            errorCount++;
-            errors.push(error.message || 'Ошибка сети');
-        }
-    }
-    
-    if (successCount > 0) {
-        let message = `✅ Удалено подключений: ${successCount}`;
-        if (errorCount > 0) {
-            message += `\n❌ Ошибок: ${errorCount}`;
-            if (errors.length > 0) {
-                message += `\n${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`;
-            }
-        }
-        showNotification(message, errorCount > 0);
-        connectionSelectionMode = false;
-        selectedConnections.clear();
-        loadConnections();
-        if (window.loadStatistics) {
-            loadStatistics();
-        }
-    } else {
-        const errorMessage = errors.length > 0 
-            ? `❌ Ошибка удаления подключений: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`
-            : '❌ Ошибка удаления подключений';
-        showNotification(errorMessage, true);
-    }
-}
-
-/**
- * Настраивает обработчики событий для кластеров
- */
-function setupClusterEventHandlers() {
-    // Удаляем старые обработчики, если они есть (чтобы избежать накопления)
-    if (window._clusterContextMenuHandler) {
-        document.removeEventListener('contextmenu', window._clusterContextMenuHandler);
-    }
-    if (window._clusterClickHandler) {
-        document.removeEventListener('click', window._clusterClickHandler);
-    }
-    
-    // Обработчик контекстного меню для заголовка кластера
-    window._clusterContextMenuHandler = (e) => {
-        const clusterHeader = e.target.closest('.cluster-header');
-        if (clusterHeader) {
-            e.preventDefault();
-            const connectionId = clusterHeader.dataset.connectionId;
-            const clusterUuid = clusterHeader.dataset.clusterUuid;
-            const clusterName = clusterHeader.dataset.clusterName;
-            showClusterContextMenu(e, connectionId, clusterUuid, clusterName);
-            return;
-        }
-        
-        // Обработчик контекстного меню для секций "Информационные базы" и "Рабочие серверы"
-        const treeItemSection = e.target.closest('.tree-item-section');
-        if (treeItemSection) {
-            const section = treeItemSection.dataset.section;
-            const connectionId = treeItemSection.dataset.connectionId;
-            const clusterUuid = treeItemSection.dataset.clusterUuid;
-            
-            if (section === 'infobases' || section === 'servers') {
-                e.preventDefault();
-                showSectionContextMenu(e, connectionId, clusterUuid, section);
-            } else if (section === 'admins') {
-                // Контекстное меню для администраторов обрабатывается в oncontextmenu
-            }
-        }
-    };
-    document.addEventListener('contextmenu', window._clusterContextMenuHandler);
-    
-    // Обработчик клика по секциям (Информационные базы, Рабочие серверы)
-    window._clusterClickHandler = (e) => {
-        // Игнорируем клики внутри модальных окон
-        if (e.target.closest('.modal-overlay')) {
-            return;
-        }
-        
-        const treeItemSection = e.target.closest('.tree-item-section');
-        if (treeItemSection) {
-            e.stopPropagation();
-            const section = treeItemSection.dataset.section;
-            const connectionId = treeItemSection.dataset.connectionId;
-            const clusterUuid = treeItemSection.dataset.clusterUuid;
-            const clusterId = `cluster-${connectionId}-${clusterUuid}`;
-            const sectionId = `${section}-${clusterId}`;
-            
-            // Проверяем текущее состояние секции (открыта или закрыта)
-            const childrenContainer = document.getElementById(`${sectionId}-children`);
-            if (!childrenContainer) {
-                console.error(`Container not found: ${sectionId}-children`);
-                return;
-            }
-            
-            // Проверяем состояние ДО переключения
-            const currentDisplay = childrenContainer.style.display;
-            const computedDisplay = window.getComputedStyle(childrenContainer).display;
-            const isCurrentlyOpen = currentDisplay !== 'none' && computedDisplay !== 'none';
-            
-            console.log(`Section ${sectionId}: before toggle - display: ${currentDisplay || 'not set'}, computed: ${computedDisplay}, isOpen: ${isCurrentlyOpen}`);
-            
-            // Переключаем раскрытие секции
-            toggleSectionNode(sectionId);
-            
-            // Проверяем новое состояние ПОСЛЕ переключения (получаем элемент заново, так как toggleSectionNode мог его изменить)
-            const containerAfterToggle = document.getElementById(`${sectionId}-children`);
-            if (!containerAfterToggle) {
-                console.error(`Container not found after toggle: ${sectionId}-children`);
-                return;
-            }
-            
-            const newDisplay = containerAfterToggle.style.display;
-            const newComputedDisplay = window.getComputedStyle(containerAfterToggle).display;
-            const isNowOpen = newDisplay !== 'none' && newComputedDisplay !== 'none';
-            
-            console.log(`Section ${sectionId}: after toggle - display: ${newDisplay || 'not set'}, computed: ${newComputedDisplay}, isOpen: ${isNowOpen}`);
-            
-            // Загружаем данные только если секция была закрыта и теперь открыта
-            if (isNowOpen && !isCurrentlyOpen) {
-                console.log(`Loading data for section ${sectionId}`);
-                loadSectionData(section, connectionId, clusterUuid, sectionId);
-            } else if (!isNowOpen && isCurrentlyOpen) {
-                console.log(`Section ${sectionId} closed, no data reload`);
-            } else {
-                console.warn(`Section ${sectionId} state unchanged or unexpected: was ${isCurrentlyOpen}, now ${isNowOpen}`);
-            }
-            
-            return;
-        }
-        
-        // Обработчик для других разделов (переход на другую страницу)
-        const treeItem = e.target.closest('.tree-item:not(.tree-item-section)');
-        if (treeItem && treeItem.dataset.section) {
-            e.stopPropagation();
-            const section = treeItem.dataset.section;
-            const connectionId = treeItem.dataset.connectionId;
-            const clusterUuid = treeItem.dataset.clusterUuid;
-            loadClusterSection(section, connectionId, clusterUuid);
-            return;
-        }
-    };
-    document.addEventListener('click', window._clusterClickHandler);
-}
-
-/**
- * Переключает раскрытие/сворачивание узла кластера
- */
-function toggleClusterNode(clusterId) {
-    const children = document.getElementById(`${clusterId}-children`);
-    const toggle = document.querySelector(`[onclick="toggleClusterNode('${clusterId}')"]`);
-    
-    if (children) {
-        if (children.style.display === 'none') {
-            children.style.display = 'block';
-            if (toggle) toggle.textContent = '▼';
-        } else {
-            children.style.display = 'none';
-            if (toggle) toggle.textContent = '▶';
-        }
-    }
-}
-
-/**
- * Переключает раскрытие/сворачивание секции (Информационные базы, Рабочие серверы)
- */
-function toggleSectionNode(sectionId) {
-    const children = document.getElementById(`${sectionId}-children`);
-    const toggle = document.querySelector(`.tree-toggle-section[data-section-id="${sectionId}"]`);
-    
-    if (children) {
-        if (children.style.display === 'none') {
-            children.style.display = 'block';
-            if (toggle) toggle.textContent = '▼';
-        } else {
-            children.style.display = 'none';
-            if (toggle) toggle.textContent = '▶';
-        }
-    }
-}
-
-/**
- * Загружает данные для секции и отображает их в дереве
- */
-async function loadSectionData(section, connectionId, clusterUuid, sectionId) {
-    const childrenContainer = document.getElementById(`${sectionId}-children`);
-    if (!childrenContainer) return;
-    
-    try {
-        if (section === 'infobases') {
-            await loadInfobasesIntoTree(connectionId, clusterUuid, sectionId);
-        } else if (section === 'servers') {
-            await loadServersIntoTree(connectionId, clusterUuid, sectionId);
-        } else if (section === 'admins') {
-            await loadAdminsIntoTree(connectionId, clusterUuid, sectionId);
-        }
-    } catch (error) {
-        childrenContainer.innerHTML = `
-            <div style="padding: 0.5rem; color: #d52b1e;">
-                ❌ Ошибка загрузки: ${error.message}
-            </div>
-        `;
-    }
-}
-
-/**
- * Загружает данные для подраздела кластера
- */
-async function loadClusterSection(section, connectionId, clusterUuid) {
-    // Для секций сеансов и процессов открываем модальное окно, не трогая contentArea
-    if (section === 'sessions') {
-        await openSessionsModal(connectionId, clusterUuid);
-        return;
-    }
-    if (section === 'processes') {
-        await openProcessesModal(connectionId, clusterUuid);
-        return;
-    }
-    if (section === 'managers') {
-        await openManagersModal(connectionId, clusterUuid);
-        return;
-    }
-    
-    // Для остальных секций проверяем, реализованы ли они
-    const implementedSections = ['infobases', 'servers', 'admins'];
-    if (!implementedSections.includes(section)) {
-        showNotification(`⚠️ Функционал "${section}" находится в разработке`, true);
-        return; // Не меняем contentArea, остаемся в дереве
-    }
-    
-    // Секция "Администраторы" не загружается в contentArea, только в дерево
-    if (section === 'admins') {
-        return;
-    }
-    
-    const contentArea = document.getElementById('contentArea');
-    if (!contentArea) return;
-    
-    contentArea.innerHTML = '<div style="text-align: center; padding: 2rem;"><p>⏳ Загрузка данных...</p></div>';
-    
-    try {
-        // В зависимости от раздела загружаем соответствующие данные
-        switch(section) {
-            case 'infobases':
-                await loadInfobases(connectionId, clusterUuid);
-                break;
-            case 'servers':
-                await loadServers(connectionId, clusterUuid);
-                break;
-            default:
-                showNotification(`⚠️ Функционал "${section}" находится в разработке`, true);
-        }
-    } catch (error) {
-        showNotification(`❌ Ошибка загрузки: ${error.message}`, true);
-    }
-}
-
-/**
- * Загружает информационные базы в дерево
- */
-async function loadInfobasesIntoTree(connectionId, clusterUuid, sectionId) {
-    const childrenContainer = document.getElementById(`${sectionId}-children`);
-    if (!childrenContainer) return;
-    
-    // Убеждаемся, что контейнер видим перед загрузкой
-    if (childrenContainer.style.display === 'none') {
-        childrenContainer.style.display = 'block';
-    }
-    
-    childrenContainer.innerHTML = '<div style="padding: 0.5rem; color: #666; font-style: italic;">⏳ Загрузка...</div>';
-    
-    try {
-        const url = addClusterAdminParams(`/api/clusters/infobases/${connectionId}/?cluster=${clusterUuid}`, connectionId, clusterUuid);
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        // Проверяем, что контейнер все еще существует (на случай переключения подключений)
-        const currentContainer = document.getElementById(`${sectionId}-children`);
-        if (!currentContainer) return;
-        
-        if (data.success) {
-            const infobases = data.infobases || [];
-            
-            if (infobases.length === 0) {
-                currentContainer.innerHTML = `
-                    <div style="padding: 0.5rem; color: #666; font-style: italic;">
-                        Информационные базы не найдены
-                    </div>
-                `;
-            } else {
-                let html = '';
-                infobases.forEach((infobase) => {
-                    const infobaseName = infobase.name || `Информационная база ${infobase.uuid.substring(0, 8)}`;
-                    html += `
-                        <div class="tree-item" 
-                             data-infobase-uuid="${infobase.uuid}"
-                             data-connection-id="${connectionId}"
-                             data-cluster-uuid="${clusterUuid}"
-                             style="cursor: pointer; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0; display: flex; align-items: center; gap: 0.5rem;"
-                             oncontextmenu="showInfobaseContextMenu(event, ${connectionId}, '${clusterUuid}', '${infobase.uuid}', '${escapeHtml(infobaseName).replace(/'/g, "\\'")}'); return false;">
-                            <span class="tree-icon">📁</span>
-                            <span>${escapeHtml(infobaseName)}</span>
-                        </div>
-                    `;
-                });
-                currentContainer.innerHTML = html;
-                
-                // Добавляем обработчики кликов
-                currentContainer.querySelectorAll('[data-infobase-uuid]').forEach(item => {
-                    item.addEventListener('click', (e) => {
-                        if (e.button === 0) {
-                            const uuid = item.getAttribute('data-infobase-uuid');
-                            const connId = item.getAttribute('data-connection-id');
-                            const clustUuid = item.getAttribute('data-cluster-uuid');
-                            openInfobaseProperties(connId, clustUuid, uuid);
-                        }
-                    });
-                });
-            }
-        } else {
-            currentContainer.innerHTML = `
-                <div style="padding: 0.5rem; color: #d52b1e;">
-                    ❌ Ошибка: ${data.error || 'Неизвестная ошибка'}
-                </div>
-            `;
-        }
-    } catch (error) {
-        const errorContainer = document.getElementById(`${sectionId}-children`);
-        if (errorContainer) {
-            errorContainer.innerHTML = `
-                <div style="padding: 0.5rem; color: #d52b1e;">
-                    ❌ Ошибка загрузки: ${error.message}
-                </div>
-            `;
-        }
-    }
-}
-
-/**
- * Загружает рабочие серверы в дерево
- */
-async function loadServersIntoTree(connectionId, clusterUuid, sectionId) {
-    const childrenContainer = document.getElementById(`${sectionId}-children`);
-    if (!childrenContainer) return;
-    
-    // Убеждаемся, что контейнер видим перед загрузкой
-    if (childrenContainer.style.display === 'none') {
-        childrenContainer.style.display = 'block';
-    }
-    
-    childrenContainer.innerHTML = '<div style="padding: 0.5rem; color: #666; font-style: italic;">⏳ Загрузка...</div>';
-    
-    try {
-        const url = addClusterAdminParams(`/api/clusters/servers/${connectionId}/?cluster=${clusterUuid}`, connectionId, clusterUuid);
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        // Проверяем, что контейнер все еще существует (на случай переключения подключений)
-        const currentContainer = document.getElementById(`${sectionId}-children`);
-        if (!currentContainer) return;
-        
-        if (data.success) {
-            const servers = data.servers || [];
-            
-            if (servers.length === 0) {
-                currentContainer.innerHTML = `
-                    <div style="padding: 0.5rem; color: #666; font-style: italic;">
-                        Рабочие серверы не найдены
-                    </div>
-                `;
-            } else {
-                let html = '';
-                servers.forEach((server) => {
-                    // Используем host из server, если нет - из data, если нет - name, если нет - uuid
-                    const serverHost = server.host || server.data?.host || server.data?.['agent-host'] || server.name || `Сервер ${server.uuid.substring(0, 8)}`;
-                    html += `
-                        <div class="tree-item" 
-                             data-server-uuid="${server.uuid}"
-                             data-connection-id="${connectionId}"
-                             data-cluster-uuid="${clusterUuid}"
-                             style="cursor: pointer; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0; display: flex; align-items: center; gap: 0.5rem;"
-                             oncontextmenu="showServerContextMenu(event, ${connectionId}, '${clusterUuid}', '${server.uuid}', '${escapeHtml(serverHost).replace(/'/g, "\\'")}'); return false;">
-                            <span class="tree-icon">⚙️</span>
-                            <span>${escapeHtml(serverHost)}</span>
-                        </div>
-                    `;
-                });
-                currentContainer.innerHTML = html;
-                
-                // Добавляем обработчики кликов
-                currentContainer.querySelectorAll('[data-server-uuid]').forEach(item => {
-                    item.addEventListener('click', (e) => {
-                        if (e.button === 0) {
-                            const uuid = item.getAttribute('data-server-uuid');
-                            const connId = item.getAttribute('data-connection-id');
-                            const clustUuid = item.getAttribute('data-cluster-uuid');
-                            openServerProperties(connId, clustUuid, uuid);
-                        }
-                    });
-                });
-            }
-        } else {
-            currentContainer.innerHTML = `
-                <div style="padding: 0.5rem; color: #d52b1e;">
-                    ❌ Ошибка: ${data.error || 'Неизвестная ошибка'}
-                </div>
-            `;
-        }
-    } catch (error) {
-        const errorContainer = document.getElementById(`${sectionId}-children`);
-        if (errorContainer) {
-            errorContainer.innerHTML = `
-                <div style="padding: 0.5rem; color: #d52b1e;">
-                    ❌ Ошибка загрузки: ${error.message}
-                </div>
-            `;
-        }
-    }
-}
-
-/**
- * Загружает информационные базы
- */
-async function loadInfobases(connectionId, clusterUuid) {
-    const response = await fetch(`/api/clusters/infobases/${connectionId}/?cluster=${clusterUuid}`);
-    const data = await response.json();
-    
-    const contentArea = document.getElementById('contentArea');
-    if (data.success) {
-        const infobases = data.infobases || [];
-        
-        let html = `
-            <div class="info-card">
-                <h4>📁 Информационные базы</h4>
-        `;
-        
-        if (infobases.length === 0) {
-            html += `
-                <div style="padding: 1rem; text-align: center; color: #666;">
-                    <p>Информационные базы не найдены</p>
-                </div>
-            `;
-        } else {
-            html += `<div class="clusters-tree">`;
-            infobases.forEach((infobase) => {
-                const infobaseName = infobase.name || `Информационная база ${infobase.uuid.substring(0, 8)}`;
-                html += `
-                    <div class="tree-item" 
-                         data-infobase-uuid="${infobase.uuid}"
-                         data-connection-id="${connectionId}"
-                         data-cluster-uuid="${clusterUuid}"
-                         style="cursor: pointer; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0;"
-                         oncontextmenu="showInfobaseContextMenu(event, ${connectionId}, '${clusterUuid}', '${infobase.uuid}', '${escapeHtml(infobaseName).replace(/'/g, "\\'")}'); return false;">
-                        <span class="tree-icon">📁</span>
-                        <span>${escapeHtml(infobaseName)}</span>
-                    </div>
-                `;
-            });
-            html += `</div>`;
-        }
-        
-        html += `</div>`;
-        contentArea.innerHTML = html;
-        
-        // Добавляем обработчики кликов для открытия свойств
-        contentArea.querySelectorAll('[data-infobase-uuid]').forEach(item => {
-            item.addEventListener('click', (e) => {
-                if (e.button === 0) { // Левый клик
-                    const uuid = item.getAttribute('data-infobase-uuid');
-                    const connId = item.getAttribute('data-connection-id');
-                    const clustUuid = item.getAttribute('data-cluster-uuid');
-                    openInfobaseProperties(connId, clustUuid, uuid);
-                }
-            });
-        });
-    } else {
-        contentArea.innerHTML = `
-            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
-                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
-                <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
-            </div>
-        `;
-    }
-}
-
-/**
- * Загружает рабочие серверы
- */
-async function loadServers(connectionId, clusterUuid) {
-    const response = await fetch(`/api/clusters/servers/${connectionId}/?cluster=${clusterUuid}`);
-    const data = await response.json();
-    
-    const contentArea = document.getElementById('contentArea');
-    if (data.success) {
-        const servers = data.servers || [];
-        
-        let html = `
-            <div class="info-card">
-                <h4>⚙️ Рабочие серверы</h4>
-        `;
-        
-        if (servers.length === 0) {
-            html += `
-                <div style="padding: 1rem; text-align: center; color: #666;">
-                    <p>Рабочие серверы не найдены</p>
-                </div>
-            `;
-        } else {
-            html += `<div class="clusters-tree">`;
-            servers.forEach((server) => {
-                const serverName = server.name || `Рабочий сервер ${server.uuid.substring(0, 8)}`;
-                html += `
-                    <div class="tree-item" 
-                         data-server-uuid="${server.uuid}"
-                         data-connection-id="${connectionId}"
-                         data-cluster-uuid="${clusterUuid}"
-                         style="cursor: pointer; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0;"
-                         oncontextmenu="showServerContextMenu(event, ${connectionId}, '${clusterUuid}', '${server.uuid}', '${escapeHtml(serverName).replace(/'/g, "\\'")}'); return false;">
-                        <span class="tree-icon">⚙️</span>
-                        <span>${escapeHtml(serverName)}</span>
-                    </div>
-                `;
-            });
-            html += `</div>`;
-        }
-        
-        html += `</div>`;
-        contentArea.innerHTML = html;
-        
-        // Добавляем обработчики кликов для открытия свойств
-        contentArea.querySelectorAll('[data-server-uuid]').forEach(item => {
-            item.addEventListener('click', (e) => {
-                if (e.button === 0) { // Левый клик
-                    const uuid = item.getAttribute('data-server-uuid');
-                    const connId = item.getAttribute('data-connection-id');
-                    const clustUuid = item.getAttribute('data-cluster-uuid');
-                    openServerProperties(connId, clustUuid, uuid);
-                }
-            });
-        });
-    } else {
-        contentArea.innerHTML = `
-            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
-                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
-                <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
-            </div>
-        `;
-    }
-}
+// Примечание: Функции loadInfobasesIntoTree, loadServersIntoTree, loadInfobases, loadServers
+// перенесены в connections-infobases.js и connections-servers.js соответственно
 
 /**
  * Открывает модальное окно сеансов на весь экран
@@ -1846,6 +186,9 @@ async function loadSessionsTable(connectionId, clusterUuid, infobaseUuid = null)
         if (includeLicenses) {
             url += `&licenses=true`;
         }
+        
+        // Добавляем учетные данные администратора кластера
+        url = addClusterAdminParams(url, connectionId, clusterUuid);
         
         const response = await fetch(url);
         const data = await response.json();
@@ -2290,17 +633,22 @@ async function terminateSelectedSessions(connectionId, clusterUuid, sessionUuids
             return;
         }
         
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', connectionId, clusterUuid, 'POST');
+        const requestData = {
+            connection_id: connectionId,
+            cluster_uuid: clusterUuid,
+            session_uuids: sessionUuids,
+            ...adminParams
+        };
+        
         const response = await fetch('/api/clusters/sessions/terminate/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
-            body: JSON.stringify({
-                connection_id: connectionId,
-                cluster_uuid: clusterUuid,
-                session_uuids: sessionUuids
-            })
+            body: JSON.stringify(requestData)
         });
         
         const result = await response.json();
@@ -2356,7 +704,9 @@ async function openSessionInfoModal(connectionId, clusterUuid, sessionUuid) {
     document.body.appendChild(modal);
     
     try {
-        const response = await fetch(`/api/clusters/sessions/${connectionId}/${clusterUuid}/info/?session=${sessionUuid}`);
+        let url = `/api/clusters/sessions/${connectionId}/${clusterUuid}/info/?session=${sessionUuid}`;
+        url = addClusterAdminParams(url, connectionId, clusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.success) {
@@ -2814,17 +1164,22 @@ async function interruptSelectedSessions(connectionId, clusterUuid, sessionUuids
         // Выполняем запросы для каждого сеанса
         const promises = sessionUuids.map(async (sessionUuid) => {
             try {
+                // Добавляем учетные данные администратора кластера
+                const adminParams = addClusterAdminParams('', connectionId, clusterUuid, 'POST');
+                const requestData = {
+                    connection_id: connectionId,
+                    cluster_uuid: clusterUuid,
+                    session_uuids: [sessionUuid],
+                    ...adminParams
+                };
+                
                 const response = await fetch('/api/clusters/sessions/interrupt/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': csrfToken
                     },
-                    body: JSON.stringify({
-                        connection_id: connectionId,
-                        cluster_uuid: clusterUuid,
-                        session_uuids: [sessionUuid]
-                    })
+                    body: JSON.stringify(requestData)
                 });
                 
                 const data = await response.json();
@@ -2911,15 +1266,7 @@ function showClusterContextMenu(event, connectionId, clusterUuid, clusterName) {
     }, 100);
 }
 
-/**
- * Закрывает контекстное меню
- */
-function closeContextMenu() {
-    const menu = document.getElementById('clusterContextMenu');
-    if (menu) {
-        menu.remove();
-    }
-}
+// Примечание: Функция closeContextMenu перенесена в connections-utils.js
 
 /**
  * Открывает модальное окно свойств кластера
@@ -3385,113 +1732,10 @@ function showSectionContextMenu(event, connectionId, clusterUuid, section) {
     }, 100);
 }
 
-/**
- * Показывает контекстное меню для информационной базы
- */
-function showInfobaseContextMenu(event, connectionId, clusterUuid, infobaseUuid, infobaseName) {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    const existingMenu = document.getElementById('infobaseContextMenu');
-    if (existingMenu) {
-        existingMenu.remove();
-    }
-    
-    const menu = document.createElement('div');
-    menu.id = 'infobaseContextMenu';
-    menu.className = 'context-menu';
-    menu.style.position = 'fixed';
-    menu.style.left = event.clientX + 'px';
-    menu.style.top = event.clientY + 'px';
-    menu.style.zIndex = '10000';
-    
-    menu.innerHTML = `
-        <div class="context-menu-item" onclick="openInfobaseProperties(${connectionId}, '${clusterUuid}', '${infobaseUuid}'); closeContextMenu();">
-            📋 Свойства
-        </div>
-        <div class="context-menu-item" onclick="openSessionsModal(${connectionId}, '${clusterUuid}', '${infobaseUuid}'); closeContextMenu();">
-            💺 Сеансы
-        </div>
-        <div class="context-menu-item" onclick="deleteInfobase(${connectionId}, '${clusterUuid}', '${infobaseUuid}', '${escapeHtml(infobaseName).replace(/'/g, "\\'")}'); closeContextMenu();">
-            🗑️ Удалить
-        </div>
-    `;
-    
-    document.body.appendChild(menu);
-    
-    const closeMenu = (e) => {
-        if (!menu.contains(e.target)) {
-            closeContextMenu();
-            document.removeEventListener('click', closeMenu);
-        }
-    };
-    
-    setTimeout(() => {
-        document.addEventListener('click', closeMenu);
-    }, 100);
-}
+// Примечание: Функции showInfobaseContextMenu и showServerContextMenu перенесены 
+// в connections-infobases.js и connections-servers.js соответственно
 
-/**
- * Показывает контекстное меню для рабочего сервера
- */
-function showServerContextMenu(event, connectionId, clusterUuid, serverUuid, serverName) {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    const existingMenu = document.getElementById('serverContextMenu');
-    if (existingMenu) {
-        existingMenu.remove();
-    }
-    
-    const menu = document.createElement('div');
-    menu.id = 'serverContextMenu';
-    menu.className = 'context-menu';
-    menu.style.position = 'fixed';
-    menu.style.left = event.clientX + 'px';
-    menu.style.top = event.clientY + 'px';
-    menu.style.zIndex = '10000';
-    
-    menu.innerHTML = `
-        <div class="context-menu-item" onclick="openServerProperties(${connectionId}, '${clusterUuid}', '${serverUuid}'); closeContextMenu();">
-            📋 Свойства
-        </div>
-        <div class="context-menu-item" onclick="openRulesModal(${connectionId}, '${clusterUuid}', '${serverUuid}', '${escapeHtml(serverName).replace(/'/g, "\\'")}'); closeContextMenu();">
-            📐 ТНФ
-        </div>
-        <div class="context-menu-item" onclick="openProcessesModal(${connectionId}, '${clusterUuid}', '${serverUuid}'); closeContextMenu();">
-            🔄 Процессы
-        </div>
-        <div class="context-menu-item" onclick="deleteServer(${connectionId}, '${clusterUuid}', '${serverUuid}', '${escapeHtml(serverName).replace(/'/g, "\\'")}'); closeContextMenu();">
-            🗑️ Удалить
-        </div>
-    `;
-    
-    document.body.appendChild(menu);
-    
-    const closeMenu = (e) => {
-        if (!menu.contains(e.target)) {
-            closeContextMenu();
-            document.removeEventListener('click', closeMenu);
-        }
-    };
-    
-    setTimeout(() => {
-        document.addEventListener('click', closeMenu);
-    }, 100);
-}
-
-/**
- * Закрывает контекстное меню
- */
-function closeContextMenu() {
-    const menus = ['sectionContextMenu', 'infobaseContextMenu', 'serverContextMenu', 'clusterContextMenu', 'adminsContextMenu', 'contextMenu'];
-    menus.forEach(id => {
-        const menu = document.getElementById(id);
-        if (menu) {
-            menu.remove();
-        }
-    });
-}
+// Примечание: Функция closeContextMenu перенесена в connections-utils.js
 
 // ============================================
 // Функции для работы с информационными базами
@@ -3685,6 +1929,10 @@ async function saveCreateInfobase(connectionId, clusterUuid) {
             return;
         }
         
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', connectionId, clusterUuid, 'POST');
+        Object.assign(data, adminParams);
+        
         const response = await fetch(`/api/clusters/infobases/${connectionId}/${clusterUuid}/create/`, {
             method: 'POST',
             headers: {
@@ -3726,6 +1974,9 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
         if (infobaseUser && infobasePwd !== null && infobasePwd !== undefined) {
             url += `&infobase_pwd=${encodeURIComponent(infobasePwd)}`;
         }
+        
+        // Добавляем учетные данные администратора кластера
+        url = addClusterAdminParams(url, connectionId, clusterUuid);
         
         const response = await fetch(url);
         const data = await response.json();
@@ -3945,6 +2196,10 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
     if (infobasePwd !== null && infobasePwd !== undefined) {
         data.infobase_pwd = infobasePwd;
     }
+    
+    // Добавляем учетные данные администратора кластера
+    const adminParams = addClusterAdminParams('', connectionId, clusterUuid, 'POST');
+    Object.assign(data, adminParams);
     
     try {
         const csrfToken = getCSRFToken();
@@ -4265,17 +2520,22 @@ async function confirmDeleteInfobase(connectionId, clusterUuid, infobaseUuid, in
             return;
         }
         
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', connectionId, clusterUuid, 'POST');
+        const requestData = {
+            infobase_uuid: infobaseUuid,
+            drop_database: dropDatabase,
+            clear_database: clearDatabase,
+            ...adminParams
+        };
+        
         const response = await fetch(`/api/clusters/infobases/${connectionId}/${clusterUuid}/drop/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
-            body: JSON.stringify({
-                infobase_uuid: infobaseUuid,
-                drop_database: dropDatabase,
-                clear_database: clearDatabase
-            })
+            body: JSON.stringify(requestData)
         });
         
         const result = await response.json();
@@ -4432,6 +2692,10 @@ async function saveCreateServer(connectionId, clusterUuid) {
             return;
         }
         
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', connectionId, clusterUuid, 'POST');
+        Object.assign(data, adminParams);
+        
         const response = await fetch(`/api/clusters/servers/${connectionId}/${clusterUuid}/insert/`, {
             method: 'POST',
             headers: {
@@ -4465,7 +2729,9 @@ async function openServerProperties(connectionId, clusterUuid, serverUuid) {
     closeContextMenu();
     
     try {
-        const response = await fetch(`/api/clusters/servers/${connectionId}/${clusterUuid}/${serverUuid}/info/`);
+        let url = `/api/clusters/servers/${connectionId}/${clusterUuid}/${serverUuid}/info/`;
+        url = addClusterAdminParams(url, connectionId, clusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         if (!data.success) {
@@ -4634,6 +2900,10 @@ async function saveServerProperties(connectionId, clusterUuid, serverUuid) {
             return;
         }
         
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', connectionId, clusterUuid, 'POST');
+        Object.assign(data, adminParams);
+        
         const response = await fetch(`/api/clusters/servers/${connectionId}/${clusterUuid}/${serverUuid}/update/`, {
             method: 'POST',
             headers: {
@@ -4687,12 +2957,16 @@ async function deleteServer(connectionId, clusterUuid, serverUuid, serverName) {
             return;
         }
         
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', connectionId, clusterUuid, 'POST');
+        
         const response = await fetch(`/api/clusters/servers/${connectionId}/${clusterUuid}/${serverUuid}/remove/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
-            }
+            },
+            body: JSON.stringify(adminParams)
         });
         
         const result = await response.json();
@@ -4835,6 +3109,9 @@ async function loadProcessesTable(connectionId, clusterUuid, serverUuid = null) 
         if (includeLicenses) {
             url += `&licenses=true`;
         }
+        
+        // Добавляем учетные данные администратора кластера
+        url = addClusterAdminParams(url, connectionId, clusterUuid);
         
         const response = await fetch(url);
         const data = await response.json();
@@ -5267,7 +3544,9 @@ async function openProcessInfoModal(connectionId, clusterUuid, processUuid) {
     document.body.appendChild(modal);
     
     try {
-        const response = await fetch(`/api/clusters/processes/${connectionId}/${clusterUuid}/info/?process=${processUuid}`);
+        let url = `/api/clusters/processes/${connectionId}/${clusterUuid}/info/?process=${processUuid}`;
+        url = addClusterAdminParams(url, connectionId, clusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.success) {
@@ -5483,7 +3762,9 @@ async function loadManagersTable(connectionId, clusterUuid) {
     if (!container) return;
     
     try {
-        const response = await fetch(`/api/clusters/managers/${connectionId}/?cluster=${clusterUuid}`);
+        let url = `/api/clusters/managers/${connectionId}/?cluster=${clusterUuid}`;
+        url = addClusterAdminParams(url, connectionId, clusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.success) {
@@ -5912,7 +4193,9 @@ async function openManagerInfoModal(connectionId, clusterUuid, managerUuid) {
     document.body.appendChild(modal);
     
     try {
-        const response = await fetch(`/api/clusters/managers/${connectionId}/${clusterUuid}/info/?manager=${managerUuid}`);
+        let url = `/api/clusters/managers/${connectionId}/${clusterUuid}/info/?manager=${managerUuid}`;
+        url = addClusterAdminParams(url, connectionId, clusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.success) {

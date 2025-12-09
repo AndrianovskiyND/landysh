@@ -468,7 +468,7 @@ def delete_user(request):
             # Это предотвратит удаление группы при удалении пользователя
             for group in created_groups:
                 group.created_by = request.user
-                group.save()
+            group.save()
             
             # Удаляем пользователя из всех групп (ManyToMany связь)
             # Это не удалит сами группы, так как это ManyToMany

@@ -642,7 +642,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -686,7 +689,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -727,7 +733,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -751,7 +760,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -778,7 +790,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -806,7 +821,10 @@ def get_sessions(request, connection_id):
         if not cluster_uuid:
             return JsonResponse({'success': False, 'error': 'Cluster UUID required'})
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_session_list(cluster_uuid, infobase_uuid, include_licenses)
         
         if result['success']:
@@ -911,7 +929,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -955,7 +976,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -996,7 +1020,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -1020,7 +1047,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -1047,7 +1077,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -1076,7 +1109,11 @@ def terminate_sessions(request):
             error_message = data.get('error_message')
             
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-            rac_client = RACClient(connection)
+            
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             
             results = []
             for session_uuid in session_uuids:
@@ -1107,7 +1144,11 @@ def interrupt_server_calls(request):
             error_message = data.get('error_message')
             
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-            rac_client = RACClient(connection)
+            
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             
             results = []
             for session_uuid in session_uuids:
@@ -1136,7 +1177,10 @@ def get_session_info(request, connection_id, cluster_uuid):
         if not session_uuid:
             return JsonResponse({'success': False, 'error': 'Session UUID required'})
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_session_info(cluster_uuid, session_uuid, include_licenses)
         
         if result['success']:
@@ -1204,7 +1248,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -1248,7 +1295,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -1289,7 +1339,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -1313,7 +1366,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -1340,7 +1396,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -1397,7 +1456,10 @@ def get_processes(request, connection_id):
         if not cluster_uuid:
             return JsonResponse({'success': False, 'error': 'Cluster UUID required'})
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_process_list(cluster_uuid, server_uuid, include_licenses)
         
         if result['success']:
@@ -1465,7 +1527,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -1509,7 +1574,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -1550,7 +1618,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -1574,7 +1645,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -1601,7 +1675,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -1628,7 +1705,10 @@ def get_process_info(request, connection_id, cluster_uuid):
         if not process_uuid:
             return JsonResponse({'success': False, 'error': 'Process UUID required'})
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_process_info(cluster_uuid, process_uuid, include_licenses)
         
         if result['success']:
@@ -1696,7 +1776,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -1740,7 +1823,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -1781,7 +1867,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -1805,7 +1894,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -1832,7 +1924,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -1886,7 +1981,10 @@ def get_rule_info(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_info(cluster_uuid, server_uuid, rule_uuid)
         
         if result['success']:
@@ -1986,7 +2084,10 @@ def get_managers(request, connection_id):
         if not cluster_uuid:
             return JsonResponse({'success': False, 'error': 'Cluster UUID required'})
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_manager_list(cluster_uuid)
         
         if result['success']:
@@ -2054,7 +2155,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -2098,7 +2202,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -2139,7 +2246,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -2163,7 +2273,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -2190,7 +2303,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -2216,7 +2332,10 @@ def get_manager_info(request, connection_id, cluster_uuid):
         if not manager_uuid:
             return JsonResponse({'success': False, 'error': 'Manager UUID required'})
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_manager_info(cluster_uuid, manager_uuid)
         
         if result['success']:
@@ -2284,7 +2403,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -2328,7 +2450,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -2369,7 +2494,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -2393,7 +2521,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -2420,7 +2551,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -2515,7 +2649,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -2559,7 +2696,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -2600,7 +2740,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -2624,7 +2767,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -2651,7 +2797,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -2746,7 +2895,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -2790,7 +2942,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -2831,7 +2986,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -2855,7 +3013,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -2882,7 +3043,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -2984,7 +3148,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -3028,7 +3195,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -3069,7 +3239,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -3093,7 +3266,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -3120,7 +3296,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -3250,7 +3429,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -3294,7 +3476,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -3335,7 +3520,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -3359,7 +3547,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -3386,7 +3577,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -3523,7 +3717,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -3567,7 +3764,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -3608,7 +3808,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -3632,7 +3835,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -3659,7 +3865,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -3754,7 +3963,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -3798,7 +4010,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -3839,7 +4054,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -3863,7 +4081,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -3890,7 +4111,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -3932,7 +4156,10 @@ def get_infobase_info(request, connection_id, cluster_uuid):
         elif 'infobase_pwd' in request.POST:
             infobase_pwd = request.POST.get('infobase_pwd', '')
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_infobase_info(
             cluster_uuid, 
             infobase_uuid, 
@@ -4043,7 +4270,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -4087,7 +4317,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -4128,7 +4361,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -4152,7 +4388,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -4179,7 +4418,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -4204,7 +4446,11 @@ def create_infobase(request, connection_id, cluster_uuid):
     
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-        rac_client = RACClient(connection)
+        
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         
         data = json.loads(request.body)
         
@@ -4310,7 +4556,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -4354,7 +4603,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -4395,7 +4647,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -4419,7 +4674,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -4446,7 +4704,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -4471,7 +4732,11 @@ def update_infobase(request, connection_id, cluster_uuid):
     
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-        rac_client = RACClient(connection)
+        
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         
         data = json.loads(request.body)
         infobase_uuid = data.get('infobase_uuid')
@@ -4578,7 +4843,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -4622,7 +4890,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -4663,7 +4934,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -4687,7 +4961,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -4714,7 +4991,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -4739,7 +5019,11 @@ def drop_infobase(request, connection_id, cluster_uuid):
     
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-        rac_client = RACClient(connection)
+        
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         
         data = json.loads(request.body)
         infobase_uuid = data.get('infobase_uuid')
@@ -4823,7 +5107,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -4867,7 +5154,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -4908,7 +5198,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -4932,7 +5225,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -4959,7 +5255,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -4984,7 +5283,11 @@ def get_server_info(request, connection_id, cluster_uuid, server_uuid):
     """Получает информацию о рабочем сервере"""
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-        rac_client = RACClient(connection)
+        
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         
         result = rac_client.get_server_info(cluster_uuid, server_uuid)
         
@@ -5057,7 +5360,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -5101,7 +5407,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -5142,7 +5451,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -5166,7 +5478,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -5193,7 +5508,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -5218,7 +5536,11 @@ def insert_server(request, connection_id, cluster_uuid):
     
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-        rac_client = RACClient(connection)
+        
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         
         data = json.loads(request.body)
         
@@ -5307,7 +5629,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -5351,7 +5676,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -5392,7 +5720,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -5416,7 +5747,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -5443,7 +5777,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -5468,7 +5805,11 @@ def update_server(request, connection_id, cluster_uuid, server_uuid):
     
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-        rac_client = RACClient(connection)
+        
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         
         data = json.loads(request.body)
         
@@ -5549,7 +5890,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -5593,7 +5937,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -5634,7 +5981,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -5658,7 +6008,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -5685,7 +6038,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:
@@ -5710,7 +6066,11 @@ def remove_server(request, connection_id, cluster_uuid, server_uuid):
     
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-        rac_client = RACClient(connection)
+        
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         
         result = rac_client.remove_server(cluster_uuid, server_uuid)
         
@@ -5779,7 +6139,10 @@ def get_rules(request, connection_id, cluster_uuid, server_uuid):
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         
-        rac_client = RACClient(connection)
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_rule_list(cluster_uuid, server_uuid)
         
         if result['success']:
@@ -5823,7 +6186,10 @@ def create_rule(request, connection_id, cluster_uuid, server_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.insert_rule(cluster_uuid, server_uuid, position, **kwargs)
             
             if result['success']:
@@ -5864,7 +6230,10 @@ def update_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
             if 'priority' in data:
                 kwargs['priority'] = data['priority']
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.update_rule(cluster_uuid, server_uuid, rule_uuid, position, **kwargs)
             
             if result['success']:
@@ -5888,7 +6257,10 @@ def delete_rule(request, connection_id, cluster_uuid, server_uuid, rule_uuid):
         try:
             connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.remove_rule(cluster_uuid, server_uuid, rule_uuid)
             
             if result['success']:
@@ -5915,7 +6287,10 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             
             full = data.get('full', True)
             
-            rac_client = RACClient(connection)
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
             result = rac_client.apply_rules(cluster_uuid, server_uuid, full=full)
             
             if result['success']:

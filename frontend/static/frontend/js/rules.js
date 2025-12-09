@@ -130,7 +130,9 @@ function closeRulesModal() {
  */
 async function loadRules() {
     try {
-        const response = await fetch(`/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/`);
+        let url = `/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/`;
+        url = addClusterAdminParams(url, currentRulesConnectionId, currentRulesClusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.success) {
@@ -440,6 +442,10 @@ async function saveCreateRule() {
     if (priority) data.priority = parseInt(priority);
     
     try {
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', currentRulesConnectionId, currentRulesClusterUuid, 'POST');
+        Object.assign(data, adminParams);
+        
         const response = await fetch(`/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/create/`, {
             method: 'POST',
             headers: {
@@ -483,7 +489,9 @@ async function saveCreateRule() {
 async function openEditRuleModal(ruleUuid, index) {
     // Загружаем полную информацию о правиле через API
     try {
-        const response = await fetch(`/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/${ruleUuid}/info/`);
+        let url = `/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/${ruleUuid}/info/`;
+        url = addClusterAdminParams(url, currentRulesConnectionId, currentRulesClusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         if (!data.success) {
@@ -604,6 +612,10 @@ async function saveEditRule(ruleUuid) {
     if (priority) data.priority = parseInt(priority);
     
     try {
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', currentRulesConnectionId, currentRulesClusterUuid, 'POST');
+        Object.assign(data, adminParams);
+        
         const response = await fetch(`/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/${ruleUuid}/update/`, {
             method: 'POST',
             headers: {
@@ -650,12 +662,16 @@ async function deleteRule(ruleUuid) {
     }
     
     try {
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', currentRulesConnectionId, currentRulesClusterUuid, 'POST');
+        
         const response = await fetch(`/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/${ruleUuid}/delete/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
-            }
+            },
+            body: JSON.stringify(adminParams)
         });
         
         if (!response.ok) {
@@ -746,13 +762,20 @@ async function saveApplyRules() {
     const full = applyMode === 'full';
     
     try {
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', currentRulesConnectionId, currentRulesClusterUuid, 'POST');
+        const requestData = {
+            full: full,
+            ...adminParams
+        };
+        
         const response = await fetch(`/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/apply/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
             },
-            body: JSON.stringify({ full: full })
+            body: JSON.stringify(requestData)
         });
         
         // Проверяем, что ответ - это JSON
@@ -1043,7 +1066,9 @@ async function moveRuleUp(ruleUuid, currentIndex) {
     
     try {
         // Получаем текущие данные правила
-        const response = await fetch(`/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/${ruleUuid}/info/`);
+        let url = `/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/${ruleUuid}/info/`;
+        url = addClusterAdminParams(url, currentRulesConnectionId, currentRulesClusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         if (!data.success || !data.rule) {
@@ -1064,6 +1089,10 @@ async function moveRuleUp(ruleUuid, currentIndex) {
         if (ruleData['infobase-name']) updateData.infobase_name = ruleData['infobase-name'];
         if (ruleData['application-ext']) updateData.application_ext = ruleData['application-ext'];
         if (ruleData.priority !== undefined) updateData.priority = parseInt(ruleData.priority) || 0;
+        
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', currentRulesConnectionId, currentRulesClusterUuid, 'POST');
+        Object.assign(updateData, adminParams);
         
         // Обновляем правило
         const updateResponse = await fetch(`/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/${ruleUuid}/update/`, {
@@ -1115,7 +1144,9 @@ async function moveRuleDown(ruleUuid, currentIndex) {
     
     try {
         // Получаем текущие данные правила
-        const response = await fetch(`/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/${ruleUuid}/info/`);
+        let url = `/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/${ruleUuid}/info/`;
+        url = addClusterAdminParams(url, currentRulesConnectionId, currentRulesClusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         if (!data.success || !data.rule) {
@@ -1136,6 +1167,10 @@ async function moveRuleDown(ruleUuid, currentIndex) {
         if (ruleData['infobase-name']) updateData.infobase_name = ruleData['infobase-name'];
         if (ruleData['application-ext']) updateData.application_ext = ruleData['application-ext'];
         if (ruleData.priority !== undefined) updateData.priority = parseInt(ruleData.priority) || 0;
+        
+        // Добавляем учетные данные администратора кластера
+        const adminParams = addClusterAdminParams('', currentRulesConnectionId, currentRulesClusterUuid, 'POST');
+        Object.assign(updateData, adminParams);
         
         // Обновляем правило
         const updateResponse = await fetch(`/api/clusters/rules/${currentRulesConnectionId}/${currentRulesClusterUuid}/${currentRulesServerUuid}/${ruleUuid}/update/`, {

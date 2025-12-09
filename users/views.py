@@ -96,40 +96,73 @@ def create_group(request):
 
 @login_required
 def user_list(request):
-    """Возвращает список всех пользователей (только для админов)"""
+    """Возвращает список всех пользователей (для админов) или данные текущего пользователя (для обычных пользователей)"""
     try:
         profile = Profile.objects.get(user=request.user)
-        if not profile.is_admin():
-            return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+        is_admin = profile.is_admin()
+        
+        # Если не админ, возвращаем только данные текущего пользователя
+        if not is_admin:
+            user = request.user
+            try:
+                user_profile = Profile.objects.get(user=user)
+                role = user_profile.role
+                last_login_at = user_profile.last_login_at.isoformat() if user_profile.last_login_at else None
+                subject_to_password_policy = user_profile.subject_to_password_policy
+            except Profile.DoesNotExist:
+                role = 'user'
+                last_login_at = None
+                subject_to_password_policy = True
+            
+            user_data = [{
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_active': user.is_active,
+                'role': role,
+                'subject_to_password_policy': subject_to_password_policy,
+                'last_login': user.last_login.isoformat() if user.last_login else None,
+                'last_login_at': last_login_at,
+                'date_joined': user.date_joined.isoformat(),
+            }]
+            
+            return JsonResponse({'success': True, 'users': user_data})
+        
+        # Админ видит всех пользователей
+        users = User.objects.all()
+        user_data = []
+        
+        for user in users:
+            try:
+                user_profile = Profile.objects.get(user=user)
+                role = user_profile.role
+                last_login_at = user_profile.last_login_at.isoformat() if user_profile.last_login_at else None
+                subject_to_password_policy = user_profile.subject_to_password_policy
+            except Profile.DoesNotExist:
+                role = 'user'
+                last_login_at = None
+                subject_to_password_policy = True
+            
+            user_data.append({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_active': user.is_active,
+                'role': role,
+                'subject_to_password_policy': subject_to_password_policy,
+                'last_login': user.last_login.isoformat() if user.last_login else None,
+                'last_login_at': last_login_at,
+                'date_joined': user.date_joined.isoformat(),
+            })
+        
+        return JsonResponse({'success': True, 'users': user_data})
+        
     except Profile.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
-    
-    users = User.objects.all()
-    user_data = []
-    
-    for user in users:
-        try:
-            user_profile = Profile.objects.get(user=user)
-            role = user_profile.role
-            last_login_at = user_profile.last_login_at.isoformat() if user_profile.last_login_at else None
-        except Profile.DoesNotExist:
-            role = 'user'
-            last_login_at = None
-        
-        user_data.append({
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'is_active': user.is_active,
-            'role': role,
-            'last_login': user.last_login.isoformat() if user.last_login else None,
-            'last_login_at': last_login_at,
-            'date_joined': user.date_joined.isoformat(),
-        })
-    
-    return JsonResponse({'success': True, 'users': user_data})
 
 @login_required
 @csrf_exempt
@@ -162,7 +195,12 @@ def create_user(request):
             )
             
             # Создаем профиль
-            Profile.objects.create(user=user, role=role)
+            subject_to_password_policy = data.get('subject_to_password_policy', True)
+            Profile.objects.create(
+                user=user, 
+                role=role,
+                subject_to_password_policy=subject_to_password_policy
+            )
             
             return JsonResponse({'success': True, 'user_id': user.id})
             
@@ -173,14 +211,14 @@ def create_user(request):
 
 @login_required
 def all_groups(request):
-    """Возвращает список всех групп (только для админов)"""
+    """Возвращает список всех групп (для админов) или группы текущего пользователя (для обычных пользователей)"""
     try:
         profile = Profile.objects.get(user=request.user)
-        if not profile.is_admin():
-            return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+        is_admin = profile.is_admin()
     except Profile.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
     
+    # Админы видят все группы, обычные пользователи - все группы (для отображения в модальном окне)
     groups = UserGroup.objects.all()
     group_data = []
     
@@ -229,21 +267,24 @@ def assign_user_to_group(request):
 @login_required
 @csrf_exempt
 def update_user(request):
-    """Обновляет данные пользователя"""
+    """Обновляет данные пользователя (только для админов)"""
     if request.method == 'POST':
         try:
+            # Только администратор может изменять данные пользователей
             profile = Profile.objects.get(user=request.user)
             if not profile.is_admin():
-                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен. Только администратор может изменять свойства пользователей.'})
             
             data = json.loads(request.body)
             user_id = data.get('user_id')
             first_name = data.get('first_name')
             last_name = data.get('last_name')
             email = data.get('email')
+            subject_to_password_policy = data.get('subject_to_password_policy')
             
             user = User.objects.get(id=user_id)
             
+            # Админ может изменять все данные
             if first_name is not None:
                 user.first_name = first_name
             if last_name is not None:
@@ -252,6 +293,15 @@ def update_user(request):
                 user.email = email
             
             user.save()
+            
+            # Обновляем профиль
+            try:
+                user_profile = Profile.objects.get(user=user)
+                if subject_to_password_policy is not None:
+                    user_profile.subject_to_password_policy = subject_to_password_policy
+                    user_profile.save()
+            except Profile.DoesNotExist:
+                pass
             
             return JsonResponse({'success': True})
             
@@ -263,11 +313,11 @@ def update_user(request):
 @login_required
 @csrf_exempt
 def change_password(request):
-    """Изменяет пароль пользователя
+    """Изменяет пароль пользователя (только для админов)
     
     ВАЖНО: При смене пароля администратором флаг force_password_change НЕ сбрасывается.
     Флаг сбрасывается только когда пользователь сам меняет пароль через страницу
-    принудительной смены пароля.
+    принудительной смены пароля (core/views.py:force_password_change).
     """
     if request.method == 'POST':
         try:
@@ -295,6 +345,53 @@ def change_password(request):
             return JsonResponse({'success': True})
             
         except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'})
+
+@login_required
+@csrf_exempt
+def change_own_password(request):
+    """Изменяет пароль текущего пользователя (для обычных пользователей)"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            current_password = data.get('current_password')
+            new_password1 = data.get('new_password1')
+            new_password2 = data.get('new_password2')
+            
+            if not current_password:
+                return JsonResponse({'success': False, 'error': 'Введите текущий пароль'})
+            
+            if not new_password1 or not new_password2:
+                return JsonResponse({'success': False, 'error': 'Заполните все поля для нового пароля'})
+            
+            if new_password1 != new_password2:
+                return JsonResponse({'success': False, 'error': 'Новые пароли не совпадают'})
+            
+            # Проверяем текущий пароль
+            if not request.user.check_password(current_password):
+                return JsonResponse({'success': False, 'error': 'Неверный текущий пароль'})
+            
+            # Устанавливаем новый пароль
+            request.user.set_password(new_password1)
+            request.user.save()
+            
+            # Обновляем сессию
+            update_session_auth_hash(request, request.user)
+            
+            # Сбрасываем флаг принудительной смены пароля, если он был установлен
+            try:
+                profile = Profile.objects.get(user=request.user)
+                profile.force_password_change = False
+                profile.save()
+            except Profile.DoesNotExist:
+                pass
+            
+            return JsonResponse({'success': True})
+            
+        except Exception as e:
+            logger.error(f"Ошибка при смене пароля: {e}")
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Only POST allowed'})

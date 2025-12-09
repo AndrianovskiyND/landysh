@@ -19,4 +19,5 @@ urlpatterns = [
     # Новые endpoints для групп
     path('groups/copy/', views.copy_group, name='copy_group'),
     path('groups/merge/', views.merge_groups, name='merge_groups'),
+    path('change-own-password/', views.change_own_password, name='change_own_password'),
 ]

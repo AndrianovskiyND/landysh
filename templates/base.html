@@ -48,6 +48,65 @@
             display: flex;
             align-items: center;
             gap: 1rem;
+            position: relative;
+        }
+        
+        .user-menu {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .user-menu-trigger {
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .user-menu-trigger:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .user-menu-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.5rem;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            min-width: 180px;
+            z-index: 1000;
+        }
+        
+        .user-menu-dropdown.show {
+            display: block;
+        }
+        
+        .user-menu-item {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            color: var(--text-color);
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+        
+        .user-menu-item:last-child {
+            border-bottom: none;
+        }
+        
+        .user-menu-item:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .user-menu-item.danger {
+            color: #dc3545;
+        }
+        
+        .user-menu-item.danger:hover {
+            background-color: #f8d7da;
         }
         
         .top-nav {
@@ -256,9 +315,24 @@
     <div class="header">
         <h1 onclick="showDashboard()">🚂 Ландыш - Управление кластерами 1С</h1>
         <div class="user-info">
-            <span>{% if user.is_authenticated %}{{ user.username }}{% endif %}</span>
             {% if user.is_authenticated %}
-                <a href="{% url 'logout' %}" style="color: white; text-decoration: none;">Выйти</a>
+                <div class="user-menu">
+                    <div class="user-menu-trigger" onclick="toggleUserMenu(event)">
+                        <span>{{ user.username }}</span>
+                        <span style="margin-left: 0.5rem;">▼</span>
+                    </div>
+                    <div class="user-menu-dropdown" id="userMenuDropdown">
+                        <div class="user-menu-item" onclick="openMyProperties()">
+                            👤 Мои свойства
+                        </div>
+                        <div class="user-menu-item" onclick="openChangePasswordModal()">
+                            🔑 Сменить пароль
+                        </div>
+                        <div class="user-menu-item danger" onclick="window.location.href='{% url 'logout' %}'">
+                            🚪 Выйти
+                        </div>
+                    </div>
+                </div>
             {% endif %}
         </div>
     </div>

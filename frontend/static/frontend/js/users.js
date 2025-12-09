@@ -120,6 +120,7 @@ async function showUserProperties(userId) {
 function renderUserPropertiesModal(user, allGroups = []) {
     const currentUserId = window.CURRENT_USER_ID || 0;
     const isOtherUser = user.id !== currentUserId;
+    const isAdmin = window.IS_ADMIN || false;
     
     // Определяем текущую группу пользователя
     const userGroup = allGroups.find(g => g.members && g.members.some(m => m.id === user.id));
@@ -199,7 +200,8 @@ function renderUserPropertiesModal(user, allGroups = []) {
                         </div>
                     </div>
                     
-                    <!-- Блок редактирования -->
+                    <!-- Блок редактирования (только для администраторов) -->
+                    ${isAdmin ? `
                     <div class="info-card" style="margin-bottom: 1rem;">
                         <h4 style="border-bottom-color: var(--secondary-color);">✏️ Редактирование данных</h4>
                         <div class="edit-form">
@@ -233,31 +235,46 @@ function renderUserPropertiesModal(user, allGroups = []) {
                                     ${groupOptions}
                                 </select>
                             </div>
+                            <div class="form-row">
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; text-transform: none; letter-spacing: normal;">
+                                    <input type="checkbox" id="editSubjectToPasswordPolicy" ${user.subject_to_password_policy !== false ? 'checked' : ''} style="width: 18px; height: 18px;">
+                                    <span style="font-weight: 500; color: #333;">Подчиняется парольной политике</span>
+                                </label>
+                                <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Если снято, пользователю разрешено не подчиняться парольной политике</small>
+                            </div>
                         </div>
                         <button class="btn btn-primary" onclick="saveUserChanges(${user.id})" style="margin-top: 1.25rem; width: 100%;">
                             💾 Сохранить изменения
                         </button>
                     </div>
+                    ` : ''}
                     
                     <!-- Блок действий -->
                     <div class="info-card">
                         <h4>⚡ Действия</h4>
                         <div class="actions-grid">
-                            <button class="btn btn-secondary" onclick="openChangePasswordModal(${user.id}, '${user.username}')">
-                                🔑 Сменить пароль
-                            </button>
-                            ${isOtherUser ? `
-                                <button class="btn btn-warning" onclick="requirePasswordChange(${user.id}, '${user.username}')">
-                                    🔄 Требовать смену
+                            ${isAdmin ? `
+                                <button class="btn btn-secondary" onclick="openAdminChangePasswordModal(${user.id}, '${user.username}')">
+                                    🔑 Сменить пароль
                                 </button>
-                                <button class="btn ${user.is_active ? 'btn-danger' : 'btn-success'}" 
-                                        onclick="toggleUserActive(${user.id}, ${!user.is_active})">
-                                    ${user.is_active ? '🚫 Заблокировать' : '✅ Разблокировать'}
+                                ${isOtherUser ? `
+                                    <button class="btn btn-warning" onclick="requirePasswordChange(${user.id}, '${user.username}')">
+                                        🔄 Требовать смену
+                                    </button>
+                                    <button class="btn ${user.is_active ? 'btn-danger' : 'btn-success'}" 
+                                            onclick="toggleUserActive(${user.id}, ${!user.is_active})">
+                                        ${user.is_active ? '🚫 Заблокировать' : '✅ Разблокировать'}
+                                    </button>
+                                    <button class="btn btn-danger" onclick="deleteUser(${user.id}, '${user.username}')">
+                                        🗑️ Удалить пользователя
+                                    </button>
+                                ` : ''}
+                            ` : `
+                                <!-- Обычный пользователь может только сменить пароль (использует функцию из app.js) -->
+                                <button class="btn btn-secondary" onclick="if(typeof openChangePasswordModal === 'function') { openChangePasswordModal(); } else { showNotification('❌ Функция смены пароля недоступна', true); }">
+                                    🔑 Сменить пароль
                                 </button>
-                                <button class="btn btn-danger" onclick="deleteUser(${user.id}, '${user.username}')">
-                                    🗑️ Удалить пользователя
-                                </button>
-                            ` : ''}
+                            `}
                         </div>
                     </div>
                 </div>
@@ -302,6 +319,10 @@ async function saveUserChanges(userId) {
             return;
         }
         
+        // Получаем значение чекбокса парольной политики
+        const subjectToPasswordPolicyEl = document.getElementById('editSubjectToPasswordPolicy');
+        const subjectToPasswordPolicy = subjectToPasswordPolicyEl ? subjectToPasswordPolicyEl.checked : true;
+        
         // Сохраняем основные данные
         const updateResponse = await fetch('/api/users/update/', {
             method: 'POST',
@@ -313,7 +334,8 @@ async function saveUserChanges(userId) {
                 user_id: userId,
                 first_name: firstName,
                 last_name: lastName,
-                email: email
+                email: email,
+                subject_to_password_policy: subjectToPasswordPolicy
             })
         });
         
@@ -433,9 +455,9 @@ function closeUserProperties() {
 // ============================================
 
 /**
- * Открыть модальное окно смены пароля
+ * Открыть модальное окно смены пароля (для администраторов)
  */
-function openChangePasswordModal(userId, username) {
+function openAdminChangePasswordModal(userId, username) {
     const modalHtml = `
         <div class="modal-overlay" id="passwordModal">
             <div class="modal" style="max-width: 400px;">
@@ -667,6 +689,13 @@ function showCreateUserForm() {
                     <label for="newUserLastName">Фамилия</label>
                     <input type="text" id="newUserLastName" placeholder="Иванов">
                 </div>
+                <div class="form-row">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; text-transform: none; letter-spacing: normal;">
+                        <input type="checkbox" id="newUserSubjectToPasswordPolicy" checked style="width: 18px; height: 18px;">
+                        <span style="font-weight: 500; color: #333;">Подчиняется парольной политике</span>
+                    </label>
+                    <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Если снято, пользователю разрешено не подчиняться парольной политике</small>
+                </div>
                 <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
                     <button class="btn btn-primary" onclick="createNewUser()">Создать</button>
                     <button class="btn" onclick="showUserManagement()">Отмена</button>
@@ -677,13 +706,17 @@ function showCreateUserForm() {
 }
 
 async function createNewUser() {
+    const subjectToPasswordPolicyEl = document.getElementById('newUserSubjectToPasswordPolicy');
+    const subjectToPasswordPolicy = subjectToPasswordPolicyEl ? subjectToPasswordPolicyEl.checked : true;
+    
     const userData = {
         username: document.getElementById('newUsername').value,
         password: document.getElementById('newPassword').value,
         role: document.getElementById('newUserRole').value,
         email: document.getElementById('newUserEmail').value,
         first_name: document.getElementById('newUserFirstName').value,
-        last_name: document.getElementById('newUserLastName').value
+        last_name: document.getElementById('newUserLastName').value,
+        subject_to_password_policy: subjectToPasswordPolicy
     };
     
     if (!userData.username || !userData.password) {

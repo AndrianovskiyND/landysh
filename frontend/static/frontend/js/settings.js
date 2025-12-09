@@ -50,64 +50,47 @@ function renderSystemSettings(settings) {
                 <div class="edit-form">
                     <div class="form-row">
                         <label>Путь к утилите RAC</label>
-                        <input type="text" id="rac_path" value="${settings.rac_path}" placeholder="/opt/1cv8/x86_64/8.3.27.1860/rac">
+                        <input type="text" id="rac_path" value="${settings.rac_path || ''}" placeholder="/opt/1cv8/x86_64/8.3.27.1860/rac">
                         <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Абсолютный путь к исполняемому файлу rac</small>
                     </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                        <div class="form-row">
-                            <label>Таймаут сессии (сек)</label>
-                            <input type="number" id="session_timeout" value="${settings.session_timeout}">
-                        </div>
-                        <div class="form-row">
-                            <label>Макс. подключений</label>
-                            <input type="number" id="max_connections" value="${settings.max_connections}">
-                        </div>
-                    </div>
                 </div>
             </div>
             
-            <!-- Настройки уведомлений -->
+            <!-- Парольная политика -->
             <div class="info-card" style="margin-bottom: 1rem;">
-                <h4 style="border-bottom-color: var(--secondary-color);">📧 Настройки уведомлений</h4>
+                <h4 style="border-bottom-color: var(--primary-color);">🔐 Парольная политика</h4>
                 <div class="edit-form">
                     <div class="form-row">
-                        <label>SMTP сервер</label>
-                        <input type="text" id="smtp_server" value="${settings.smtp_server}" placeholder="smtp.example.com">
+                        <label>Минимальная длина пароля</label>
+                        <input type="number" id="password_min_length" value="${settings.password_min_length || '8'}" min="1" max="128">
+                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Минимальное количество символов в пароле</small>
                     </div>
                     
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                        <div class="form-row">
-                            <label>SMTP порт</label>
-                            <input type="number" id="smtp_port" value="${settings.smtp_port}">
-                        </div>
-                        <div class="form-row">
-                            <label>Email для уведомлений</label>
-                            <input type="email" id="notification_email" value="${settings.notification_email}" placeholder="admin@example.com">
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Прочие настройки -->
-            <div class="info-card" style="margin-bottom: 1rem;">
-                <h4 style="border-bottom-color: #6366f1;">⚡ Прочие настройки</h4>
-                <div class="edit-form">
                     <div class="form-row">
-                        <label>Уровень логирования</label>
-                        <select id="log_level">
-                            <option value="DEBUG" ${settings.log_level === 'DEBUG' ? 'selected' : ''}>DEBUG</option>
-                            <option value="INFO" ${settings.log_level === 'INFO' ? 'selected' : ''}>INFO</option>
-                            <option value="WARNING" ${settings.log_level === 'WARNING' ? 'selected' : ''}>WARNING</option>
-                            <option value="ERROR" ${settings.log_level === 'ERROR' ? 'selected' : ''}>ERROR</option>
+                        <label>Сложность пароля</label>
+                        <select id="password_complexity">
+                            <option value="low" ${settings.password_complexity === 'low' ? 'selected' : ''}>Низкая (только буквы и цифры)</option>
+                            <option value="medium" ${settings.password_complexity === 'medium' ? 'selected' : ''}>Средняя (буквы, цифры, спецсимволы)</option>
+                            <option value="high" ${settings.password_complexity === 'high' ? 'selected' : ''}>Высокая (обязательны буквы, цифры, спецсимволы, регистры)</option>
                         </select>
                     </div>
                     
                     <div class="form-row">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; text-transform: none; letter-spacing: normal;">
-                            <input type="checkbox" id="backup_enabled" ${settings.backup_enabled === 'true' ? 'checked' : ''} style="width: 18px; height: 18px;">
-                            <span style="font-weight: 500; color: #333;">Резервное копирование настроек</span>
-                        </label>
+                        <label>Срок действия пароля (дней)</label>
+                        <input type="number" id="password_expiry_days" value="${settings.password_expiry_days || '90'}" min="1">
+                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Через сколько дней требуется смена пароля</small>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Ограничение количества неудачных попыток входа</label>
+                        <input type="number" id="password_max_failed_attempts" value="${settings.password_max_failed_attempts || '5'}" min="1" max="20">
+                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">После скольких неудачных попыток блокировать учетную запись</small>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Количество дней блокировки после неудачной попытки</label>
+                        <input type="number" id="password_lockout_days" value="${settings.password_lockout_days || '1'}" min="0">
+                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">0 = бесконечно (блокировка до разблокировки администратором)</small>
                     </div>
                 </div>
             </div>
@@ -140,13 +123,11 @@ function renderSystemSettings(settings) {
 async function saveSystemSettings() {
     const settings = {
         rac_path: document.getElementById('rac_path').value,
-        session_timeout: document.getElementById('session_timeout').value,
-        max_connections: document.getElementById('max_connections').value,
-        log_level: document.getElementById('log_level').value,
-        backup_enabled: document.getElementById('backup_enabled').checked ? 'true' : 'false',
-        smtp_server: document.getElementById('smtp_server').value,
-        smtp_port: document.getElementById('smtp_port').value,
-        notification_email: document.getElementById('notification_email').value,
+        password_min_length: document.getElementById('password_min_length').value,
+        password_complexity: document.getElementById('password_complexity').value,
+        password_expiry_days: document.getElementById('password_expiry_days').value,
+        password_max_failed_attempts: document.getElementById('password_max_failed_attempts').value,
+        password_lockout_days: document.getElementById('password_lockout_days').value,
     };
     
     try {

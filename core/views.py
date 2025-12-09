@@ -20,13 +20,12 @@ def system_settings(request):
     
     settings_data = {
         'rac_path': SystemSettings.get_setting('rac_path', '/opt/1cv8/x86_64/8.3.27.1860/rac'),
-        'session_timeout': SystemSettings.get_setting('session_timeout', '30'),
-        'max_connections': SystemSettings.get_setting('max_connections', '10'),
-        'log_level': SystemSettings.get_setting('log_level', 'INFO'),
-        'backup_enabled': SystemSettings.get_setting('backup_enabled', 'false'),
-        'smtp_server': SystemSettings.get_setting('smtp_server', ''),
-        'smtp_port': SystemSettings.get_setting('smtp_port', '587'),
-        'notification_email': SystemSettings.get_setting('notification_email', ''),
+        # Парольная политика
+        'password_min_length': SystemSettings.get_setting('password_min_length', '8'),
+        'password_complexity': SystemSettings.get_setting('password_complexity', 'medium'),  # low, medium, high
+        'password_expiry_days': SystemSettings.get_setting('password_expiry_days', '90'),
+        'password_max_failed_attempts': SystemSettings.get_setting('password_max_failed_attempts', '5'),
+        'password_lockout_days': SystemSettings.get_setting('password_lockout_days', '1'),  # 0 = бесконечно
     }
     
     return JsonResponse({'success': True, 'settings': settings_data})

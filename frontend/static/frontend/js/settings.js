@@ -56,6 +56,79 @@ function renderSystemSettings(settings) {
                 </div>
             </div>
             
+            <!-- Настройки кодировок -->
+            <div class="info-card" style="margin-bottom: 1rem;">
+                <h4 style="border-bottom-color: var(--primary-color);">📝 Настройки кодировок</h4>
+                <div class="edit-form">
+                    <div style="margin-bottom: 1rem; padding: 0.75rem; background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 4px; font-size: 0.9rem;">
+                        <strong>🖥️ Текущая система:</strong> Сервер работает на <strong>${settings.current_os || 'Неизвестно'}</strong>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Кодировка для Windows</label>
+                        <select id="encoding_windows">
+                            <option value="utf-8" ${settings.encoding_windows === 'utf-8' ? 'selected' : ''}>UTF-8 (универсальная)</option>
+                            <option value="cp1251" ${settings.encoding_windows === 'cp1251' ? 'selected' : ''}>CP1251 (Windows Cyrillic)</option>
+                            <option value="cp866" ${settings.encoding_windows === 'cp866' ? 'selected' : ''}>CP866 (DOS Cyrillic)</option>
+                            <option value="koi8-r" ${settings.encoding_windows === 'koi8-r' ? 'selected' : ''}>KOI8-R (Linux/Unix Cyrillic)</option>
+                            <option value="latin1" ${settings.encoding_windows === 'latin1' ? 'selected' : ''}>Latin1 (ISO 8859-1)</option>
+                        </select>
+                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Основная кодировка для декодирования вывода RAC на Windows. Если декодирование не удается, система попробует другие кодировки автоматически.</small>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Кодировка для Linux</label>
+                        <select id="encoding_linux">
+                            <option value="utf-8" ${settings.encoding_linux === 'utf-8' ? 'selected' : ''}>UTF-8 (универсальная)</option>
+                            <option value="cp1251" ${settings.encoding_linux === 'cp1251' ? 'selected' : ''}>CP1251 (Windows Cyrillic)</option>
+                            <option value="cp866" ${settings.encoding_linux === 'cp866' ? 'selected' : ''}>CP866 (DOS Cyrillic)</option>
+                            <option value="koi8-r" ${settings.encoding_linux === 'koi8-r' ? 'selected' : ''}>KOI8-R (Linux/Unix Cyrillic)</option>
+                            <option value="latin1" ${settings.encoding_linux === 'latin1' ? 'selected' : ''}>Latin1 (ISO 8859-1)</option>
+                        </select>
+                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Основная кодировка для декодирования вывода RAC на Linux. Если декодирование не удается, система попробует другие кодировки автоматически.</small>
+                    </div>
+                    
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; font-size: 0.9rem;">
+                        <strong>💡 Совет:</strong> Попробуйте разные кодировки, если видите некорректное отображение текста. Система автоматически попробует другие кодировки, если выбранная не подходит.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Настройки логирования -->
+            <div class="info-card" style="margin-bottom: 1rem;">
+                <h4 style="border-bottom-color: var(--primary-color);">📋 Настройки логирования</h4>
+                <div class="edit-form">
+                    <div class="form-row">
+                        <label>
+                            <input type="checkbox" id="logging_enabled" ${settings.logging_enabled === 'true' ? 'checked' : ''} style="margin-right: 0.5rem;">
+                            Включить логирование
+                        </label>
+                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Логи сохраняются в папку logs/django.log</small>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Уровень логирования</label>
+                        <select id="logging_level">
+                            <option value="DEBUG" ${settings.logging_level === 'DEBUG' ? 'selected' : ''}>DEBUG (максимальная детализация)</option>
+                            <option value="INFO" ${settings.logging_level === 'INFO' ? 'selected' : ''}>INFO (информационные сообщения)</option>
+                            <option value="WARNING" ${settings.logging_level === 'WARNING' ? 'selected' : ''}>WARNING (предупреждения)</option>
+                            <option value="ERROR" ${settings.logging_level === 'ERROR' ? 'selected' : ''}>ERROR (только ошибки)</option>
+                        </select>
+                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Уровень детализации логов. DEBUG включает максимальную детализацию, включая результаты команд RAC.</small>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label>Что логировать</label>
+                        <select id="logging_what">
+                            <option value="rac" ${settings.logging_what === 'rac' ? 'selected' : ''}>Только команды RAC</option>
+                            <option value="requests" ${settings.logging_what === 'requests' ? 'selected' : ''}>Только запросы</option>
+                            <option value="both" ${settings.logging_what === 'both' ? 'selected' : ''}>Запросы и RAC</option>
+                        </select>
+                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Выберите, что нужно логировать: команды RAC, HTTP запросы или оба.</small>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Парольная политика -->
             <div class="info-card" style="margin-bottom: 1rem;">
                 <h4 style="border-bottom-color: var(--primary-color);">🔐 Парольная политика</h4>
@@ -123,12 +196,28 @@ function renderSystemSettings(settings) {
 async function saveSystemSettings() {
     const settings = {
         rac_path: document.getElementById('rac_path').value,
+        encoding_windows: document.getElementById('encoding_windows').value.trim(),
+        encoding_linux: document.getElementById('encoding_linux').value.trim(),
+        logging_enabled: document.getElementById('logging_enabled').checked ? 'true' : 'false',
+        logging_level: document.getElementById('logging_level').value,
+        logging_what: document.getElementById('logging_what').value,
         password_min_length: document.getElementById('password_min_length').value,
         password_complexity: document.getElementById('password_complexity').value,
         password_expiry_days: document.getElementById('password_expiry_days').value,
         password_max_failed_attempts: document.getElementById('password_max_failed_attempts').value,
         password_lockout_days: document.getElementById('password_lockout_days').value,
     };
+    
+    // Валидация кодировок (теперь это просто выбор из списка, но проверим на всякий случай)
+    const validEncodings = ['utf-8', 'cp1251', 'cp866', 'koi8-r', 'latin1'];
+    if (!validEncodings.includes(settings.encoding_windows)) {
+        showNotification('❌ Неверная кодировка для Windows', true);
+        return;
+    }
+    if (!validEncodings.includes(settings.encoding_linux)) {
+        showNotification('❌ Неверная кодировка для Linux', true);
+        return;
+    }
     
     try {
         // Сохраняем каждую настройку отдельно

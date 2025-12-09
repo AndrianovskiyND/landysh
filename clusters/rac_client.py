@@ -106,6 +106,8 @@ class RACClient:
         # Логируем маскированную команду
         masked_cmd = self._mask_sensitive_data(' '.join(cmd_args))
         logger.info(f"Executing RAC command: {masked_cmd}")
+        # Логируем полную команду на уровне DEBUG (если включено логирование RAC)
+        logger.debug(f"Full RAC command: {' '.join(cmd_args)}")
         
         try:
             # Определяем кодировку в зависимости от ОС
@@ -143,14 +145,21 @@ class RACClient:
                 if isinstance(data_bytes, str):
                     return data_bytes
                 
-                # Определяем список кодировок в зависимости от ОС
+                # Определяем основную кодировку в зависимости от ОС
+                # Получаем настройки из SystemSettings или используем значения по умолчанию
                 if sys.platform == 'win32':
-                    # Windows: cp866 (DOS), cp1251 (Windows), utf-8, latin1
-                    all_encodings = ['cp866', 'cp1251', 'utf-8', 'latin1']
+                    # Windows: получаем основную кодировку из настроек
+                    primary_encoding = SystemSettings.get_setting('encoding_windows', 'cp866')
+                    # Fallback кодировки для Windows (если основная не подходит)
+                    fallback_encodings = ['cp1251', 'utf-8', 'latin1']
                 else:
-                    # Linux (РЕД ОС, CentOS и т.д.): пробуем utf-8 в первую очередь
-                    # Затем cp1251, cp866, koi8-r, latin1
-                    all_encodings = ['utf-8', 'cp1251', 'cp866', 'koi8-r', 'latin1']
+                    # Linux (РЕД ОС, CentOS и т.д.): получаем основную кодировку из настроек
+                    primary_encoding = SystemSettings.get_setting('encoding_linux', 'utf-8')
+                    # Fallback кодировки для Linux (если основная не подходит)
+                    fallback_encodings = ['cp1251', 'cp866', 'koi8-r', 'latin1']
+                
+                # Формируем список кодировок: сначала основная, затем fallback
+                all_encodings = [primary_encoding] + [e for e in fallback_encodings if e != primary_encoding]
                 
                 best_decoded = None
                 best_score = 0
@@ -218,6 +227,8 @@ class RACClient:
                 # Если нашли вариант с кириллицей - возвращаем его
                 if best_decoded and best_score > 0:
                     logger.debug(f"Decoded with {best_score} cyrillic characters using {best_encoding}")
+                    # Логируем результат декодирования на уровне DEBUG
+                    logger.debug(f"Decoded text (first 200 chars): {best_decoded[:200]}")
                     return best_decoded
                 
                 # Возвращаем лучший вариант или строковое представление
@@ -289,6 +300,9 @@ class RACClient:
             
             # Декодируем вывод с правильной кодировкой
             output_text = decode_text(result.stdout)
+            # Логируем результаты команд RAC на уровне DEBUG
+            if output_text:
+                logger.debug(f"RAC stdout (first 500 chars): {output_text[:500]}")
             return {'success': True, 'output': output_text}
             
         except subprocess.TimeoutExpired:
@@ -439,14 +453,21 @@ class RACClient:
                 if isinstance(data_bytes, str):
                     return data_bytes
                 
-                # Определяем список кодировок в зависимости от ОС
+                # Определяем основную кодировку в зависимости от ОС
+                # Получаем настройки из SystemSettings или используем значения по умолчанию
                 if sys.platform == 'win32':
-                    # Windows: cp866 (DOS), cp1251 (Windows), utf-8, latin1
-                    all_encodings = ['cp866', 'cp1251', 'utf-8', 'latin1']
+                    # Windows: получаем основную кодировку из настроек
+                    primary_encoding = SystemSettings.get_setting('encoding_windows', 'cp866')
+                    # Fallback кодировки для Windows (если основная не подходит)
+                    fallback_encodings = ['cp1251', 'utf-8', 'latin1']
                 else:
-                    # Linux (РЕД ОС, CentOS и т.д.): пробуем utf-8 в первую очередь
-                    # Затем cp1251, cp866, koi8-r, latin1
-                    all_encodings = ['utf-8', 'cp1251', 'cp866', 'koi8-r', 'latin1']
+                    # Linux (РЕД ОС, CentOS и т.д.): получаем основную кодировку из настроек
+                    primary_encoding = SystemSettings.get_setting('encoding_linux', 'utf-8')
+                    # Fallback кодировки для Linux (если основная не подходит)
+                    fallback_encodings = ['cp1251', 'cp866', 'koi8-r', 'latin1']
+                
+                # Формируем список кодировок: сначала основная, затем fallback
+                all_encodings = [primary_encoding] + [e for e in fallback_encodings if e != primary_encoding]
                 
                 best_decoded = None
                 best_score = 0
@@ -514,6 +535,8 @@ class RACClient:
                 # Если нашли вариант с кириллицей - возвращаем его
                 if best_decoded and best_score > 0:
                     logger.debug(f"Decoded with {best_score} cyrillic characters using {best_encoding}")
+                    # Логируем результат декодирования на уровне DEBUG
+                    logger.debug(f"Decoded text (first 200 chars): {best_decoded[:200]}")
                     return best_decoded
                 
                 return best_decoded if best_decoded else str(data_bytes)

@@ -3885,6 +3885,12 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
 @csrf_exempt
 def get_infobase_info(request, connection_id, cluster_uuid):
     """Получает информацию об информационной базе"""
+    import logging
+    logger = logging.getLogger('clusters')
+    
+    # Логируем запрос
+    logger.debug(f"GET /api/clusters/infobases/{connection_id}/{cluster_uuid}/info/ - User: {request.user.username}")
+    
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         infobase_uuid = request.GET.get('infobase')

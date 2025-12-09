@@ -76,18 +76,25 @@ def fix_broken_encoding(text):
     return text
 
 class RACClient:
-    def __init__(self, server_connection):
+    def __init__(self, server_connection, cluster_admin=None, cluster_password=None):
         self.server_connection = server_connection
         # Получаем путь к RAC из системных настроек
         self.rac_path = SystemSettings.get_setting('rac_path', settings.RAC_PATH)
+        # Администратор кластера (передается отдельно, не из server_connection)
+        self.cluster_admin = cluster_admin
+        self.cluster_password = cluster_password
         
     def _mask_sensitive_data(self, command):
         """Маскирует чувствительные данные в команде для логирования"""
         masked = command
-        if self.server_connection.cluster_admin:
-            masked = masked.replace(self.server_connection.cluster_admin, '***')
-        if self.server_connection.cluster_password:
-            masked = masked.replace(str(self.server_connection.cluster_password), '***')
+        if self.cluster_admin:
+            masked = masked.replace(self.cluster_admin, '***')
+        if self.cluster_password:
+            masked = masked.replace(str(self.cluster_password), '***')
+        if self.server_connection.agent_user:
+            masked = masked.replace(self.server_connection.agent_user, '***')
+        if self.server_connection.agent_password:
+            masked = masked.replace(str(self.server_connection.agent_password), '***')
         return masked
         
     def _execute_command(self, args):
@@ -102,8 +109,8 @@ class RACClient:
         # Проверяем, не является ли это командой 'cluster list'
         is_cluster_list = len(args) >= 2 and args[0] == 'cluster' and args[1] == 'list'
         
-        # Добавляем аутентификацию только если это НЕ cluster list
-        if not is_cluster_list and self.server_connection.cluster_admin:
+        # Добавляем аутентификацию кластера только если это НЕ cluster list
+        if not is_cluster_list and self.cluster_admin:
             # Параметры --cluster-user и --cluster-pwd должны идти ПОСЛЕ --cluster=...
             # Ищем позицию параметра --cluster= в аргументах
             cluster_param_index = None
@@ -115,14 +122,24 @@ class RACClient:
             if cluster_param_index is not None:
                 # Вставляем после --cluster=
                 insert_pos = cluster_param_index + 1
-                cmd_args.insert(insert_pos, f'--cluster-user={self.server_connection.cluster_admin}')
-                if self.server_connection.cluster_password:
-                    cmd_args.insert(insert_pos + 1, f'--cluster-pwd={self.server_connection.cluster_password}')
+                cmd_args.insert(insert_pos, f'--cluster-user={self.cluster_admin}')
+                if self.cluster_password:
+                    cmd_args.insert(insert_pos + 1, f'--cluster-pwd={self.cluster_password}')
             else:
                 # Если параметра --cluster= нет, вставляем в начало (для обратной совместимости)
-                cmd_args.insert(1, f'--cluster-user={self.server_connection.cluster_admin}')
-                if self.server_connection.cluster_password:
-                    cmd_args.insert(2, f'--cluster-pwd={self.server_connection.cluster_password}')
+                cmd_args.insert(1, f'--cluster-user={self.cluster_admin}')
+                if self.cluster_password:
+                    cmd_args.insert(2, f'--cluster-pwd={self.cluster_password}')
+        
+        # Добавляем аутентификацию агента для команд, которые её поддерживают
+        # Команда 'cluster list' поддерживает параметры --agent-user и --agent-pwd
+        if self.server_connection.agent_user:
+            # Параметры --agent-user и --agent-pwd можно добавлять в любом месте команды
+            # Добавляем их перед connection_str (в конец аргументов, но перед connection_str)
+            insert_pos = len(cmd_args) - 1  # Позиция перед connection_str
+            cmd_args.insert(insert_pos, f'--agent-user={self.server_connection.agent_user}')
+            if self.server_connection.agent_password:
+                cmd_args.insert(insert_pos + 1, f'--agent-pwd={self.server_connection.agent_password}')
         
         # Логируем маскированную команду
         masked_cmd = self._mask_sensitive_data(' '.join(cmd_args))
@@ -443,10 +460,10 @@ class RACClient:
         cmd_args = [self.rac_path]
         
         # Добавляем аутентификацию если есть (после rac, перед аргументами команды)
-        if self.server_connection.cluster_admin:
-            cmd_args.append(f'--cluster-user={self.server_connection.cluster_admin}')
-            if self.server_connection.cluster_password:
-                cmd_args.append(f'--cluster-pwd={self.server_connection.cluster_password}')
+        if self.cluster_admin:
+            cmd_args.append(f'--cluster-user={self.cluster_admin}')
+            if self.cluster_password:
+                cmd_args.append(f'--cluster-pwd={self.cluster_password}')
         
         # Добавляем аргументы команды
         cmd_args.extend(args)
@@ -659,10 +676,10 @@ class RACClient:
         args = ['cluster', 'remove', f'--cluster={cluster_uuid}']
         
         # Добавляем аутентификацию если есть
-        if self.server_connection.cluster_admin:
-            args.insert(1, f'--cluster-user={self.server_connection.cluster_admin}')
-            if self.server_connection.cluster_password:
-                args.insert(2, f'--cluster-pwd={self.server_connection.cluster_password}')
+        if self.cluster_admin:
+            args.insert(1, f'--cluster-user={self.cluster_admin}')
+            if self.cluster_password:
+                args.insert(2, f'--cluster-pwd={self.cluster_password}')
         
         return self._execute_command(args)
     
@@ -1076,6 +1093,52 @@ class RACClient:
             f'--server={server_uuid}',
             f'--rule={rule_uuid}'
         ]
+        return self._execute_command(args)
+    
+    # ============================================
+    # Агенты кластера
+    # ============================================
+    
+    def agent_admin_list(self):
+        """Получает список администраторов агента кластера"""
+        args = ['agent', 'admin', 'list']
+        return self._execute_command(args)
+    
+    def agent_admin_register(self, name, pwd=None, descr=None):
+        """Добавляет нового администратора агента кластера"""
+        args = ['agent', 'admin', 'register', f'--name={name}', '--auth=pwd']
+        if pwd:
+            args.append(f'--pwd={pwd}')
+        if descr:
+            args.append(f'--descr={descr}')
+        return self._execute_command(args)
+    
+    def agent_admin_remove(self, name):
+        """Удаляет администратора агента кластера"""
+        args = ['agent', 'admin', 'remove', f'--name={name}']
+        return self._execute_command(args)
+    
+    # ============================================
+    # Администраторы кластера
+    # ============================================
+    
+    def cluster_admin_list(self, cluster_uuid):
+        """Получает список администраторов кластера"""
+        args = ['cluster', 'admin', 'list', f'--cluster={cluster_uuid}']
+        return self._execute_command(args)
+    
+    def cluster_admin_register(self, cluster_uuid, name, pwd=None, descr=None):
+        """Добавляет нового администратора кластера"""
+        args = ['cluster', 'admin', 'register', f'--cluster={cluster_uuid}', f'--name={name}', '--auth=pwd']
+        if pwd:
+            args.append(f'--pwd={pwd}')
+        if descr:
+            args.append(f'--descr={descr}')
+        return self._execute_command(args)
+    
+    def cluster_admin_remove(self, cluster_uuid, name):
+        """Удаляет администратора кластера"""
+        args = ['cluster', 'admin', 'remove', f'--cluster={cluster_uuid}', f'--name={name}']
         return self._execute_command(args)
     
     def apply_rules(self, cluster_uuid, server_uuid=None, full=True):

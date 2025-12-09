@@ -10,6 +10,8 @@ class ServerConnection(models.Model):
     ras_port = models.IntegerField(verbose_name='Порт RAS')
     cluster_admin = models.CharField(max_length=255, blank=True, null=True, verbose_name='Логин кластера')
     cluster_password = encrypt(models.CharField(max_length=255, blank=True, null=True, verbose_name='Пароль кластера'))
+    agent_user = models.CharField(max_length=255, blank=True, null=True, verbose_name='Логин агента кластера')
+    agent_password = encrypt(models.CharField(max_length=255, blank=True, null=True, verbose_name='Пароль агента кластера'))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

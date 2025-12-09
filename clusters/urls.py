@@ -36,4 +36,12 @@ urlpatterns = [
     path('rules/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/<str:rule_uuid>/update/', views.update_rule, name='update_rule'),
     path('rules/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/<str:rule_uuid>/delete/', views.delete_rule, name='delete_rule'),
     path('rules/<int:connection_id>/<str:cluster_uuid>/<str:server_uuid>/apply/', views.apply_rules, name='apply_rules'),
+    # Агенты кластера
+    path('agents/<int:connection_id>/', views.get_agents, name='get_agents'),
+    path('agents/<int:connection_id>/create/', views.create_agent, name='create_agent'),
+    path('agents/<int:connection_id>/delete/', views.delete_agent, name='delete_agent'),
+    # Администраторы кластера
+    path('admins/<int:connection_id>/<str:cluster_uuid>/', views.get_cluster_admins, name='get_cluster_admins'),
+    path('admins/<int:connection_id>/<str:cluster_uuid>/create/', views.create_cluster_admin, name='create_cluster_admin'),
+    path('admins/<int:connection_id>/<str:cluster_uuid>/delete/', views.delete_cluster_admin, name='delete_cluster_admin'),
 ]

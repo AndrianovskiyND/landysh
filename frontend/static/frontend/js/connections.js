@@ -205,38 +205,49 @@ async function openConnectionEditModal(connectionId) {
     
     const modalHtml = `
         <div class="modal-overlay" id="connectionModal">
-            <div class="modal" style="max-width: 500px;">
+            <div class="modal" style="max-width: 600px;">
                 <div class="modal-header">
                     <h3>${connectionId ? '⚙️ Редактирование подключения' : '➕ Добавить подключение'}</h3>
                     <button class="modal-close-btn" onclick="closeConnectionModal()">×</button>
                 </div>
                 <div class="modal-body">
-                    <div class="edit-form">
-                        <div class="form-row">
-                            <label for="modalDisplayName">Отображаемое имя *</label>
-                            <input type="text" id="modalDisplayName" value="${connectionData?.display_name || ''}" placeholder="Первый сервер проекта...">
-                        </div>
-                        <div class="form-row">
-                            <label for="modalServerHost">Сервер *</label>
-                            <input type="text" id="modalServerHost" value="${connectionData?.server_host || ''}" placeholder="server_ro01.com">
-                        </div>
-                        <div class="form-row">
-                            <label for="modalRasPort">Порт RAS *</label>
-                            <input type="number" id="modalRasPort" value="${connectionData?.ras_port || '1545'}" placeholder="1545">
-                        </div>
-                        <div class="form-row checkbox-row" style="margin-top: 0.5rem;">
-                            <input type="checkbox" id="modalUseClusterAuth" ${connectionData?.cluster_admin ? 'checked' : ''} onchange="toggleClusterAuthFields()">
-                            <label for="modalUseClusterAuth" style="font-weight: normal; text-transform: none; letter-spacing: normal;">Использовать УЗ админа кластера</label>
-                        </div>
-                        <div id="clusterAuthFields" style="display: ${connectionData?.cluster_admin ? 'block' : 'none'};">
+                    <!-- Основные настройки -->
+                    <div class="info-card" style="margin-bottom: 1rem;">
+                        <h4 style="border-bottom-color: var(--primary-color);">🔧 Основные настройки</h4>
+                        <div class="edit-form">
                             <div class="form-row">
-                                <label for="modalClusterAdmin">Логин кластера</label>
-                                <input type="text" id="modalClusterAdmin" value="${connectionData?.cluster_admin || ''}" placeholder="admin">
+                                <label for="modalDisplayName">Отображаемое имя *</label>
+                                <input type="text" id="modalDisplayName" value="${connectionData?.display_name || ''}" placeholder="Первый сервер проекта...">
                             </div>
                             <div class="form-row">
-                                <label for="modalClusterPassword">Пароль кластера</label>
-                                <input type="password" id="modalClusterPassword" value="" placeholder="••••••••">
-                                <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">${connectionId ? 'Оставьте пустым, чтобы не изменять' : 'Введите пароль'}</small>
+                                <label for="modalServerHost">Сервер *</label>
+                                <input type="text" id="modalServerHost" value="${connectionData?.server_host || ''}" placeholder="server_ro01.com">
+                            </div>
+                            <div class="form-row">
+                                <label for="modalRasPort">Порт RAS *</label>
+                                <input type="number" id="modalRasPort" value="${connectionData?.ras_port || '1545'}" placeholder="1545">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Учетные данные агента кластера -->
+                    <div class="info-card" style="margin-bottom: 1rem;">
+                        <h4 style="border-bottom-color: var(--primary-color);">🤖 Агент кластера</h4>
+                        <div class="edit-form">
+                            <div class="form-row checkbox-row" style="margin-top: 0.5rem;">
+                                <input type="checkbox" id="modalUseAgentAuth" ${connectionData?.agent_user ? 'checked' : ''} onchange="toggleAgentAuthFields()">
+                                <label for="modalUseAgentAuth" style="font-weight: normal; text-transform: none; letter-spacing: normal;">Использовать УЗ агента кластера</label>
+                            </div>
+                            <div id="agentAuthFields" style="display: ${connectionData?.agent_user ? 'block' : 'none'};">
+                                <div class="form-row">
+                                    <label for="modalAgentUser">Логин агента</label>
+                                    <input type="text" id="modalAgentUser" value="${connectionData?.agent_user || ''}" placeholder="agent">
+                                </div>
+                                <div class="form-row">
+                                    <label for="modalAgentPassword">Пароль агента</label>
+                                    <input type="password" id="modalAgentPassword" value="" placeholder="••••••••">
+                                    <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">${connectionId ? 'Оставьте пустым, чтобы не изменять' : 'Введите пароль'}</small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -255,8 +266,8 @@ async function openConnectionEditModal(connectionId) {
     container.insertAdjacentHTML('beforeend', modalHtml);
     
     // Инициализируем состояние полей УЗ при загрузке модального окна
-    if (connectionData?.cluster_admin) {
-        toggleClusterAuthFields();
+    if (connectionData?.agent_user) {
+        toggleAgentAuthFields();
     }
 }
 
@@ -288,6 +299,33 @@ function toggleClusterAuthFields() {
 }
 
 /**
+ * Переключить отображение полей УЗ агента кластера
+ */
+function toggleAgentAuthFields() {
+    const checkbox = document.getElementById('modalUseAgentAuth');
+    const fieldsContainer = document.getElementById('agentAuthFields');
+    const agentUserInput = document.getElementById('modalAgentUser');
+    const agentPasswordInput = document.getElementById('modalAgentPassword');
+    
+    if (!checkbox || !fieldsContainer || !agentUserInput || !agentPasswordInput) {
+        return;
+    }
+    
+    if (checkbox.checked) {
+        fieldsContainer.style.display = 'block';
+        agentUserInput.disabled = false;
+        agentPasswordInput.disabled = false;
+    } else {
+        fieldsContainer.style.display = 'none';
+        agentUserInput.disabled = false;
+        agentPasswordInput.disabled = false;
+        // Очищаем поля при скрытии
+        agentUserInput.value = '';
+        agentPasswordInput.value = '';
+    }
+}
+
+/**
  * Сохранить подключение (создать или обновить)
  */
 async function saveConnection(connectionId) {
@@ -295,9 +333,8 @@ async function saveConnection(connectionId) {
         const displayNameEl = document.getElementById('modalDisplayName');
         const serverHostEl = document.getElementById('modalServerHost');
         const rasPortEl = document.getElementById('modalRasPort');
-        const useClusterAuthEl = document.getElementById('modalUseClusterAuth');
         
-        if (!displayNameEl || !serverHostEl || !rasPortEl || !useClusterAuthEl) {
+        if (!displayNameEl || !serverHostEl || !rasPortEl) {
             showNotification('❌ Ошибка: Не найдены элементы формы. Попробуйте обновить страницу.', true);
             return;
         }
@@ -305,9 +342,9 @@ async function saveConnection(connectionId) {
         const displayName = displayNameEl.value;
         const serverHost = serverHostEl.value;
         const rasPort = rasPortEl.value;
-        const useClusterAuth = useClusterAuthEl.checked;
-        const clusterAdmin = useClusterAuth ? (document.getElementById('modalClusterAdmin')?.value || '') : '';
-        const clusterPassword = useClusterAuth ? (document.getElementById('modalClusterPassword')?.value || '') : '';
+        const useAgentAuth = document.getElementById('modalUseAgentAuth')?.checked || false;
+        const agentUser = useAgentAuth ? (document.getElementById('modalAgentUser')?.value || '') : '';
+        const agentPassword = useAgentAuth ? (document.getElementById('modalAgentPassword')?.value || '') : '';
     
         if (!displayName || !serverHost || !rasPort) {
             showNotification('❌ Заполните обязательные поля: Отображаемое имя, Сервер и Порт RAS', true);
@@ -318,16 +355,15 @@ async function saveConnection(connectionId) {
             display_name: displayName,
             server_host: serverHost,
             ras_port: parseInt(rasPort),
-            cluster_admin: useClusterAuth ? (clusterAdmin || '') : ''
+            agent_user: useAgentAuth ? (agentUser || '') : ''
         };
         
-        // Пароль добавляем только если галочка включена и указан пароль
-        // При редактировании пустое поле означает "не менять"
-        if (useClusterAuth && clusterPassword) {
-            connectionData.cluster_password = clusterPassword;
-        } else if (!useClusterAuth && connectionId) {
+        // Пароль агента добавляем только если галочка включена и указан пароль
+        if (useAgentAuth && agentPassword) {
+            connectionData.agent_password = agentPassword;
+        } else if (!useAgentAuth && connectionId) {
             // Если галочка снята при редактировании - очищаем пароль
-            connectionData.cluster_password = '';
+            connectionData.agent_password = '';
         }
         
         const csrfToken = getCSRFToken();
@@ -348,9 +384,12 @@ async function saveConnection(connectionId) {
                 body: JSON.stringify(connectionData)
             });
         } else {
-            // Создание нового подключения - пароль добавляем только если галочка включена
+            // Создание нового подключения - пароли добавляем только если галочки включены
             if (useClusterAuth && clusterPassword) {
                 connectionData.cluster_password = clusterPassword;
+            }
+            if (useAgentAuth && agentPassword) {
+                connectionData.agent_password = agentPassword;
             }
             response = await fetch('/api/clusters/connections/create/', {
                 method: 'POST',
@@ -388,6 +427,246 @@ function closeConnectionModal() {
     if (modal) {
         modal.classList.add('modal-closing');
         setTimeout(() => modal.remove(), 200);
+    }
+}
+
+// ============================================
+// Модальное окно для редактирования администратора кластера
+// ============================================
+
+/**
+ * Получить ключ для localStorage для учетных данных администратора кластера
+ */
+function getClusterAdminStorageKey(connectionId, clusterUuid) {
+    return `cluster_admin_${connectionId}_${clusterUuid}`;
+}
+
+/**
+ * Сохранить учетные данные администратора кластера в localStorage
+ */
+function saveClusterAdminToStorage(connectionId, clusterUuid, admin, password) {
+    const key = getClusterAdminStorageKey(connectionId, clusterUuid);
+    const data = {
+        admin: admin || '',
+        password: password || ''
+    };
+    localStorage.setItem(key, JSON.stringify(data));
+}
+
+/**
+ * Загрузить учетные данные администратора кластера из localStorage
+ */
+function loadClusterAdminFromStorage(connectionId, clusterUuid) {
+    const key = getClusterAdminStorageKey(connectionId, clusterUuid);
+    const stored = localStorage.getItem(key);
+    if (stored) {
+        try {
+            return JSON.parse(stored);
+        } catch (e) {
+            return { admin: '', password: '' };
+        }
+    }
+    return { admin: '', password: '' };
+}
+
+/**
+ * Открыть модальное окно для редактирования администратора кластера
+ */
+async function openClusterAdminModal(connectionId, clusterUuid, clusterName) {
+    // Загружаем сохраненные данные из localStorage
+    let storedData = loadClusterAdminFromStorage(connectionId, clusterUuid);
+    
+    // Если данных нет в localStorage, но есть в подключении - переносим для первого кластера
+    if (!storedData.admin) {
+        try {
+            const connResponse = await fetch('/api/clusters/connections/');
+            const connData = await connResponse.json();
+            const connection = connData.connections?.find(c => c.id === connectionId);
+            
+            // Проверяем, это первый кластер?
+            const clustersResponse = await fetch(`/api/clusters/clusters/${connectionId}/`);
+            const clustersData = await clustersResponse.json();
+            let clusters = clustersData.clusters || [];
+            if (clusters.length === 0 && clustersData.output) {
+                // Парсим вывод вручную если структурированных данных нет
+                clusters = parseClusterList(clustersData.output);
+            }
+            
+            // Если это первый кластер и в подключении есть администратор - переносим
+            if (clusters.length > 0 && clusters[0].uuid === clusterUuid && connection?.cluster_admin) {
+                storedData = {
+                    admin: connection.cluster_admin || '',
+                    password: '' // Пароль не хранится в подключении в открытом виде
+                };
+                // Сохраняем в localStorage
+                saveClusterAdminToStorage(connectionId, clusterUuid, storedData.admin, storedData.password);
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки данных подключения:', error);
+        }
+    }
+    
+    const modalHtml = `
+        <div class="modal-overlay" id="clusterAdminModal">
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>⚙️ Администратор кластера: ${escapeHtml(clusterName)}</h3>
+                    <button class="modal-close-btn" onclick="closeClusterAdminModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card" style="margin-bottom: 1rem;">
+                        <h4 style="border-bottom-color: var(--secondary-color);">👤 Администратор кластера</h4>
+                        <div class="edit-form">
+                            <div class="form-row checkbox-row" style="margin-top: 0.5rem;">
+                                <input type="checkbox" id="clusterAdminUseAuth" ${storedData.admin ? 'checked' : ''} onchange="toggleClusterAdminAuthFields()">
+                                <label for="clusterAdminUseAuth" style="font-weight: normal; text-transform: none; letter-spacing: normal;">Использовать УЗ админа кластера</label>
+                            </div>
+                            <div id="clusterAdminAuthFields" style="display: ${storedData.admin ? 'block' : 'none'};">
+                                <div class="form-row">
+                                    <label for="clusterAdminName">Логин кластера</label>
+                                    <input type="text" id="clusterAdminName" value="${storedData.admin || ''}" placeholder="admin">
+                                </div>
+                                <div class="form-row">
+                                    <label for="clusterAdminPassword">Пароль кластера</label>
+                                    <input type="password" id="clusterAdminPassword" value="" placeholder="••••••••">
+                                    <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Оставьте пустым, чтобы не изменять</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeClusterAdminModal()">Отмена</button>
+                    <button class="btn btn-primary" onclick="saveClusterAdminSettings(${connectionId}, '${clusterUuid}')">
+                        💾 Сохранить
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const container = document.getElementById('modal-container');
+    container.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Инициализируем состояние полей при загрузке
+    if (storedData.admin) {
+        toggleClusterAdminAuthFields();
+    }
+}
+
+/**
+ * Переключить отображение полей УЗ админа кластера
+ */
+function toggleClusterAdminAuthFields() {
+    const checkbox = document.getElementById('clusterAdminUseAuth');
+    const fieldsContainer = document.getElementById('clusterAdminAuthFields');
+    const adminInput = document.getElementById('clusterAdminName');
+    const passwordInput = document.getElementById('clusterAdminPassword');
+    
+    if (!checkbox || !fieldsContainer || !adminInput || !passwordInput) {
+        return;
+    }
+    
+    if (checkbox.checked) {
+        fieldsContainer.style.display = 'block';
+        adminInput.disabled = false;
+        passwordInput.disabled = false;
+    } else {
+        fieldsContainer.style.display = 'none';
+        adminInput.disabled = false;
+        passwordInput.disabled = false;
+        // Очищаем поля при скрытии
+        adminInput.value = '';
+        passwordInput.value = '';
+    }
+}
+
+/**
+ * Сохранить учетные данные администратора кластера
+ */
+function saveClusterAdminSettings(connectionId, clusterUuid) {
+    const useAuth = document.getElementById('clusterAdminUseAuth')?.checked || false;
+    
+    // Если чекбокс выключен - просто очищаем данные
+    if (!useAuth) {
+        saveClusterAdminToStorage(connectionId, clusterUuid, '', '');
+        showNotification('✅ Учетные данные администратора кластера очищены', false);
+        closeClusterAdminModal();
+        
+        // Перезагружаем данные кластера, чтобы применить изменения
+        if (window._currentConnectionId == connectionId) {
+            loadConnectionData(connectionId);
+        }
+        return;
+    }
+    
+    // Если чекбокс включен - проверяем, что логин заполнен
+    const admin = document.getElementById('clusterAdminName')?.value || '';
+    const password = document.getElementById('clusterAdminPassword')?.value || '';
+    
+    if (!admin) {
+        showNotification('❌ Логин обязателен для заполнения', true);
+        return;
+    }
+    
+    // Сохраняем в localStorage
+    saveClusterAdminToStorage(connectionId, clusterUuid, admin, password);
+    showNotification('✅ Учетные данные администратора кластера сохранены', false);
+    
+    closeClusterAdminModal();
+    
+    // Перезагружаем данные кластера, чтобы применить изменения
+    if (window._currentConnectionId == connectionId) {
+        loadConnectionData(connectionId);
+    }
+}
+
+/**
+ * Закрыть модальное окно администратора кластера
+ */
+function closeClusterAdminModal() {
+    const modal = document.getElementById('clusterAdminModal');
+    if (modal) {
+        modal.classList.add('modal-closing');
+        setTimeout(() => modal.remove(), 200);
+    }
+}
+
+/**
+ * Получить учетные данные администратора кластера для использования в RAC командах
+ */
+function getClusterAdminCredentials(connectionId, clusterUuid) {
+    return loadClusterAdminFromStorage(connectionId, clusterUuid);
+}
+
+/**
+ * Добавить параметры администратора кластера к URL или body запроса
+ */
+function addClusterAdminParams(url, connectionId, clusterUuid, method = 'GET') {
+    const credentials = getClusterAdminCredentials(connectionId, clusterUuid);
+    
+    if (method === 'GET') {
+        // Для GET запросов добавляем параметры в URL
+        if (!credentials.admin) {
+            return url; // Если нет данных - возвращаем URL как есть
+        }
+        const urlObj = new URL(url, window.location.origin);
+        urlObj.searchParams.set('cluster_admin', credentials.admin);
+        if (credentials.password) {
+            urlObj.searchParams.set('cluster_password', credentials.password);
+        }
+        // Возвращаем только путь с параметрами (без origin)
+        return urlObj.pathname + urlObj.search;
+    } else {
+        // Для POST/PUT/DELETE запросов возвращаем объект для добавления в body
+        const params = {};
+        if (credentials.admin) {
+            params.cluster_admin = credentials.admin;
+            if (credentials.password) {
+                params.cluster_password = credentials.password;
+            }
+        }
+        return params;
     }
 }
 
@@ -499,9 +778,14 @@ async function loadConnectionData(connectionId, connectionName = null) {
                 <div class="info-card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h4 style="margin: 0;">📊 Кластеры: ${escapeHtml(displayConnectionName)}</h4>
-                        <button class="btn btn-primary" onclick="openRegisterClusterModal(${connectionId})">
-                            + Регистрация нового кластера
-                        </button>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary" onclick="showAgentsTable(${connectionId})">
+                                Агенты
+                            </button>
+                            <button class="btn btn-primary" onclick="openRegisterClusterModal(${connectionId})">
+                                + Регистрация нового кластера
+                            </button>
+                        </div>
                     </div>
             `;
             
@@ -527,11 +811,19 @@ async function loadConnectionData(connectionId, connectionName = null) {
                              data-cluster-name="${escapeHtml(clusterName)}">
                             <span class="tree-toggle" onclick="toggleClusterNode('${clusterId}')">▶</span>
                             <span class="cluster-name">📊 ${escapeHtml(clusterName)}</span>
-                            <button class="btn btn-sm btn-danger" 
-                                    onclick="deleteCluster(${connectionId}, '${clusterUuid}', '${escapeHtml(clusterName).replace(/'/g, "\\'")}')"
-                                    style="margin-left: auto; padding: 0.25rem 0.5rem; font-size: 0.8rem;">
-                                🗑️
-                            </button>
+                            <div style="margin-left: auto; display: flex; gap: 0.25rem;">
+                                <button class="btn btn-sm" 
+                                        onclick="event.stopPropagation(); openClusterAdminModal(${connectionId}, '${clusterUuid}', '${escapeHtml(clusterName).replace(/'/g, "\\'")}')"
+                                        style="padding: 0.25rem 0.5rem; font-size: 0.8rem; background: transparent; border: none; color: #666; cursor: pointer;"
+                                        title="Настройки администратора кластера">
+                                    ⚙️
+                                </button>
+                                <button class="btn btn-sm btn-danger" 
+                                        onclick="event.stopPropagation(); deleteCluster(${connectionId}, '${clusterUuid}', '${escapeHtml(clusterName).replace(/'/g, "\\'")}')"
+                                        style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">
+                                    🗑️
+                                </button>
+                            </div>
                         </div>
                         <div class="cluster-children" id="${clusterId}-children" style="display: none;">
                             <div class="tree-item-section" data-section="infobases" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
@@ -550,9 +842,15 @@ async function loadConnectionData(connectionId, connectionName = null) {
                             <div class="tree-section-children" id="servers-${clusterId}-children" style="display: none; margin-left: 1.5rem;">
                                 <div style="padding: 0.5rem; color: #666; font-style: italic;">Загрузка...</div>
                             </div>
-                            <div class="tree-item" data-section="admins" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
+                            <div class="tree-item-section" data-section="admins" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}"
+                                 oncontextmenu="showAdminsContextMenu(event, ${connectionId}, '${clusterUuid}'); return false;"
+                                 style="cursor: pointer;">
+                                <span class="tree-toggle-section" data-section-id="admins-${clusterId}">▶</span>
                                 <span class="tree-icon">👥</span>
                                 <span>Администраторы</span>
+                            </div>
+                            <div class="tree-section-children" id="admins-${clusterId}-children" style="display: none; margin-left: 1.5rem;">
+                                <div style="padding: 0.5rem; color: #666; font-style: italic;">Загрузка...</div>
                             </div>
                             <div class="tree-item" data-section="managers" data-connection-id="${connectionId}" data-cluster-uuid="${clusterUuid}">
                                 <span class="tree-icon">🏢</span>
@@ -941,6 +1239,8 @@ function setupClusterEventHandlers() {
             if (section === 'infobases' || section === 'servers') {
                 e.preventDefault();
                 showSectionContextMenu(e, connectionId, clusterUuid, section);
+            } else if (section === 'admins') {
+                // Контекстное меню для администраторов обрабатывается в oncontextmenu
             }
         }
     };
@@ -1067,6 +1367,8 @@ async function loadSectionData(section, connectionId, clusterUuid, sectionId) {
             await loadInfobasesIntoTree(connectionId, clusterUuid, sectionId);
         } else if (section === 'servers') {
             await loadServersIntoTree(connectionId, clusterUuid, sectionId);
+        } else if (section === 'admins') {
+            await loadAdminsIntoTree(connectionId, clusterUuid, sectionId);
         }
     } catch (error) {
         childrenContainer.innerHTML = `
@@ -1096,10 +1398,15 @@ async function loadClusterSection(section, connectionId, clusterUuid) {
     }
     
     // Для остальных секций проверяем, реализованы ли они
-    const implementedSections = ['infobases', 'servers'];
+    const implementedSections = ['infobases', 'servers', 'admins'];
     if (!implementedSections.includes(section)) {
         showNotification(`⚠️ Функционал "${section}" находится в разработке`, true);
         return; // Не меняем contentArea, остаемся в дереве
+    }
+    
+    // Секция "Администраторы" не загружается в contentArea, только в дерево
+    if (section === 'admins') {
+        return;
     }
     
     const contentArea = document.getElementById('contentArea');
@@ -1139,7 +1446,8 @@ async function loadInfobasesIntoTree(connectionId, clusterUuid, sectionId) {
     childrenContainer.innerHTML = '<div style="padding: 0.5rem; color: #666; font-style: italic;">⏳ Загрузка...</div>';
     
     try {
-        const response = await fetch(`/api/clusters/infobases/${connectionId}/?cluster=${clusterUuid}`);
+        const url = addClusterAdminParams(`/api/clusters/infobases/${connectionId}/?cluster=${clusterUuid}`, connectionId, clusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         // Проверяем, что контейнер все еще существует (на случай переключения подключений)
@@ -1219,7 +1527,8 @@ async function loadServersIntoTree(connectionId, clusterUuid, sectionId) {
     childrenContainer.innerHTML = '<div style="padding: 0.5rem; color: #666; font-style: italic;">⏳ Загрузка...</div>';
     
     try {
-        const response = await fetch(`/api/clusters/servers/${connectionId}/?cluster=${clusterUuid}`);
+        const url = addClusterAdminParams(`/api/clusters/servers/${connectionId}/?cluster=${clusterUuid}`, connectionId, clusterUuid);
+        const response = await fetch(url);
         const data = await response.json();
         
         // Проверяем, что контейнер все еще существует (на случай переключения подключений)
@@ -3175,7 +3484,7 @@ function showServerContextMenu(event, connectionId, clusterUuid, serverUuid, ser
  * Закрывает контекстное меню
  */
 function closeContextMenu() {
-    const menus = ['sectionContextMenu', 'infobaseContextMenu', 'serverContextMenu', 'clusterContextMenu'];
+    const menus = ['sectionContextMenu', 'infobaseContextMenu', 'serverContextMenu', 'clusterContextMenu', 'adminsContextMenu', 'contextMenu'];
     menus.forEach(id => {
         const menu = document.getElementById(id);
         if (menu) {
@@ -5742,4 +6051,687 @@ function exportManagersToExcel() {
     URL.revokeObjectURL(url);
     
     showNotification('✅ Таблица выгружена в Excel', false);
+}
+
+// ============================================
+// Агенты кластера
+// ============================================
+
+/**
+ * Показать таблицу агентов кластера
+ */
+async function showAgentsTable(connectionId) {
+    const contentArea = document.getElementById('contentArea');
+    contentArea.innerHTML = '<div style="text-align: center; padding: 2rem;"><p>⏳ Загрузка агентов...</p></div>';
+    
+    try {
+        const response = await fetch(`/api/clusters/agents/${connectionId}/`);
+        const data = await response.json();
+        
+        if (data.success) {
+            renderAgentsTable(data.agents || [], connectionId);
+        } else {
+            contentArea.innerHTML = `
+                <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                    <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                    <p style="color: #721c24; margin: 0;">${data.error || 'Неизвестная ошибка'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        contentArea.innerHTML = `
+            <div class="info-card" style="border-left: 4px solid var(--primary-color);">
+                <h4 style="color: var(--primary-color);">❌ Ошибка</h4>
+                <p style="color: #721c24; margin: 0;">Ошибка загрузки: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Отрисовать таблицу агентов
+ */
+function renderAgentsTable(agents, connectionId) {
+    const contentArea = document.getElementById('contentArea');
+    
+    let html = `
+        <div class="info-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h4 style="margin: 0;">🤖 Администраторы агента кластера</h4>
+                <button class="btn btn-primary" onclick="openCreateAgentModal(${connectionId})">
+                    + Создать
+                </button>
+            </div>
+            <div id="agentsTableContainer">
+    `;
+    
+    if (agents.length === 0) {
+        html += `
+            <div style="padding: 1rem; text-align: center; color: #666;">
+                <p>Агентов кластера нету</p>
+            </div>
+        `;
+    } else {
+        html += `
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Имя</th>
+                        <th>Аутентификация</th>
+                        <th>Описание</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        agents.forEach(agent => {
+            html += `
+                <tr style="cursor: pointer;" 
+                    oncontextmenu="showAgentContextMenu(event, ${connectionId}, '${escapeHtml(agent.name || '').replace(/'/g, "\\'")}'); return false;">
+                    <td><strong>${escapeHtml(agent.name || '—')}</strong></td>
+                    <td>${escapeHtml(agent.auth || '—')}</td>
+                    <td>${escapeHtml(agent.descr || '—')}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                </tbody>
+            </table>
+        `;
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    contentArea.innerHTML = html;
+}
+
+/**
+ * Открыть модальное окно создания агента
+ */
+function openCreateAgentModal(connectionId) {
+    const modalHtml = `
+        <div class="modal-overlay" id="createAgentModal">
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>➕ Создать администратора агента</h3>
+                    <button class="modal-close-btn" onclick="closeModal('createAgentModal')">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card">
+                        <h4 style="border-bottom-color: var(--primary-color);">📝 Данные администратора</h4>
+                        <div class="edit-form">
+                            <div class="form-row">
+                                <label for="agentName">Имя *</label>
+                                <input type="text" id="agentName" placeholder="admin">
+                            </div>
+                            <div class="form-row">
+                                <label for="agentPwd">Пароль</label>
+                                <input type="password" id="agentPwd" placeholder="••••••••">
+                            </div>
+                            <div class="form-row">
+                                <label for="agentDescr">Описание</label>
+                                <input type="text" id="agentDescr" placeholder="Описание администратора">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('createAgentModal')">Отмена</button>
+                    <button class="btn btn-primary" onclick="saveAgent(${connectionId})">Создать</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const container = document.getElementById('modal-container');
+    container.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+/**
+ * Сохранить агента
+ */
+async function saveAgent(connectionId) {
+    const name = document.getElementById('agentName')?.value;
+    const pwd = document.getElementById('agentPwd')?.value || '';
+    const descr = document.getElementById('agentDescr')?.value || '';
+    
+    if (!name) {
+        showNotification('❌ Имя обязательно', true);
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/clusters/agents/${connectionId}/create/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ name, pwd, descr })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Администратор агента создан');
+            closeModal('createAgentModal');
+            showAgentsTable(connectionId);
+        } else {
+            showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+/**
+ * Показать контекстное меню для агента
+ */
+function showAgentContextMenu(event, connectionId, agentName) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const contextMenu = document.getElementById('contextMenu');
+    if (contextMenu) {
+        contextMenu.remove();
+    }
+    
+    const menu = document.createElement('div');
+    menu.id = 'contextMenu';
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.pageX + 'px';
+    menu.style.top = event.pageY + 'px';
+    menu.style.zIndex = '10000';
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="deleteAgent(${connectionId}, '${agentName.replace(/'/g, "\\'")}'); closeContextMenu();">
+            Удалить
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    // Закрываем меню при клике вне его
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu() {
+            closeContextMenu();
+            document.removeEventListener('click', closeMenu);
+        });
+    }, 0);
+}
+
+/**
+ * Удалить агента
+ */
+async function deleteAgent(connectionId, agentName) {
+    if (!confirm(`Вы уверены, что хотите удалить администратора агента "${agentName}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/clusters/agents/${connectionId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ name: agentName })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Администратор агента удален');
+            showAgentsTable(connectionId);
+        } else {
+            showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+// ============================================
+// Администраторы кластера
+// ============================================
+
+/**
+ * Загрузить администраторов кластера в дерево
+ */
+async function loadAdminsIntoTree(connectionId, clusterUuid, sectionId) {
+    const childrenContainer = document.getElementById(`${sectionId}-children`);
+    if (!childrenContainer) return;
+    
+    if (childrenContainer.style.display === 'none') {
+        childrenContainer.style.display = 'block';
+    }
+    
+    childrenContainer.innerHTML = '<div style="padding: 0.5rem; color: #666; font-style: italic;">⏳ Загрузка...</div>';
+    
+    try {
+        const url = addClusterAdminParams(`/api/clusters/admins/${connectionId}/${clusterUuid}/`, connectionId, clusterUuid);
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        const currentContainer = document.getElementById(`${sectionId}-children`);
+        if (!currentContainer) return;
+        
+        if (data.success) {
+            const admins = data.admins || [];
+            
+            if (admins.length === 0) {
+                currentContainer.innerHTML = `
+                    <div style="padding: 0.5rem; color: #666; font-style: italic;">
+                        Администраторы не найдены
+                    </div>
+                `;
+            } else {
+                let html = '';
+                admins.forEach((admin) => {
+                    const adminName = admin.name || '—';
+                    html += `
+                        <div class="tree-item" 
+                             data-admin-name="${adminName}"
+                             data-connection-id="${connectionId}"
+                             data-cluster-uuid="${clusterUuid}"
+                             style="cursor: pointer; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0; display: flex; align-items: center; gap: 0.5rem;"
+                             oncontextmenu="showAdminContextMenu(event, ${connectionId}, '${clusterUuid}', '${escapeHtml(adminName).replace(/'/g, "\\'")}'); return false;">
+                            <span class="tree-icon">👤</span>
+                            <span>${escapeHtml(adminName)}</span>
+                        </div>
+                    `;
+                });
+                currentContainer.innerHTML = html;
+            }
+        } else {
+            currentContainer.innerHTML = `
+                <div style="padding: 0.5rem; color: #d52b1e;">
+                    ❌ Ошибка: ${data.error || 'Неизвестная ошибка'}
+                </div>
+            `;
+        }
+    } catch (error) {
+        const errorContainer = document.getElementById(`${sectionId}-children`);
+        if (errorContainer) {
+            errorContainer.innerHTML = `
+                <div style="padding: 0.5rem; color: #d52b1e;">
+                    ❌ Ошибка загрузки: ${error.message}
+                </div>
+            `;
+        }
+    }
+}
+
+/**
+ * Показать контекстное меню для администраторов
+ */
+function showAdminsContextMenu(event, connectionId, clusterUuid) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Удаляем предыдущее меню если есть
+    const existingMenu = document.getElementById('adminsContextMenu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    const menu = document.createElement('div');
+    menu.id = 'adminsContextMenu';
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+    menu.style.zIndex = '10000';
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="openCreateClusterAdminModal(${connectionId}, '${clusterUuid}'); closeContextMenu();">
+            Создать администратора
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            closeContextMenu();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+    }, 100);
+}
+
+/**
+ * Показать контекстное меню для администратора
+ */
+function showAdminContextMenu(event, connectionId, clusterUuid, adminName) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const contextMenu = document.getElementById('contextMenu');
+    if (contextMenu) {
+        contextMenu.remove();
+    }
+    
+    const menu = document.createElement('div');
+    menu.id = 'contextMenu';
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.pageX + 'px';
+    menu.style.top = event.pageY + 'px';
+    menu.style.zIndex = '10000';
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="deleteClusterAdmin(${connectionId}, '${clusterUuid}', '${adminName.replace(/'/g, "\\'")}'); closeContextMenu();">
+            Удалить
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu() {
+            closeContextMenu();
+            document.removeEventListener('click', closeMenu);
+        });
+    }, 0);
+}
+
+/**
+ * Открыть модальное окно создания администратора кластера
+ */
+async function openCreateClusterAdminModal(connectionId, clusterUuid) {
+    // Проверяем, есть ли уже администраторы
+    let isFirstAdmin = false;
+    try {
+        const url = addClusterAdminParams(`/api/clusters/admins/${connectionId}/${clusterUuid}/`, connectionId, clusterUuid);
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.success && (!data.admins || data.admins.length === 0)) {
+            isFirstAdmin = true;
+        }
+    } catch (error) {
+        console.error('Error checking admins:', error);
+    }
+    
+    // Проверяем, есть ли уже сохраненные данные администратора для этого кластера в localStorage
+    const storedCredentials = getClusterAdminCredentials(connectionId, clusterUuid);
+    const hasClusterAuth = !!(storedCredentials.admin);
+    
+    const modalHtml = `
+        <div class="modal-overlay" id="createClusterAdminModal">
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>➕ Создать администратора кластера</h3>
+                    <button class="modal-close-btn" onclick="closeModal('createClusterAdminModal')">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card">
+                        <h4 style="border-bottom-color: var(--primary-color);">📝 Данные администратора</h4>
+                        <div class="edit-form">
+                            <div class="form-row">
+                                <label for="clusterAdminName">Имя *</label>
+                                <input type="text" id="clusterAdminName" placeholder="admin">
+                            </div>
+                            <div class="form-row">
+                                <label for="clusterAdminPwd">Пароль</label>
+                                <input type="password" id="clusterAdminPwd" placeholder="••••••••">
+                            </div>
+                            <div class="form-row">
+                                <label for="clusterAdminDescr">Описание</label>
+                                <input type="text" id="clusterAdminDescr" placeholder="Описание администратора">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('createClusterAdminModal')">Отмена</button>
+                    <button class="btn btn-primary" onclick="saveClusterAdmin(${connectionId}, '${clusterUuid}', ${isFirstAdmin}, ${hasClusterAuth})">Создать</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const container = document.getElementById('modal-container');
+    container.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Больше не показываем confirm здесь - предложение будет в отдельном модальном окне после создания
+}
+
+/**
+ * Сохранить администратора кластера
+ */
+async function saveClusterAdmin(connectionId, clusterUuid, isFirstAdmin, hasClusterAuth) {
+    const name = document.getElementById('clusterAdminName')?.value;
+    const pwd = document.getElementById('clusterAdminPwd')?.value || '';
+    const descr = document.getElementById('clusterAdminDescr')?.value || '';
+    
+    if (!name) {
+        showNotification('❌ Имя обязательно', true);
+        return;
+    }
+    
+    const shouldSaveToConnection = document.getElementById('createClusterAdminModal')?.getAttribute('data-save-to-connection') === 'true';
+    
+    try {
+        const adminParams = addClusterAdminParams('', connectionId, clusterUuid, 'POST');
+        const response = await fetch(`/api/clusters/admins/${connectionId}/${clusterUuid}/create/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ 
+                name, 
+                pwd, 
+                descr,
+                is_first_admin: isFirstAdmin,
+                should_save_to_connection: shouldSaveToConnection,
+                ...adminParams
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Администратор кластера создан');
+            closeModal('createClusterAdminModal');
+            
+            // Если это первый администратор и пользователь ранее не сохранял данные - предлагаем сохранить
+            if (isFirstAdmin && !shouldSaveToConnection) {
+                // Проверяем, есть ли уже сохраненные данные для этого кластера
+                const storedCredentials = getClusterAdminCredentials(connectionId, clusterUuid);
+                if (!storedCredentials.admin) {
+                    // Получаем имя кластера из DOM
+                    const clusterHeader = document.querySelector(`[data-cluster-uuid="${clusterUuid}"]`);
+                    const clusterName = clusterHeader?.getAttribute('data-cluster-name') || 'кластера';
+                    // Открываем модальное окно с предложением сохранить данные
+                    setTimeout(() => {
+                        openSaveClusterAdminModal(connectionId, clusterUuid, name, pwd, clusterName);
+                    }, 300);
+                }
+            } else if (shouldSaveToConnection) {
+                // Если пользователь выбрал сохранить - сохраняем в localStorage для этого кластера
+                saveClusterAdminToStorage(connectionId, clusterUuid, name, pwd);
+            }
+            
+            // Перезагружаем дерево кластера
+            loadConnectionData(connectionId);
+        } else {
+            showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+/**
+ * Удалить администратора кластера
+ */
+async function deleteClusterAdmin(connectionId, clusterUuid, adminName) {
+    if (!confirm(`Вы уверены, что хотите удалить администратора кластера "${adminName}"?`)) {
+        return;
+    }
+    
+    // Проверяем данные ДО удаления, чтобы знать, нужно ли предлагать очистку
+    const credentials = getClusterAdminCredentials(connectionId, clusterUuid);
+    const hasStoredCredentials = !!credentials.admin;
+    
+    // Проверяем, сколько администраторов останется после удаления
+    let wasLastAdmin = false;
+    try {
+        const url = addClusterAdminParams(`/api/clusters/admins/${connectionId}/${clusterUuid}/`, connectionId, clusterUuid);
+        const checkResponse = await fetch(url);
+        const checkData = await checkResponse.json();
+        
+        if (checkData.success && checkData.admins && checkData.admins.length === 1) {
+            // Если остался только один администратор - это будет последний
+            wasLastAdmin = true;
+        }
+    } catch (error) {
+        console.error('Ошибка проверки администраторов:', error);
+    }
+    
+    try {
+        const adminParams = addClusterAdminParams('', connectionId, clusterUuid, 'POST');
+        const response = await fetch(`/api/clusters/admins/${connectionId}/${clusterUuid}/delete/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ 
+                name: adminName,
+                ...adminParams
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Администратор кластера удален');
+            
+            // Если это был последний администратор и есть сохраненные данные - предлагаем очистить
+            if (wasLastAdmin && hasStoredCredentials) {
+                // Получаем имя кластера из DOM
+                const clusterHeader = document.querySelector(`[data-cluster-uuid="${clusterUuid}"]`);
+                const clusterName = clusterHeader?.getAttribute('data-cluster-name') || 'кластера';
+                setTimeout(() => {
+                    openClearClusterAdminModal(connectionId, clusterUuid, clusterName);
+                }, 300);
+            }
+            
+            // Перезагружаем дерево кластера
+            loadConnectionData(connectionId);
+        } else {
+            showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
+    }
+}
+
+/**
+ * Открыть модальное окно с предложением сохранить данные администратора кластера
+ */
+function openSaveClusterAdminModal(connectionId, clusterUuid, adminName, adminPassword, clusterName = 'кластера') {
+    const modalHtml = `
+        <div class="modal-overlay" id="saveClusterAdminModal">
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>💾 Сохранить данные администратора?</h3>
+                    <button class="modal-close-btn" onclick="closeModal('saveClusterAdminModal')">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card">
+                        <p style="margin: 0; font-size: 1rem;">
+                            Вы создали первого администратора кластера. Хотите ли вы сохранить указанные данные (логин: <strong>${escapeHtml(adminName)}</strong>) в настройках (кластера: <strong>${escapeHtml(clusterName)}</strong>)?
+                        </p>
+                        <p style="margin: 1rem 0 0 0; font-size: 0.9rem; color: #666;">
+                            Это позволит автоматически использовать эти данные при выполнении команд RAC для этого кластера.
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('saveClusterAdminModal')">Нет, не сохранять</button>
+                    <button class="btn btn-primary" onclick="saveClusterAdminToSettings(${connectionId}, '${clusterUuid}', '${escapeHtml(adminName).replace(/'/g, "\\'")}', '${escapeHtml(adminPassword).replace(/'/g, "\\'")}')">
+                        Да, сохранить
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const container = document.getElementById('modal-container');
+    container.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+/**
+ * Сохранить данные администратора в настройки кластера
+ */
+function saveClusterAdminToSettings(connectionId, clusterUuid, adminName, adminPassword) {
+    saveClusterAdminToStorage(connectionId, clusterUuid, adminName, adminPassword);
+    showNotification('✅ Данные администратора сохранены в настройках кластера', false);
+    closeModal('saveClusterAdminModal');
+    
+    // Перезагружаем данные кластера
+    if (window._currentConnectionId == connectionId) {
+        loadConnectionData(connectionId);
+    }
+}
+
+/**
+ * Открыть модальное окно с предложением очистить данные администратора кластера
+ */
+function openClearClusterAdminModal(connectionId, clusterUuid, clusterName = 'кластера') {
+    const modalHtml = `
+        <div class="modal-overlay" id="clearClusterAdminModal">
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>🧹 Очистить данные администратора?</h3>
+                    <button class="modal-close-btn" onclick="closeModal('clearClusterAdminModal')">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card">
+                        <p style="margin: 0; font-size: 1rem;">
+                            Вы удалили последнего администратора кластера. Хотите ли вы очистить сохраненные данные администратора в настройках (кластера: <strong>${escapeHtml(clusterName)}</strong>)?
+                        </p>
+                        <p style="margin: 1rem 0 0 0; font-size: 0.9rem; color: #666;">
+                            Это очистит логин и пароль администратора кластера из настроек и снимет чекбокс.
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('clearClusterAdminModal')">Нет, оставить</button>
+                    <button class="btn btn-primary" onclick="clearClusterAdminFromSettings(${connectionId}, '${clusterUuid}')">
+                        Да, очистить
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const container = document.getElementById('modal-container');
+    container.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+/**
+ * Очистить данные администратора из настроек кластера
+ */
+function clearClusterAdminFromSettings(connectionId, clusterUuid) {
+    saveClusterAdminToStorage(connectionId, clusterUuid, '', '');
+    showNotification('✅ Данные администратора очищены из настроек кластера', false);
+    closeModal('clearClusterAdminModal');
+    
+    // Перезагружаем данные кластера
+    if (window._currentConnectionId == connectionId) {
+        loadConnectionData(connectionId);
+    }
 }

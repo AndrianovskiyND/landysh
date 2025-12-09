@@ -9,6 +9,27 @@ from .rac_client import RACClient, fix_broken_encoding
 
 logger = logging.getLogger(__name__)
 
+def _get_cluster_admin_from_request(request):
+    """Извлекает cluster_admin и cluster_password из запроса (GET или POST)"""
+    cluster_admin = None
+    cluster_password = None
+    
+    # Пробуем получить из GET параметров
+    cluster_admin = request.GET.get('cluster_admin')
+    cluster_password = request.GET.get('cluster_password')
+    
+    # Если не найдено в GET, пробуем POST body
+    if not cluster_admin and request.method == 'POST':
+        try:
+            if hasattr(request, 'body') and request.body:
+                data = json.loads(request.body)
+                cluster_admin = data.get('cluster_admin')
+                cluster_password = data.get('cluster_password')
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    
+    return cluster_admin, cluster_password
+
 @login_required
 def server_connections(request):
     """Возвращает список подключений пользователя"""
@@ -30,6 +51,7 @@ def server_connections(request):
             'server_host': conn.server_host,
             'ras_port': conn.ras_port,
             'cluster_admin': conn.cluster_admin or '',
+            'agent_user': conn.agent_user or '',
             'created_at': conn.created_at.isoformat(),
             'group_id': group.id,
             'group_name': group.name,
@@ -62,7 +84,9 @@ def create_connection(request):
                 server_host=data['server_host'],
                 ras_port=data['ras_port'],
                 cluster_admin=data.get('cluster_admin', ''),
-                cluster_password=data.get('cluster_password', '')
+                cluster_password=data.get('cluster_password', ''),
+                agent_user=data.get('agent_user', ''),
+                agent_password=data.get('agent_password', '')
             )
             
             return JsonResponse({'success': True, 'connection_id': connection.id})
@@ -88,10 +112,13 @@ def update_connection(request, connection_id):
             connection.server_host = data.get('server_host', connection.server_host)
             connection.ras_port = data.get('ras_port', connection.ras_port)
             connection.cluster_admin = data.get('cluster_admin', connection.cluster_admin)
+            connection.agent_user = data.get('agent_user', connection.agent_user)
             
-            # Пароль обновляем только если указан новый
+            # Пароли обновляем только если указаны новые
             if data.get('cluster_password'):
                 connection.cluster_password = data.get('cluster_password')
+            if data.get('agent_password'):
+                connection.agent_password = data.get('agent_password')
             
             connection.save()
             
@@ -2419,7 +2446,8 @@ def get_infobases(request, connection_id):
         if not cluster_uuid:
             return JsonResponse({'success': False, 'error': 'Cluster UUID required'})
         
-        rac_client = RACClient(connection)
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_infobase_summary_list(cluster_uuid)
         
         if result['success']:
@@ -2649,7 +2677,8 @@ def get_servers(request, connection_id):
         if not cluster_uuid:
             return JsonResponse({'success': False, 'error': 'Cluster UUID required'})
         
-        rac_client = RACClient(connection)
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
         result = rac_client.get_server_list(cluster_uuid)
         
         if result['success']:
@@ -5901,3 +5930,226 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
             return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
     
     return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Агенты кластера
+# ============================================
+
+@login_required
+def get_agents(request, connection_id):
+    """Получает список администраторов агента кластера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        rac_client = RACClient(connection)
+        result = rac_client.agent_admin_list()
+        
+        if result['success']:
+            # Парсим вывод команды
+            agents = []
+            if result.get('output'):
+                lines = result['output'].strip().split('\n')
+                current_agent = {}
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        if current_agent:
+                            agents.append(current_agent)
+                            current_agent = {}
+                        continue
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        if key == 'name':
+                            current_agent['name'] = value
+                        elif key == 'auth':
+                            current_agent['auth'] = value
+                        elif key == 'os-user':
+                            current_agent['os_user'] = value
+                        elif key == 'descr':
+                            current_agent['descr'] = value
+                if current_agent:
+                    agents.append(current_agent)
+            
+            return JsonResponse({'success': True, 'agents': agents}, json_dumps_params={'ensure_ascii': False})
+        else:
+            error_msg = fix_broken_encoding(result.get('error', 'Unknown error'))
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_agent(request, connection_id):
+    """Создает нового администратора агента кластера"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            name = data.get('name')
+            pwd = data.get('pwd', '')
+            descr = data.get('descr', '')
+            
+            if not name:
+                return JsonResponse({'success': False, 'error': 'Name is required'}, json_dumps_params={'ensure_ascii': False})
+            
+            rac_client = RACClient(connection)
+            result = rac_client.agent_admin_register(name, pwd if pwd else None, descr if descr else None)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                error_msg = fix_broken_encoding(result.get('error', 'Unknown error'))
+                return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_agent(request, connection_id):
+    """Удаляет администратора агента кластера"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            name = data.get('name')
+            if not name:
+                return JsonResponse({'success': False, 'error': 'Name is required'}, json_dumps_params={'ensure_ascii': False})
+            
+            rac_client = RACClient(connection)
+            result = rac_client.agent_admin_remove(name)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                error_msg = fix_broken_encoding(result.get('error', 'Unknown error'))
+                return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+# ============================================
+# Администраторы кластера
+# ============================================
+
+@login_required
+def get_cluster_admins(request, connection_id, cluster_uuid):
+    """Получает список администраторов кластера"""
+    try:
+        connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
+        result = rac_client.cluster_admin_list(cluster_uuid)
+        
+        if result['success']:
+            # Парсим вывод команды
+            admins = []
+            if result.get('output'):
+                lines = result['output'].strip().split('\n')
+                current_admin = {}
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        if current_admin:
+                            admins.append(current_admin)
+                            current_admin = {}
+                        continue
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        if key == 'name':
+                            current_admin['name'] = value
+                        elif key == 'auth':
+                            current_admin['auth'] = value
+                        elif key == 'os-user':
+                            current_admin['os_user'] = value
+                        elif key == 'descr':
+                            current_admin['descr'] = value
+                if current_admin:
+                    admins.append(current_admin)
+            
+            return JsonResponse({'success': True, 'admins': admins}, json_dumps_params={'ensure_ascii': False})
+        else:
+            error_msg = fix_broken_encoding(result.get('error', 'Unknown error'))
+            return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
+    except ServerConnection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def create_cluster_admin(request, connection_id, cluster_uuid):
+    """Создает нового администратора кластера"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            name = data.get('name')
+            pwd = data.get('pwd', '')
+            descr = data.get('descr', '')
+            
+            if not name:
+                return JsonResponse({'success': False, 'error': 'Name is required'}, json_dumps_params={'ensure_ascii': False})
+            
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
+            result = rac_client.cluster_admin_register(cluster_uuid, name, pwd if pwd else None, descr if descr else None)
+            
+            if result['success']:
+                # Больше не сохраняем в настройки подключения - данные хранятся в localStorage на фронтенде для каждого кластера отдельно
+                return JsonResponse({
+                    'success': True
+                }, json_dumps_params={'ensure_ascii': False})
+            else:
+                error_msg = fix_broken_encoding(result.get('error', 'Unknown error'))
+                return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
+@login_required
+@csrf_exempt
+def delete_cluster_admin(request, connection_id, cluster_uuid):
+    """Удаляет администратора кластера"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            
+            name = data.get('name')
+            if not name:
+                return JsonResponse({'success': False, 'error': 'Name is required'}, json_dumps_params={'ensure_ascii': False})
+            
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
+            result = rac_client.cluster_admin_remove(cluster_uuid, name)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                error_msg = fix_broken_encoding(result.get('error', 'Unknown error'))
+                return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+

@@ -34,10 +34,12 @@ def fix_broken_encoding(text):
         return str(text)
     
     # Проверяем на признаки "битой" кодировки
-    # Расширенный список "битых" символов
+    # Расширенный список "битых" символов и паттернов
     broken_patterns = [
         'Рќ', 'Рµ', 'Рґ', 'Рѕ', 'С‚', 'Р°', 'С‚Рѕ', 'С‡РЅРѕ', 'РїСЂР°РІ', 
-        'РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ', 'РЅР°', 'РёРЅС„РѕСЂРјР°С†РёРѕРЅРЅСѓСЋ', 'Р±Р°Р·Сѓ'
+        'РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ', 'РЅР°', 'РёРЅС„РѕСЂРјР°С†РёРѕРЅРЅСѓСЋ', 'Р±Р°Р·Сѓ',
+        # Паттерны для "Недостаточно прав пользователя на информационную базу"
+        'РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ', 'РїСЂР°РІ', 'РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ', 'РёРЅС„РѕСЂРјР°С†РёРѕРЅРЅСѓСЋ', 'Р±Р°Р·Сѓ'
     ]
     broken_count = sum(1 for pattern in broken_patterns if pattern in text)
     cyrillic_count = sum(1 for char in text if '\u0400' <= char <= '\u04FF')
@@ -146,9 +148,9 @@ class RACClient:
                     # Windows: cp866 (DOS), cp1251 (Windows), utf-8, latin1
                     all_encodings = ['cp866', 'cp1251', 'utf-8', 'latin1']
                 else:
-                    # Linux (РЕД ОС, CentOS и т.д.): пробуем cp1251 в первую очередь, так как RAC часто использует cp1251
-                    # Затем utf-8, koi8-r, cp866, latin1
-                    all_encodings = ['cp1251', 'utf-8', 'koi8-r', 'cp866', 'latin1']
+                    # Linux (РЕД ОС, CentOS и т.д.): пробуем utf-8 в первую очередь
+                    # Затем cp1251, cp866, koi8-r, latin1
+                    all_encodings = ['utf-8', 'cp1251', 'cp866', 'koi8-r', 'latin1']
                 
                 best_decoded = None
                 best_score = 0
@@ -442,9 +444,9 @@ class RACClient:
                     # Windows: cp866 (DOS), cp1251 (Windows), utf-8, latin1
                     all_encodings = ['cp866', 'cp1251', 'utf-8', 'latin1']
                 else:
-                    # Linux (РЕД ОС, CentOS и т.д.): пробуем cp1251 в первую очередь, так как RAC часто использует cp1251
-                    # Затем utf-8, koi8-r, cp866, latin1
-                    all_encodings = ['cp1251', 'utf-8', 'koi8-r', 'cp866', 'latin1']
+                    # Linux (РЕД ОС, CentOS и т.д.): пробуем utf-8 в первую очередь
+                    # Затем cp1251, cp866, koi8-r, latin1
+                    all_encodings = ['utf-8', 'cp1251', 'cp866', 'koi8-r', 'latin1']
                 
                 best_decoded = None
                 best_score = 0
@@ -702,7 +704,7 @@ class RACClient:
     # Методы для работы с информационными базами
     # ============================================
     
-    def get_infobase_info(self, cluster_uuid, infobase_uuid=None, infobase_name=None):
+    def get_infobase_info(self, cluster_uuid, infobase_uuid=None, infobase_name=None, infobase_user=None, infobase_pwd=None):
         """Получает информацию об информационной базе"""
         args = ['infobase', 'info', f'--cluster={cluster_uuid}']
         
@@ -710,6 +712,13 @@ class RACClient:
             args.append(f'--infobase={infobase_uuid}')
         elif infobase_name:
             args.append(f'--name={infobase_name}')
+        
+        if infobase_user:
+            args.append(f'--infobase-user={infobase_user}')
+        # Пароль может быть пустой строкой (если в базе нет пароля для администраторской УЗ)
+        # Передаем параметр только если он явно указан (не None)
+        if infobase_pwd is not None:
+            args.append(f'--infobase-pwd={infobase_pwd}')
         
         return self._execute_command(args)
     

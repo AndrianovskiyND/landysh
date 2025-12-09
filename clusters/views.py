@@ -1,10 +1,13 @@
 import json
+import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from .models import ServerConnection
 from users.models import UserGroup
 from .rac_client import RACClient, fix_broken_encoding
+
+logger = logging.getLogger(__name__)
 
 @login_required
 def server_connections(request):
@@ -3879,15 +3882,29 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
 # ============================================
 
 @login_required
+@csrf_exempt
 def get_infobase_info(request, connection_id, cluster_uuid):
     """Получает информацию об информационной базе"""
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
         infobase_uuid = request.GET.get('infobase')
         infobase_name = request.GET.get('name')
+        infobase_user = request.GET.get('infobase_user') or request.POST.get('infobase_user')
+        # Пароль может быть пустой строкой, поэтому проверяем на наличие ключа, а не на значение
+        infobase_pwd = None
+        if 'infobase_pwd' in request.GET:
+            infobase_pwd = request.GET.get('infobase_pwd', '')
+        elif 'infobase_pwd' in request.POST:
+            infobase_pwd = request.POST.get('infobase_pwd', '')
         
         rac_client = RACClient(connection)
-        result = rac_client.get_infobase_info(cluster_uuid, infobase_uuid, infobase_name)
+        result = rac_client.get_infobase_info(
+            cluster_uuid, 
+            infobase_uuid, 
+            infobase_name,
+            infobase_user=infobase_user,
+            infobase_pwd=infobase_pwd
+        )
         
         if result['success']:
             # Парсим вывод и извлекаем структурированные данные (только первая информационная база)
@@ -3902,9 +3919,38 @@ def get_infobase_info(request, connection_id, cluster_uuid):
             error_msg = result.get('error', 'Ошибка получения информации')
             # Исправляем "битую" кодировку, если ошибка уже была неправильно декодирована
             error_msg = fix_broken_encoding(error_msg)
+            
+            # Проверяем на ошибку недостаточности прав
+            requires_credentials = False
+            error_lower = error_msg.lower()
+            
+            # Проверяем различные варианты сообщения об ошибке
+            # Ищем ключевые слова: "недостаточно" + "прав" + ("пользователя" или "информационную базу")
+            # Упрощенная проверка: если есть "недостаточно прав" и упоминание информационной базы или пользователя
+            if 'недостаточно' in error_lower and 'прав' in error_lower:
+                # Если есть упоминание пользователя или информационной базы - это точно наша ошибка
+                if ('пользователя' in error_lower or 
+                    'информационную базу' in error_lower or 
+                    'информационной базы' in error_lower or
+                    'информационную' in error_lower):
+                    requires_credentials = True
+                    logger.info(f"Detected insufficient rights error, requires credentials: {error_msg}")
+            
+            # Дополнительная проверка: если ошибка содержит "информационную базу" и "недостаточно прав" 
+            # (даже если порядок слов другой или есть дополнительные слова)
+            if not requires_credentials and 'информационную базу' in error_lower and 'недостаточно' in error_lower and 'прав' in error_lower:
+                requires_credentials = True
+                logger.info(f"Detected insufficient rights error (alternative check), requires credentials: {error_msg}")
+            
+            # Еще одна проверка: если есть "недостаточно" и "прав" и "информационную" (в любом порядке)
+            if not requires_credentials and 'недостаточно' in error_lower and 'прав' in error_lower and 'информационную' in error_lower:
+                requires_credentials = True
+                logger.info(f"Detected insufficient rights error (final check), requires credentials: {error_msg}")
+            
             return JsonResponse({
                 'success': False,
-                'error': error_msg
+                'error': error_msg,
+                'requires_credentials': requires_credentials
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:
@@ -4420,9 +4466,27 @@ def update_infobase(request, connection_id, cluster_uuid):
                 'message': 'Информационная база успешно обновлена'
             }, json_dumps_params={'ensure_ascii': False})
         else:
+            error_msg = result.get('error', 'Ошибка обновления информационной базы')
+            # Исправляем "битую" кодировку, если ошибка уже была неправильно декодирована
+            from clusters.rac_client import fix_broken_encoding
+            error_msg = fix_broken_encoding(error_msg)
+            
+            # Проверяем на ошибку недостаточности прав
+            requires_credentials = False
+            error_lower = error_msg.lower()
+            # Проверяем различные варианты сообщения об ошибке
+            if 'недостаточно' in error_lower and 'прав' in error_lower:
+                if ('пользователя' in error_lower or 
+                    'информационную базу' in error_lower or 
+                    'информационной базы' in error_lower or
+                    'информационную' in error_lower):
+                    requires_credentials = True
+                    logger.info(f"Detected insufficient rights error in update_infobase, requires credentials: {error_msg}")
+            
             return JsonResponse({
                 'success': False,
-                'error': result.get('error', 'Ошибка обновления информационной базы')
+                'error': error_msg,
+                'requires_credentials': requires_credentials
             }, json_dumps_params={'ensure_ascii': False})
             
     except ServerConnection.DoesNotExist:

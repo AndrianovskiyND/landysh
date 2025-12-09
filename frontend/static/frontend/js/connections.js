@@ -3405,15 +3405,69 @@ async function saveCreateInfobase(connectionId, clusterUuid) {
 /**
  * Открывает модальное окно свойств информационной базы
  */
-async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
+async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, infobaseUser = null, infobasePwd = null) {
     closeContextMenu();
     
     try {
-        const response = await fetch(`/api/clusters/infobases/${connectionId}/${clusterUuid}/info/?infobase=${infobaseUuid}`);
+        let url = `/api/clusters/infobases/${connectionId}/${clusterUuid}/info/?infobase=${infobaseUuid}`;
+        if (infobaseUser) {
+            url += `&infobase_user=${encodeURIComponent(infobaseUser)}`;
+        }
+        // Пароль может быть пустой строкой, передаем его всегда, если указан пользователь
+        if (infobaseUser && infobasePwd !== null && infobasePwd !== undefined) {
+            url += `&infobase_pwd=${encodeURIComponent(infobasePwd)}`;
+        }
+        
+        const response = await fetch(url);
         const data = await response.json();
         
         if (!data.success) {
-            showNotification('❌ Ошибка загрузки свойств информационной базы: ' + (data.error || 'Неизвестная ошибка'), true);
+            const errorText = (data.error || '').toLowerCase();
+            const errorOriginal = data.error || '';
+            
+            // Проверяем, требуется ли ввод учетных данных
+            // Проверяем как флаг из backend, так и текст ошибки напрямую
+            // Упрощенная проверка: если есть "недостаточно прав" и упоминание информационной базы или пользователя
+            const hasInsufficientRights = errorText.includes('недостаточно') && errorText.includes('прав');
+            const hasUserOrInfobase = errorText.includes('пользователя') || 
+                                     errorText.includes('информационную') || 
+                                     errorText.includes('информационной');
+            
+            // Если backend явно указал requires_credentials, или мы видим признаки ошибки недостаточности прав
+            let needsCredentials = data.requires_credentials === true || (hasInsufficientRights && hasUserOrInfobase);
+            
+            // Универсальная проверка: если в ошибке есть "недостаточно" и "прав" и упоминание базы или пользователя
+            // Это должно сработать для текста "Недостаточно прав пользователя на информационную базу infobase_01"
+            if (!needsCredentials && errorText) {
+                const hasInsufficient = errorText.includes('недостаточно');
+                const hasRights = errorText.includes('прав');
+                const hasInfobase = errorText.includes('информационную') || errorText.includes('информационной') || errorText.includes('базу');
+                const hasUser = errorText.includes('пользователя');
+                
+                // Если есть "недостаточно" и "прав" и (упоминание базы или пользователя)
+                if (hasInsufficient && hasRights && (hasInfobase || hasUser)) {
+                    needsCredentials = true;
+                }
+            }
+            
+            // Финальная проверка на всякий случай - если есть "недостаточно прав" в любом контексте с упоминанием базы
+            if (!needsCredentials && errorText.includes('недостаточно') && errorText.includes('прав') && 
+                (errorText.includes('базу') || errorText.includes('информационную') || errorText.includes('пользователя'))) {
+                needsCredentials = true;
+            }
+            
+            if (needsCredentials) {
+                // Показываем модальное окно для ввода учетных данных
+                if (typeof showInfobaseCredentialsModal === 'function') {
+                    showInfobaseCredentialsModal(connectionId, clusterUuid, infobaseUuid, errorOriginal);
+                } else {
+                    console.error('showInfobaseCredentialsModal function not found');
+                    showNotification('❌ Ошибка загрузки свойств информационной базы: ' + errorOriginal + ' (требуются учетные данные)', true);
+                }
+                return;
+            }
+            
+            showNotification('❌ Ошибка загрузки свойств информационной базы: ' + errorOriginal, true);
             return;
         }
         
@@ -3463,6 +3517,9 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.id = 'infobasePropertiesModal';
+        // Сохраняем учетные данные в data-атрибутах для использования при сохранении
+        modal.setAttribute('data-infobase-user', infobaseUser || '');
+        modal.setAttribute('data-infobase-pwd', infobasePwd || '');
         modal.innerHTML = `
             <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
                 <div class="modal-header">
@@ -3531,7 +3588,7 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
                         </div>
                         <div class="form-actions" style="margin-top: 1.5rem;">
                             <button type="button" class="btn btn-secondary" onclick="closeInfobasePropertiesModal()">Отмена</button>
-                            <button type="button" class="btn btn-primary" onclick="saveInfobaseProperties('${connectionId}', '${clusterUuid}', '${infobaseUuid}')">Сохранить</button>
+                            <button type="button" class="btn btn-primary" onclick="saveInfobaseProperties('${connectionId}', '${clusterUuid}', '${infobaseUuid}', '${infobaseUser || ''}', '${infobasePwd || ''}')">Сохранить</button>
                         </div>
                     </form>
                 </div>
@@ -3547,9 +3604,18 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
 /**
  * Сохраняет свойства информационной базы
  */
-async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
+async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid, infobaseUser = null, infobasePwd = null) {
     const form = document.getElementById('infobasePropertiesForm');
     if (!form) return;
+    
+    // Если учетные данные не переданы, пытаемся получить их из модального окна
+    if (!infobaseUser) {
+        const modal = document.getElementById('infobasePropertiesModal');
+        if (modal) {
+            infobaseUser = modal.getAttribute('data-infobase-user') || null;
+            infobasePwd = modal.getAttribute('data-infobase-pwd') || null;
+        }
+    }
     
     const formData = new FormData(form);
     const data = {
@@ -3561,6 +3627,14 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
         if (value) {
             data[key] = value;
         }
+    }
+    
+    // Добавляем учетные данные администратора ИБ, если они были указаны
+    if (infobaseUser) {
+        data.infobase_user = infobaseUser;
+    }
+    if (infobasePwd !== null && infobasePwd !== undefined) {
+        data.infobase_pwd = infobasePwd;
     }
     
     try {
@@ -3579,6 +3653,21 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
             body: JSON.stringify(data)
         });
         
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Update infobase error:', errorText);
+            showNotification('❌ Ошибка обновления информационной базы: HTTP ' + response.status, true);
+            return;
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const errorText = await response.text();
+            console.error('Update infobase non-JSON response:', errorText);
+            showNotification('❌ Ошибка обновления информационной базы: Неверный формат ответа', true);
+            return;
+        }
+        
         const result = await response.json();
         
         if (result.success) {
@@ -3589,7 +3678,40 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
             const sectionId = `infobases-${clusterId}`;
             await loadInfobasesIntoTree(connectionId, clusterUuid, sectionId);
         } else {
-            showNotification('❌ Ошибка обновления информационной базы: ' + (result.error || 'Неизвестная ошибка'), true);
+            const errorText = (result.error || '').toLowerCase();
+            const errorOriginal = result.error || '';
+            
+            // Проверяем, требуется ли ввод учетных данных
+            const hasInsufficientRights = errorText.includes('недостаточно') && errorText.includes('прав');
+            const hasUserOrInfobase = errorText.includes('пользователя') || 
+                                     errorText.includes('информационную') || 
+                                     errorText.includes('информационной');
+            
+            let needsCredentials = result.requires_credentials === true || (hasInsufficientRights && hasUserOrInfobase);
+            
+            // Универсальная проверка
+            if (!needsCredentials && errorText) {
+                const hasInsufficient = errorText.includes('недостаточно');
+                const hasRights = errorText.includes('прав');
+                const hasInfobase = errorText.includes('информационную') || errorText.includes('информационной') || errorText.includes('базу');
+                const hasUser = errorText.includes('пользователя');
+                
+                if (hasInsufficient && hasRights && (hasInfobase || hasUser)) {
+                    needsCredentials = true;
+                }
+            }
+            
+            if (needsCredentials) {
+                // Показываем модальное окно для ввода учетных данных
+                if (typeof showInfobaseCredentialsModal === 'function') {
+                    showInfobaseCredentialsModal(connectionId, clusterUuid, infobaseUuid, errorOriginal, true);
+                } else {
+                    showNotification('❌ Ошибка обновления информационной базы: ' + errorOriginal + ' (требуются учетные данные)', true);
+                }
+                return;
+            }
+            
+            showNotification('❌ Ошибка обновления информационной базы: ' + errorOriginal, true);
         }
     } catch (error) {
         showNotification('❌ Ошибка сохранения: ' + error.message, true);
@@ -3599,6 +3721,124 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid) {
 /**
  * Закрывает модальное окно свойств информационной базы
  */
+/**
+ * Показать модальное окно для ввода учетных данных администратора ИБ
+ */
+function showInfobaseCredentialsModal(connectionId, clusterUuid, infobaseUuid, errorMessage, isUpdate = false) {
+    const modalHtml = `
+        <div class="modal-overlay" id="infobaseCredentialsModal" style="z-index: 10010;">
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>🔐 Учетные данные администратора ИБ</h3>
+                    <button class="modal-close-btn" onclick="closeInfobaseCredentialsModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div style="margin-bottom: 1rem; padding: 0.75rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+                        <strong>⚠️ Требуется аутентификация</strong>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #856404;">
+                            ${escapeHtml(errorMessage || 'Недостаточно прав пользователя на информационную базу')}
+                        </p>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #856404;">
+                            Введите учетные данные администратора информационной базы для доступа к свойствам.
+                        </p>
+                    </div>
+                    <div class="edit-form">
+                        <div class="form-row">
+                            <label for="infobaseUserInput">Имя администратора ИБ</label>
+                            <input type="text" id="infobaseUserInput" placeholder="Администратор" autocomplete="username">
+                        </div>
+                        <div class="form-row">
+                            <label for="infobasePwdInput">Пароль администратора ИБ</label>
+                            <input type="password" id="infobasePwdInput" placeholder="Введите пароль" autocomplete="current-password">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" onclick="submitInfobaseCredentials(${connectionId}, '${clusterUuid}', '${infobaseUuid}', ${isUpdate ? 'true' : 'false'})">
+                        🔓 Войти
+                    </button>
+                    <button class="btn" onclick="closeInfobaseCredentialsModal()" style="background: #6c757d; color: white;">
+                        Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const modalContainer = document.getElementById('modal-container');
+    if (modalContainer) {
+        modalContainer.insertAdjacentHTML('beforeend', modalHtml);
+    } else {
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    // Фокус на поле ввода пользователя
+    setTimeout(() => {
+        const userInput = document.getElementById('infobaseUserInput');
+        const pwdInput = document.getElementById('infobasePwdInput');
+        if (userInput) {
+            userInput.focus();
+        }
+        
+        // Обработка Enter для отправки формы
+        if (userInput) {
+            userInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (pwdInput) {
+                        pwdInput.focus();
+                    }
+                }
+            });
+        }
+        
+        if (pwdInput) {
+            pwdInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    submitInfobaseCredentials(connectionId, clusterUuid, infobaseUuid, isUpdate);
+                }
+            });
+        }
+    }, 100);
+}
+
+/**
+ * Закрыть модальное окно ввода учетных данных ИБ
+ */
+function closeInfobaseCredentialsModal() {
+    const modal = document.getElementById('infobaseCredentialsModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Отправить учетные данные и повторить запрос
+ */
+async function submitInfobaseCredentials(connectionId, clusterUuid, infobaseUuid, isUpdate = false) {
+    const infobaseUser = document.getElementById('infobaseUserInput').value.trim();
+    const infobasePwd = document.getElementById('infobasePwdInput').value || ''; // Пароль может быть пустым
+    
+    if (!infobaseUser) {
+        showNotification('❌ Введите имя администратора ИБ', true);
+        return;
+    }
+    
+    // Пароль может быть пустым, если в базе нет пароля для администраторской УЗ
+    
+    // Закрываем модальное окно ввода учетных данных
+    closeInfobaseCredentialsModal();
+    
+    if (isUpdate) {
+        // Если это обновление, вызываем сохранение с учетными данными
+        await saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid, infobaseUser, infobasePwd);
+    } else {
+        // Если это открытие свойств, повторяем запрос с учетными данными
+        await openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, infobaseUser, infobasePwd);
+    }
+}
+
 function closeInfobasePropertiesModal() {
     const modal = document.getElementById('infobasePropertiesModal');
     if (modal) {

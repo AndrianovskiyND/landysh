@@ -13,8 +13,6 @@ def dashboard(request):
         profile = Profile.objects.create(user=request.user, role='user')
         is_admin = False
     
-    print(f"DEBUG: User {request.user.username}, is_admin: {is_admin}")  # Для отладки
-    
     context = {
         'is_admin': is_admin,
         'username': request.user.username,

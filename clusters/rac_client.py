@@ -205,8 +205,26 @@ class RACClient:
                         except (UnicodeDecodeError, LookupError):
                             pass
                 
-                # Пробуем каждую кодировку
-                for encoding in all_encodings:
+                # Сначала пробуем основную кодировку из настроек
+                # Если она успешно декодирует - используем её (даже если нет кириллицы)
+                try:
+                    primary_decoded = data_bytes.decode(primary_encoding, errors='replace')
+                    primary_cyrillic = sum(1 for char in primary_decoded if '\u0400' <= char <= '\u04FF')
+                    # Если основная кодировка успешно декодирует и есть кириллица - используем её
+                    if primary_cyrillic > 0:
+                        logger.debug(f"Decoded with {primary_cyrillic} cyrillic characters using primary encoding: {primary_encoding}")
+                        logger.debug(f"Decoded text (first 200 chars): {primary_decoded[:200]}")
+                        return primary_decoded
+                    # Если кириллицы нет, но декодирование успешно - тоже используем основную
+                    # (возможно, это английский текст или данные без кириллицы)
+                    logger.debug(f"Decoded using primary encoding {primary_encoding} (no cyrillic, but successful decode)")
+                    return primary_decoded
+                except (UnicodeDecodeError, LookupError):
+                    logger.debug(f"Primary encoding {primary_encoding} failed, trying fallback encodings")
+                    pass
+                
+                # Если основная кодировка не подошла - пробуем fallback
+                for encoding in fallback_encodings:
                     try:
                         decoded = data_bytes.decode(encoding, errors='replace')
                         # Подсчитываем количество кириллических символов
@@ -226,7 +244,7 @@ class RACClient:
                 
                 # Если нашли вариант с кириллицей - возвращаем его
                 if best_decoded and best_score > 0:
-                    logger.debug(f"Decoded with {best_score} cyrillic characters using {best_encoding}")
+                    logger.debug(f"Decoded with {best_score} cyrillic characters using fallback encoding: {best_encoding}")
                     # Логируем результат декодирования на уровне DEBUG
                     logger.debug(f"Decoded text (first 200 chars): {best_decoded[:200]}")
                     return best_decoded
@@ -242,11 +260,8 @@ class RACClient:
                 # Если ошибка уже пришла как строка (не байты), сразу исправляем кодировку
                 if isinstance(error_bytes, str):
                     error_text = fix_broken_encoding(error_bytes)
-                    logger.error(f"RAC command failed (string error): {error_text}")
-                    return {'success': False, 'error': error_text}
-                
-                # Логируем сырые байты для отладки (первые 200 байт)
-                if error_bytes:
+                elif error_bytes:
+                    # Логируем сырые байты для отладки (первые 200 байт)
                     logger.debug(f"Raw error bytes (first 200): {error_bytes[:200]}")
                     # Для Linux используем улучшенную логику декодирования
                     if sys.platform != 'win32':
@@ -466,14 +481,22 @@ class RACClient:
                     # Fallback кодировки для Linux (если основная не подходит)
                     fallback_encodings = ['cp1251', 'cp866', 'koi8-r', 'latin1']
                 
-                # Формируем список кодировок: сначала основная, затем fallback
-                all_encodings = [primary_encoding] + [e for e in fallback_encodings if e != primary_encoding]
-                
                 best_decoded = None
                 best_score = 0
                 best_encoding = None
                 broken_utf8_decoded = None
                 broken_utf8_score = 0
+                
+                # Сначала пробуем основную кодировку из настроек
+                try:
+                    primary_decoded = data_bytes.decode(primary_encoding, errors='replace')
+                    primary_cyrillic = sum(1 for char in primary_decoded if '\u0400' <= char <= '\u04FF')
+                    if primary_cyrillic > 0:
+                        return primary_decoded
+                    # Если кириллицы нет, но декодирование успешно - тоже используем основную
+                    return primary_decoded
+                except (UnicodeDecodeError, LookupError):
+                    pass
                 
                 # Сначала пробуем декодировать как utf-8, чтобы проверить на "битую" кодировку
                 try:
@@ -513,8 +536,8 @@ class RACClient:
                         except (UnicodeDecodeError, LookupError):
                             pass
                 
-                # Пробуем каждую кодировку
-                for encoding in all_encodings:
+                # Если основная кодировка не подошла - пробуем fallback
+                for encoding in fallback_encodings:
                     try:
                         decoded = data_bytes.decode(encoding, errors='replace')
                         # Подсчитываем количество кириллических символов

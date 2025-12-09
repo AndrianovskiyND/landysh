@@ -29,10 +29,6 @@ def system_settings(request):
         # Настройки кодировок (одна кодировка для каждой ОС)
         'encoding_windows': SystemSettings.get_setting('encoding_windows', 'cp866'),
         'encoding_linux': SystemSettings.get_setting('encoding_linux', 'utf-8'),
-        # Настройки логирования
-        'logging_enabled': SystemSettings.get_setting('logging_enabled', 'true'),
-        'logging_level': SystemSettings.get_setting('logging_level', 'INFO'),
-        'logging_what': SystemSettings.get_setting('logging_what', 'both'),  # rac, requests, both
         # Информация о текущей ОС
         'current_os': 'Windows' if os.name == 'nt' else 'Linux',
     }

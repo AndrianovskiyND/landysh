@@ -94,41 +94,6 @@ function renderSystemSettings(settings) {
                 </div>
             </div>
             
-            <!-- Настройки логирования -->
-            <div class="info-card" style="margin-bottom: 1rem;">
-                <h4 style="border-bottom-color: var(--primary-color);">📋 Настройки логирования</h4>
-                <div class="edit-form">
-                    <div class="form-row">
-                        <label>
-                            <input type="checkbox" id="logging_enabled" ${settings.logging_enabled === 'true' ? 'checked' : ''} style="margin-right: 0.5rem;">
-                            Включить логирование
-                        </label>
-                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Логи сохраняются в папку logs/django.log</small>
-                    </div>
-                    
-                    <div class="form-row">
-                        <label>Уровень логирования</label>
-                        <select id="logging_level">
-                            <option value="DEBUG" ${settings.logging_level === 'DEBUG' ? 'selected' : ''}>DEBUG (максимальная детализация)</option>
-                            <option value="INFO" ${settings.logging_level === 'INFO' ? 'selected' : ''}>INFO (информационные сообщения)</option>
-                            <option value="WARNING" ${settings.logging_level === 'WARNING' ? 'selected' : ''}>WARNING (предупреждения)</option>
-                            <option value="ERROR" ${settings.logging_level === 'ERROR' ? 'selected' : ''}>ERROR (только ошибки)</option>
-                        </select>
-                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Уровень детализации логов. DEBUG включает максимальную детализацию, включая результаты команд RAC.</small>
-                    </div>
-                    
-                    <div class="form-row">
-                        <label>Что логировать</label>
-                        <select id="logging_what">
-                            <option value="rac" ${settings.logging_what === 'rac' ? 'selected' : ''}>Только команды RAC</option>
-                            <option value="requests" ${settings.logging_what === 'requests' ? 'selected' : ''}>Только запросы</option>
-                            <option value="both" ${settings.logging_what === 'both' ? 'selected' : ''}>Запросы и RAC</option>
-                        </select>
-                        <small style="color: #888; font-size: 0.75rem; margin-top: 0.25rem;">Выберите, что нужно логировать: команды RAC, HTTP запросы или оба.</small>
-                    </div>
-                </div>
-            </div>
-            
             <!-- Парольная политика -->
             <div class="info-card" style="margin-bottom: 1rem;">
                 <h4 style="border-bottom-color: var(--primary-color);">🔐 Парольная политика</h4>
@@ -198,9 +163,6 @@ async function saveSystemSettings() {
         rac_path: document.getElementById('rac_path').value,
         encoding_windows: document.getElementById('encoding_windows').value.trim(),
         encoding_linux: document.getElementById('encoding_linux').value.trim(),
-        logging_enabled: document.getElementById('logging_enabled').checked ? 'true' : 'false',
-        logging_level: document.getElementById('logging_level').value,
-        logging_what: document.getElementById('logging_what').value,
         password_min_length: document.getElementById('password_min_length').value,
         password_complexity: document.getElementById('password_complexity').value,
         password_expiry_days: document.getElementById('password_expiry_days').value,

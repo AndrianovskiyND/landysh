@@ -7,16 +7,64 @@
 let connectionSelectionMode = false;
 let selectedConnections = new Set();
 
+// Состояние сворачивания папок (хранится в localStorage)
+const FOLDERS_STATE_KEY = 'landysh_folders_state';
+
 /**
- * Загрузить список подключений
+ * Получить состояние папок из localStorage
+ */
+function getFoldersState() {
+    try {
+        const state = localStorage.getItem(FOLDERS_STATE_KEY);
+        return state ? JSON.parse(state) : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+/**
+ * Сохранить состояние папок в localStorage
+ */
+function saveFoldersState(state) {
+    try {
+        localStorage.setItem(FOLDERS_STATE_KEY, JSON.stringify(state));
+    } catch (e) {
+        console.error('Ошибка сохранения состояния папок:', e);
+    }
+}
+
+/**
+ * Получить состояние конкретной папки (развернута по умолчанию)
+ */
+function getFolderState(folderId) {
+    const state = getFoldersState();
+    // По умолчанию папки развернуты (true = развернута, false = свернута)
+    return state[folderId] !== undefined ? state[folderId] : true;
+}
+
+/**
+ * Переключить состояние папки
+ */
+function toggleFolderState(folderId) {
+    const state = getFoldersState();
+    state[folderId] = !getFolderState(folderId);
+    saveFoldersState(state);
+    return state[folderId];
+}
+
+/**
+ * Загрузить список подключений и папок
  */
 async function loadConnections() {
     try {
         const response = await fetch('/api/clusters/connections/');
         const data = await response.json();
         
-        if (data.connections) {
-            renderConnectionsTree(data.connections);
+        if (data.connections && data.folders) {
+            renderConnectionsTree(data.connections, data.folders);
+        } else if (data.connections) {
+            // Обратная совместимость: если папок нет, передаем пустой массив
+            renderConnectionsTree(data.connections, []);
         }
     } catch (error) {
         showNotification('Ошибка загрузки подключений: ' + error.message, true);
@@ -26,8 +74,9 @@ async function loadConnections() {
 /**
  * Отрисовать дерево подключений в боковой панели
  * @param {Array} connections - Массив подключений
+ * @param {Array} folders - Массив папок
  */
-function renderConnectionsTree(connections) {
+function renderConnectionsTree(connections, folders = []) {
     const treeContainer = document.getElementById('connectionsTree');
     if (!treeContainer) return;
     
@@ -44,7 +93,7 @@ function renderConnectionsTree(connections) {
     selectButton.onclick = () => {
         connectionSelectionMode = !connectionSelectionMode;
         selectedConnections.clear();
-        renderConnectionsTree(connections);
+        renderConnectionsTree(connections, folders);
     };
     treeContainer.appendChild(selectButton);
     
@@ -72,47 +121,206 @@ function renderConnectionsTree(connections) {
         treeContainer.appendChild(deleteButton);
     }
     
+    // Группируем подключения по папкам
+    const foldersMap = new Map();
+    folders.forEach(folder => {
+        foldersMap.set(folder.id, {
+            ...folder,
+            connections: []
+        });
+    });
+    
+    const connectionsWithoutFolder = [];
     connections.forEach(conn => {
-        const node = document.createElement('div');
-        node.className = 'tree-node';
-        node.style.position = 'relative';
-        
-        if (connectionSelectionMode) {
-            // Режим выбора - показываем чекбокс
-            node.innerHTML = `
-                <label style="display: flex; align-items: center; gap: 0.75rem; width: 100%; cursor: pointer;">
-                    <input type="checkbox" class="connection-checkbox" value="${conn.id}" 
-                           onchange="updateConnectionSelection(${conn.id}, this.checked)">
-                    <div style="flex: 1;">
-                        <strong>${conn.display_name}</strong>
-                        <div style="font-size: 0.8rem; color: #666;">${conn.server_host}:${conn.ras_port}</div>
-                    </div>
-                </label>
-            `;
+        if (conn.folder_id && foldersMap.has(conn.folder_id)) {
+            foldersMap.get(conn.folder_id).connections.push(conn);
         } else {
-            // Обычный режим - показываем кнопки редактирования
-            node.innerHTML = `
-                <div style="flex: 1; cursor: pointer;">
-                    <strong>${conn.display_name}</strong>
-                    <div style="font-size: 0.8rem; color: #666;">${conn.server_host}:${conn.ras_port}</div>
-                </div>
-                <button class="btn btn-sm" onclick="event.stopPropagation(); openConnectionEditModal(${conn.id})" 
-                        style="padding: 0.25rem 0.5rem; margin: 0; background: transparent; border: none; color: #666; cursor: pointer; font-size: 1rem;"
+            connectionsWithoutFolder.push(conn);
+        }
+    });
+    
+    // Сортируем папки по порядку
+    const sortedFolders = Array.from(foldersMap.values()).sort((a, b) => a.order - b.order);
+    
+    // Сортируем подключения в каждой папке по порядку
+    sortedFolders.forEach(folder => {
+        folder.connections.sort((a, b) => (a.order || 0) - (b.order || 0));
+    });
+    
+    // Сортируем подключения без папок по порядку
+    connectionsWithoutFolder.sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    // Отрисовываем папки с подключениями
+    sortedFolders.forEach(folder => {
+        const folderNode = createFolderNode(folder, connectionSelectionMode);
+        treeContainer.appendChild(folderNode);
+        
+        // Создаем контейнер для подключений папки
+        const folderConnectionsContainer = document.createElement('div');
+        folderConnectionsContainer.className = 'folder-connections';
+        folderConnectionsContainer.dataset.folderId = folder.id;
+        folderConnectionsContainer.id = `folder-connections-${folder.id}`;
+        
+        // Проверяем состояние папки (свернута/развернута)
+        const isExpanded = getFolderState(folder.id);
+        if (!isExpanded) {
+            folderConnectionsContainer.style.display = 'none';
+        }
+        
+        // Отрисовываем подключения в папке
+        folder.connections.forEach(conn => {
+            const connNode = createConnectionNode(conn, connectionSelectionMode, folder.id);
+            folderConnectionsContainer.appendChild(connNode);
+        });
+        
+        treeContainer.appendChild(folderConnectionsContainer);
+    });
+    
+    // Отрисовываем подключения без папок
+    connectionsWithoutFolder.forEach(conn => {
+        const connNode = createConnectionNode(conn, connectionSelectionMode, null);
+        treeContainer.appendChild(connNode);
+    });
+}
+
+/**
+ * Создать узел папки
+ */
+function createFolderNode(folder, selectionMode) {
+    const node = document.createElement('div');
+    node.className = 'tree-node folder-node';
+    node.style.position = 'relative';
+    node.style.paddingLeft = '1rem';
+    node.style.fontWeight = 'bold';
+    node.style.backgroundColor = '#f0f0f0';
+    node.dataset.folderId = folder.id;
+    
+    if (!selectionMode) {
+        // Проверяем состояние папки
+        const isExpanded = getFolderState(folder.id);
+        const arrowIcon = isExpanded ? '▼' : '▶';
+        const connectionsCount = folder.connections ? folder.connections.length : 0;
+        
+        // Обычный режим - показываем кнопки редактирования
+        node.innerHTML = `
+            <div style="flex: 1; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;" onclick="toggleFolder(${folder.id})">
+                <span class="folder-arrow" style="font-size: 0.8rem; width: 1rem; text-align: center; user-select: none;">${arrowIcon}</span>
+                <span>📁</span>
+                <span style="flex: 1;">${escapeHtml(folder.name)}</span>
+                <span style="font-size: 0.75rem; color: #666; font-weight: normal;">(${connectionsCount})</span>
+            </div>
+            <div style="display: flex; gap: 0.25rem;">
+                <button class="btn btn-sm" onclick="event.stopPropagation(); openEditFolderModal(${folder.id}, '${escapeHtml(folder.name).replace(/'/g, "\\'")}')" 
+                        style="padding: 0.25rem 0.5rem; margin: 0; background: transparent; border: none; color: #666; cursor: pointer; font-size: 0.9rem;"
                         title="Редактировать">
                     ⚙️
                 </button>
-            `;
-            node.style.display = 'flex';
-            node.style.alignItems = 'center';
-            node.style.justifyContent = 'space-between';
-            
-            // Клик на подключение - выполняет команду
-            const connectionPart = node.querySelector('div');
-            connectionPart.onclick = () => loadConnectionData(conn.id, conn.display_name);
-        }
+                <button class="btn btn-sm" onclick="event.stopPropagation(); deleteFolder(${folder.id}, '${escapeHtml(folder.name).replace(/'/g, "\\'")}')" 
+                        style="padding: 0.25rem 0.5rem; margin: 0; background: transparent; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;"
+                        title="Удалить">
+                    🗑️
+                </button>
+            </div>
+        `;
+        node.style.display = 'flex';
+        node.style.alignItems = 'center';
+        node.style.justifyContent = 'space-between';
         
-        treeContainer.appendChild(node);
-    });
+        // Инициализируем drag-and-drop
+        initDragDrop(node, 'folder', folder.id);
+    } else {
+        // Режим выбора - папки не показываем
+        node.style.display = 'none';
+    }
+    
+    return node;
+}
+
+/**
+ * Переключить состояние папки (свернуть/развернуть)
+ */
+function toggleFolder(folderId) {
+    const isExpanded = toggleFolderState(folderId);
+    const folderConnectionsContainer = document.getElementById(`folder-connections-${folderId}`);
+    const folderNode = document.querySelector(`[data-folder-id="${folderId}"].folder-node`);
+    
+    if (folderConnectionsContainer) {
+        if (isExpanded) {
+            folderConnectionsContainer.style.display = 'block';
+        } else {
+            folderConnectionsContainer.style.display = 'none';
+        }
+    }
+    
+    // Обновляем иконку стрелки
+    if (folderNode) {
+        const arrowElement = folderNode.querySelector('.folder-arrow');
+        if (arrowElement) {
+            arrowElement.textContent = isExpanded ? '▼' : '▶';
+        }
+    }
+}
+
+/**
+ * Создать узел подключения
+ */
+function createConnectionNode(conn, selectionMode, folderId) {
+    const node = document.createElement('div');
+    node.className = 'tree-node connection-node';
+    node.style.position = 'relative';
+    if (folderId) {
+        node.style.paddingLeft = '2rem';
+    }
+    node.dataset.folderId = folderId || '';
+    
+    if (selectionMode) {
+        // Режим выбора - показываем чекбокс
+        node.innerHTML = `
+            <label style="display: flex; align-items: center; gap: 0.75rem; width: 100%; cursor: pointer;">
+                <input type="checkbox" class="connection-checkbox" value="${conn.id}" 
+                       onchange="updateConnectionSelection(${conn.id}, this.checked)">
+                <div style="flex: 1;">
+                    <strong>${conn.display_name}</strong>
+                    <div style="font-size: 0.8rem; color: #666;">${conn.server_host}:${conn.ras_port}</div>
+                </div>
+            </label>
+        `;
+    } else {
+        // Обычный режим - показываем кнопки редактирования
+        node.innerHTML = `
+            <div style="flex: 1; cursor: pointer;">
+                <strong>${conn.display_name}</strong>
+                <div style="font-size: 0.8rem; color: #666;">${conn.server_host}:${conn.ras_port}</div>
+            </div>
+            <button class="btn btn-sm" onclick="event.stopPropagation(); openConnectionEditModal(${conn.id})" 
+                    style="padding: 0.25rem 0.5rem; margin: 0; background: transparent; border: none; color: #666; cursor: pointer; font-size: 1rem;"
+                    title="Редактировать">
+                ⚙️
+            </button>
+        `;
+        node.style.display = 'flex';
+        node.style.alignItems = 'center';
+        node.style.justifyContent = 'space-between';
+        
+        // Клик на подключение - выполняет команду
+        const connectionPart = node.querySelector('div');
+        connectionPart.onclick = () => loadConnectionData(conn.id, conn.display_name);
+        
+        // Инициализируем drag-and-drop
+        initDragDrop(node, 'connection', conn.id);
+    }
+    
+    return node;
+}
+
+/**
+ * Экранирование HTML для безопасности
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 /**

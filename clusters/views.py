@@ -3,7 +3,8 @@ import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
-from .models import ServerConnection
+from django.db import models
+from .models import ServerConnection, ConnectionFolder
 from users.models import UserGroup
 from .rac_client import RACClient, fix_broken_encoding
 
@@ -32,11 +33,13 @@ def _get_cluster_admin_from_request(request):
 
 @login_required
 def server_connections(request):
-    """Возвращает список подключений пользователя"""
+    """Возвращает список подключений и папок пользователя"""
     user_groups = request.user.user_groups.all()
     connections = ServerConnection.objects.filter(user_group__in=user_groups)
+    folders = ConnectionFolder.objects.filter(user_group__in=user_groups)
     
-    data = []
+    # Формируем данные о подключениях
+    connections_data = []
     for conn in connections:
         group = conn.user_group
         members_count = group.members.count()
@@ -45,7 +48,7 @@ def server_connections(request):
             user_group=group
         ).count()
         
-        data.append({
+        connections_data.append({
             'id': conn.id,
             'display_name': conn.display_name,
             'server_host': conn.server_host,
@@ -57,9 +60,27 @@ def server_connections(request):
             'group_name': group.name,
             'group_members_count': members_count,
             'user_connections_in_group': connections_in_group,  # Все подключения в группе
+            'folder_id': conn.folder.id if conn.folder else None,
+            'order': conn.order,
         })
     
-    return JsonResponse({'connections': data})
+    # Формируем данные о папках
+    folders_data = []
+    for folder in folders:
+        group = folder.user_group
+        folders_data.append({
+            'id': folder.id,
+            'name': folder.name,
+            'group_id': group.id,
+            'group_name': group.name,
+            'order': folder.order,
+            'created_at': folder.created_at.isoformat(),
+        })
+    
+    return JsonResponse({
+        'connections': connections_data,
+        'folders': folders_data
+    })
 
 @login_required
 @csrf_exempt

@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import views_folders
 
 urlpatterns = [
     path('connections/', views.server_connections, name='server_connections'),
@@ -44,4 +45,10 @@ urlpatterns = [
     path('admins/<int:connection_id>/<str:cluster_uuid>/', views.get_cluster_admins, name='get_cluster_admins'),
     path('admins/<int:connection_id>/<str:cluster_uuid>/create/', views.create_cluster_admin, name='create_cluster_admin'),
     path('admins/<int:connection_id>/<str:cluster_uuid>/delete/', views.delete_cluster_admin, name='delete_cluster_admin'),
+    # Папки подключений
+    path('folders/create/', views_folders.create_folder, name='create_folder'),
+    path('folders/<int:folder_id>/update/', views_folders.update_folder, name='update_folder'),
+    path('folders/<int:folder_id>/delete/', views_folders.delete_folder, name='delete_folder'),
+    path('folders/<int:folder_id>/move/', views_folders.move_folder, name='move_folder'),
+    path('connections/<int:connection_id>/move/', views_folders.move_connection, name='move_connection'),
 ]

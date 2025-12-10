@@ -197,6 +197,32 @@
             color: white;
         }
         
+        .tree-node.drag-over {
+            background-color: #e3f2fd;
+            border: 2px dashed var(--primary-color);
+        }
+        
+        .folder-node {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        
+        .folder-node:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .folder-arrow {
+            transition: transform 0.2s ease;
+        }
+        
+        .folder-connections {
+            transition: opacity 0.2s ease;
+        }
+        
+        .connection-node {
+            background-color: white;
+        }
+        
         .connection-form {
             padding: 1rem;
             border-bottom: 1px solid var(--border-color);

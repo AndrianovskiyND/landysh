@@ -860,6 +860,11 @@ async function deleteSelectedConnections(connections) {
             });
             
             if (!response.ok) {
+                // Если 404 (Not Found), подключение уже удалено - считаем успехом
+                if (response.status === 404) {
+                    successCount++;
+                    continue;
+                }
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
@@ -868,12 +873,26 @@ async function deleteSelectedConnections(connections) {
             if (result.success) {
                 successCount++;
             } else {
-                errorCount++;
-                errors.push(result.error || 'Неизвестная ошибка');
+                // Если подключение не найдено, это может означать, что оно уже было удалено
+                // (например, через CASCADE при удалении группы). Считаем это успешным удалением.
+                const errorMsg = result.error || '';
+                if (errorMsg.includes('не найдено') || errorMsg.includes('нет доступа')) {
+                    // Подключение уже удалено (цель достигнута) - считаем успехом
+                    successCount++;
+                } else {
+                    errorCount++;
+                    errors.push(errorMsg || 'Неизвестная ошибка');
+                }
             }
         } catch (error) {
-            errorCount++;
-            errors.push(error.message || 'Ошибка сети');
+            // Если ошибка связана с тем, что подключение не найдено, считаем успехом
+            const errorMsg = error.message || '';
+            if (errorMsg.includes('404') || errorMsg.includes('не найдено') || errorMsg.includes('Not Found')) {
+                successCount++;
+            } else {
+                errorCount++;
+                errors.push(errorMsg || 'Ошибка сети');
+            }
         }
     }
     

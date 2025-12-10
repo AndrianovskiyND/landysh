@@ -223,12 +223,17 @@ def all_groups(request):
     group_data = []
     
     for group in groups:
+        # Подсчитываем количество подключений для этой группы
+        from clusters.models import ServerConnection
+        connections_count = ServerConnection.objects.filter(user_group=group).count()
+        
         group_data.append({
             'id': group.id,
             'name': group.name,
             'created_by': group.created_by.username,
             'created_at': group.created_at.isoformat(),
             'members_count': group.members.count(),
+            'connections_count': connections_count,
             'members': [{'id': m.id, 'username': m.username} for m in group.members.all()]
         })
     
@@ -468,7 +473,7 @@ def delete_user(request):
             # Это предотвратит удаление группы при удалении пользователя
             for group in created_groups:
                 group.created_by = request.user
-            group.save()
+                group.save()
             
             # Удаляем пользователя из всех групп (ManyToMany связь)
             # Это не удалит сами группы, так как это ManyToMany

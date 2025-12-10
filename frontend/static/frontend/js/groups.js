@@ -70,6 +70,7 @@ function renderGroupManagement(groups) {
                     <th>Название</th>
                     <th>Создатель</th>
                     <th>Участников</th>
+                    <th>Подключений</th>
                     <th>Дата создания</th>
                     <th>Действия</th>
                 </tr>
@@ -80,7 +81,7 @@ function renderGroupManagement(groups) {
     if (groups.length === 0) {
         html += `
             <tr>
-                <td colspan="6" style="text-align: center; color: #666; padding: 2rem;">
+                <td colspan="7" style="text-align: center; color: #666; padding: 2rem;">
                     Нет созданных групп
                 </td>
             </tr>
@@ -102,6 +103,7 @@ function renderGroupManagement(groups) {
                     </td>
                     <td>${group.created_by}</td>
                     <td>${group.members_count}</td>
+                    <td>${group.connections_count || 0}</td>
                     <td>${new Date(group.created_at).toLocaleDateString('ru-RU')}</td>
                     <td>
                         <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">

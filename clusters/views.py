@@ -173,15 +173,15 @@ def delete_connection(request, connection_id):
             group_action = None
             connection_deleted = False
             
-            # Сценарий 1: Группа из 1 пользователя → удалить подключение и группу
-            if members_count == 1:
+            # Сценарий 1: Группа из 1 пользователя и это последнее подключение → удалить подключение и группу
+            if members_count == 1 and connections_count_before == 1:
                 # Удаляем подключение
                 connection.delete()
                 connection_deleted = True
                 # Удаляем группу (каскадно удалятся все подключения, но их уже нет)
                 group.delete()
                 group_action = 'deleted'
-                result_message = f'Подключение "{connection_display_name}" удалено. Группа "{group_name}" удалена, так как вы были единственным участником.'
+                result_message = f'Подключение "{connection_display_name}" удалено. Группа "{group_name}" удалена, так как вы были единственным участником и это было последнее подключение.'
             
             # Сценарий 2: Группа из 2+ пользователей и это последнее подключение → НЕ удалять подключение, только исключить пользователя
             elif members_count > 1 and connections_count_before == 1:

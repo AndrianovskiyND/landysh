@@ -64,11 +64,45 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # 1. Установите psycopg2: pip install psycopg2-binary
 # 2. Раскомментируйте конфигурацию PostgreSQL ниже
 # 3. Закомментируйте или удалите конфигурацию SQLite
-# 4. Создайте базу данных в PostgreSQL:
+# 4. Создайте базу данных и схему в PostgreSQL (выполните от имени суперпользователя postgres):
+#    
+#    -- Создание базы данных
 #    CREATE DATABASE your_database_name;
+#    
+#    -- Создание пользователя
 #    CREATE USER your_username WITH PASSWORD 'your_password';
+#    
+#    -- Выдача прав на базу данных
 #    GRANT ALL PRIVILEGES ON DATABASE your_database_name TO your_username;
-# 5. Выполните миграции: python manage.py migrate
+#    
+#    -- Подключение к базе данных для создания схемы
+#    \c your_database_name
+#    
+#    -- Создание схемы (рекомендуется использовать имя проекта, например: landysh)
+#    CREATE SCHEMA landysh;
+#    
+#    -- Выдача прав на схему
+#    GRANT ALL PRIVILEGES ON SCHEMA landysh TO your_username;
+#    
+#    -- Выдача прав на все таблицы в схеме (включая будущие)
+#    ALTER DEFAULT PRIVILEGES IN SCHEMA landysh GRANT ALL ON TABLES TO your_username;
+#    ALTER DEFAULT PRIVILEGES IN SCHEMA landysh GRANT ALL ON SEQUENCES TO your_username;
+#    
+#    -- Установка схемы по умолчанию для пользователя (опционально)
+#    ALTER USER your_username SET search_path = landysh, public;
+# 
+# 5. Установите переменные окружения (или укажите значения напрямую в конфигурации):
+#    DB_NAME=your_database_name
+#    DB_USER=your_username
+#    DB_PASSWORD=your_password
+#    DB_HOST=localhost
+#    DB_PORT=5432
+#    DB_SCHEMA=landysh  # Имя схемы (по умолчанию: landysh)
+# 
+# 6. Выполните миграции: python manage.py migrate
+#
+# ПРИМЕЧАНИЕ: Проект использует отдельную схему вместо public для безопасности
+# и изоляции данных. Имя схемы можно изменить через переменную окружения DB_SCHEMA.
 #
 # ============================================================================
 
@@ -91,6 +125,8 @@ DATABASES = {
 #         'PORT': os.getenv('DB_PORT', '5432'),
 #         'OPTIONS': {
 #             'connect_timeout': 10,
+#             # Указываем схему для использования (вместо public)
+#             'options': f"-c search_path={os.getenv('DB_SCHEMA', 'landysh')}",
 #         },
 #     }
 # }

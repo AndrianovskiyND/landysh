@@ -67,13 +67,21 @@
 /**
  * Открывает модальное окно сеансов на весь экран
  */
-async function openSessionsModal(connectionId, clusterUuid, infobaseUuid = null) {
+async function openSessionsModal(connectionId, clusterUuid, infobaseUuid = null, infobaseName = null) {
     closeContextMenu();
     
     // Удаляем предыдущее модальное окно если есть
     const existingModal = document.getElementById('sessionsModal');
     if (existingModal) {
         existingModal.remove();
+    }
+    
+    // Формируем заголовок
+    let title = '💺 Сеансы';
+    if (infobaseUuid && infobaseName) {
+        title += ` (фильтр по информационной базе: ${escapeHtml(infobaseName)})`;
+    } else if (infobaseUuid) {
+        title += ' (фильтр по информационной базе)';
     }
     
     const modal = document.createElement('div');
@@ -83,7 +91,7 @@ async function openSessionsModal(connectionId, clusterUuid, infobaseUuid = null)
     modal.innerHTML = `
         <div class="modal" style="max-width: 95vw; max-height: 95vh; width: 95vw; height: 95vh; display: flex; flex-direction: column;">
             <div class="modal-header" style="flex-shrink: 0;">
-                <h3>💺 Сеансы${infobaseUuid ? ' (фильтр по информационной базе)' : ''}</h3>
+                <h3>${title}</h3>
                 <button class="modal-close-btn" onclick="closeSessionsModal()">×</button>
             </div>
             <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 1rem;">
@@ -479,7 +487,12 @@ async function terminateSelectedSessionsFromTable() {
     }
     
     const count = sessionUuids.length;
-    if (!confirm(`Вы уверены, что хотите принудительно завершить ${count} сеанс${count > 1 ? 'ов' : ''}?`)) {
+    const confirmed = await showConfirmModal(
+        `Вы уверены, что хотите принудительно завершить ${count} сеанс${count > 1 ? 'ов' : ''}?`,
+        'Подтверждение завершения сеансов'
+    );
+    
+    if (!confirmed) {
         return;
     }
     
@@ -621,10 +634,10 @@ async function terminateSelectedSessions(connectionId, clusterUuid, sessionUuids
         return;
     }
     
+    // Подтверждение уже запрошено в terminateSelectedSessionsFromTable()
+    // Не запрашиваем повторно, чтобы избежать двойного подтверждения
+    
     const count = sessionUuids.length;
-    if (!confirm(`Вы уверены, что хотите принудительно завершить ${count} сеанс${count > 1 ? 'ов' : ''}?`)) {
-        return;
-    }
     
     try {
         const csrfToken = getCSRFToken();

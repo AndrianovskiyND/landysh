@@ -178,7 +178,7 @@ function showInfobaseContextMenu(event, connectionId, clusterUuid, infobaseUuid,
         <div class="context-menu-item" onclick="openInfobaseProperties(${connectionId}, '${clusterUuid}', '${infobaseUuid}'); closeContextMenu();">
             📋 Свойства
         </div>
-        <div class="context-menu-item" onclick="openSessionsModal(${connectionId}, '${clusterUuid}', '${infobaseUuid}'); closeContextMenu();">
+        <div class="context-menu-item" onclick="openSessionsModal(${connectionId}, '${clusterUuid}', '${infobaseUuid}', '${escapeHtml(infobaseName).replace(/'/g, "\\'")}'); closeContextMenu();">
             💺 Сеансы
         </div>
         <div class="context-menu-item" onclick="deleteInfobase(${connectionId}, '${clusterUuid}', '${infobaseUuid}', '${escapeHtml(infobaseName).replace(/'/g, "\\'")}'); closeContextMenu();">

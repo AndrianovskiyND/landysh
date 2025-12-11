@@ -106,6 +106,7 @@ def create_connection(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
+            force_create = data.get('force_create', False)  # Флаг принудительного создания при подтверждении дубликата
             
             # Автоматически создаем группу для пользователя, если нет
             user_groups = request.user.user_groups.all()
@@ -116,11 +117,43 @@ def create_connection(request):
             else:
                 user_group = user_groups.first()
             
+            server_host = data.get('server_host', '').strip()
+            ras_port = data.get('ras_port')
+            
+            # Преобразуем ras_port в int, если он передан
+            if ras_port is not None:
+                try:
+                    ras_port = int(ras_port)
+                except (ValueError, TypeError):
+                    return JsonResponse({'success': False, 'error': 'Неверный формат порта RAS'})
+            
+            # Проверяем уникальность по server_host:ras_port в группе (только при создании, не при force_create)
+            if not force_create:
+                duplicate_connections = ServerConnection.objects.filter(
+                    user_group=user_group,
+                    server_host=server_host,
+                    ras_port=ras_port
+                )
+                
+                if duplicate_connections.exists():
+                    # Возвращаем список дубликатов (до 5 для отображения)
+                    duplicates_list = list(duplicate_connections.values_list('display_name', flat=True)[:5])
+                    duplicates_count = duplicate_connections.count()
+                    
+                    return JsonResponse({
+                        'success': False,
+                        'has_duplicates': True,
+                        'duplicates': duplicates_list,
+                        'duplicates_count': duplicates_count,
+                        'error': 'Найдены дублирующие подключения'
+                    })
+            
+            # Создаем подключение
             connection = ServerConnection.objects.create(
                 user_group=user_group,
-                display_name=data['display_name'],
-                server_host=data['server_host'],
-                ras_port=data['ras_port'],
+                display_name=data.get('display_name', ''),
+                server_host=server_host,
+                ras_port=ras_port,
                 cluster_admin=data.get('cluster_admin', ''),
                 cluster_password=data.get('cluster_password', ''),
                 agent_user=data.get('agent_user', ''),

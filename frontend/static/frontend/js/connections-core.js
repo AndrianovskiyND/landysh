@@ -577,6 +577,41 @@ async function saveConnection(connectionId) {
         
         const result = await response.json();
         
+        // Обработка дубликатов при создании подключения
+        if (!result.success && result.has_duplicates && !connectionId) {
+            // Показываем модальное окно подтверждения дубликата
+            const confirmed = await showDuplicateConnectionModal(result.duplicates, result.duplicates_count);
+            if (confirmed) {
+                // Повторяем запрос с флагом force_create
+                connectionData.force_create = true;
+                const retryResponse = await fetch('/api/clusters/connections/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify(connectionData)
+                });
+                
+                if (!retryResponse.ok) {
+                    throw new Error(`HTTP error! status: ${retryResponse.status}`);
+                }
+                
+                const retryResult = await retryResponse.json();
+                if (retryResult.success) {
+                    showNotification('✅ Подключение создано успешно');
+                    closeConnectionModal();
+                    loadConnections();
+                    if (window.loadStatistics) {
+                        loadStatistics();
+                    }
+                } else {
+                    showNotification('❌ Ошибка: ' + retryResult.error, true);
+                }
+            }
+            return; // Не показываем ошибку, так как пользователь отменил
+        }
+        
         if (result.success) {
             showNotification(`✅ Подключение ${connectionId ? 'обновлено' : 'создано'} успешно`);
             closeConnectionModal();
@@ -597,6 +632,82 @@ function closeConnectionModal() {
     if (modal) {
         modal.classList.add('modal-closing');
         setTimeout(() => modal.remove(), 200);
+    }
+}
+
+/**
+ * Показать модальное окно подтверждения создания дублирующего подключения
+ * @param {Array<string>} duplicates - Список display_name дублирующих подключений (до 5)
+ * @param {number} duplicatesCount - Общее количество дублирующих подключений
+ * @returns {Promise<boolean>} - true если пользователь подтвердил, false если отменил
+ */
+function showDuplicateConnectionModal(duplicates, duplicatesCount) {
+    return new Promise((resolve) => {
+        // Удаляем предыдущее модальное окно если есть
+        const existingModal = document.getElementById('duplicateConnectionModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Формируем список дубликатов
+        let duplicatesListHtml = '';
+        const displayCount = Math.min(duplicates.length, 5);
+        for (let i = 0; i < displayCount; i++) {
+            duplicatesListHtml += `<div style="padding: 0.25rem 0;">• ${escapeHtml(duplicates[i])}</div>`;
+        }
+        
+        // Если дубликатов больше 5, добавляем "..."
+        if (duplicatesCount > 5) {
+            duplicatesListHtml += `<div style="padding: 0.25rem 0; color: #666;">...</div>`;
+        }
+        
+        const modalHtml = `
+            <div class="modal-overlay optimized" id="duplicateConnectionModal" style="z-index: 10001;">
+                <div class="modal" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3>⚠️ Дублирующее подключение</h3>
+                        <button class="modal-close-btn" onclick="closeDuplicateConnectionModal(false)">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="margin-bottom: 1rem;">Подключение с таким <strong>server_host</strong> и <strong>ras_port</strong> ранее уже было создано.</p>
+                        <div style="margin-bottom: 1rem;">
+                            <div style="font-weight: 600; margin-bottom: 0.5rem;">Дублирующие подключения:</div>
+                            <div style="max-height: 150px; overflow-y: auto; padding: 0.5rem; background: #f8f9fa; border-radius: 4px; font-size: 0.9rem;">
+                                ${duplicatesListHtml}
+                            </div>
+                        </div>
+                        <p style="font-weight: 600;">Вы точно хотите создать дублирующую запись?</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="closeDuplicateConnectionModal(false)">Нет</button>
+                        <button class="btn btn-primary" onclick="closeDuplicateConnectionModal(true)">Да</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const container = document.getElementById('modal-container');
+        container.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Сохраняем resolve в глобальной переменной для использования в closeDuplicateConnectionModal
+        window._duplicateModalResolve = resolve;
+    });
+}
+
+/**
+ * Закрыть модальное окно подтверждения дубликата
+ * @param {boolean} confirmed - true если пользователь подтвердил, false если отменил
+ */
+function closeDuplicateConnectionModal(confirmed) {
+    const modal = document.getElementById('duplicateConnectionModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Вызываем resolve из Promise
+    if (window._duplicateModalResolve) {
+        window._duplicateModalResolve(confirmed);
+        window._duplicateModalResolve = null;
     }
 }
 

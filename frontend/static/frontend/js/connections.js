@@ -1340,6 +1340,229 @@ function showClusterContextMenu(event, connectionId, clusterUuid, clusterName) {
  * Открывает модальное окно свойств кластера
  */
 /**
+ * Маппинг параметров информационной базы на русские названия
+ */
+function getInfobaseParamDisplayName(paramKey) {
+    const paramNames = {
+        'name': 'Имя информационной базы',
+        'descr': 'Описание',
+        'dbms': 'Тип СУБД',
+        'db-server': 'Сервер баз данных',
+        'db-name': 'Имя базы данных',
+        'db-user': 'Пользователь базы данных',
+        'security-level': 'Уровень безопасности',
+        'license-distribution': 'Управление выдачей лицензий',
+        'scheduled-jobs-deny': 'Блокировка регламентных заданий включена',
+        'sessions-deny': 'Блокировка начала сеансов включена',
+        'denied-from': 'Начало',
+        'denied-message': 'Сообщение',
+        'denied-parameter': 'Параметр блокировки',
+        'denied-to': 'Конец',
+        'permission-code': 'Код разрешения',
+        'external-session-manager-connection-string': 'Параметры внешнего управления сеансами',
+        'external-session-manager-required': 'Обязательное использование внешнего управления сеансами',
+        'reserve-working-processes': 'Резервирование рабочих процессов',
+        'security-profile-name': 'Профиль безопасности информационной базы',
+        'safe-mode-security-profile-name': 'Профиль безопасности внешнего кода',
+        'disable-local-speech-to-text': 'Запретить локальное распознавание речи',
+        'configuration-unload-delay-by-working-process-without-active-users': 'Задержка выгрузки конфигурации рабочим процессом без активных пользователей (секунды)',
+        'minimum-scheduled-jobs-start-period-without-active-users': 'Минимальный период запуска регламентных заданий без активных пользователей (секунды)',
+        'maximum-scheduled-jobs-start-shift-without-active-users': 'Максимальный сдвиг запуска регламентных заданий без активных пользователей (секунды)'
+    };
+    return paramNames[paramKey] || paramKey;
+}
+
+/**
+ * Маппинг имени поля формы на имя параметра RAC для информационной базы
+ */
+function getInfobaseFormFieldName(paramKey) {
+    const fieldMapping = {
+        'name': 'name',
+        'descr': 'descr',
+        'dbms': 'dbms',
+        'db-server': 'db_server',
+        'db-name': 'db_name',
+        'db-user': 'db_user',
+        'security-level': 'security_level',
+        'license-distribution': 'license_distribution',
+        'scheduled-jobs-deny': 'scheduled_jobs_deny',
+        'sessions-deny': 'sessions_deny',
+        'denied-from': 'denied_from',
+        'denied-message': 'denied_message',
+        'denied-parameter': 'denied_parameter',
+        'denied-to': 'denied_to',
+        'permission-code': 'permission_code',
+        'external-session-manager-connection-string': 'external_session_manager_connection_string',
+        'external-session-manager-required': 'external_session_manager_required',
+        'reserve-working-processes': 'reserve_working_processes',
+        'security-profile-name': 'security_profile_name',
+        'safe-mode-security-profile-name': 'safe_mode_security_profile_name',
+        'disable-local-speech-to-text': 'disable_local_speech_to_text',
+        'configuration-unload-delay-by-working-process-without-active-users': 'configuration_unload_delay_by_working_process_without_active_users',
+        'minimum-scheduled-jobs-start-period-without-active-users': 'minimum_scheduled_jobs_start_period_without_active_users',
+        'maximum-scheduled-jobs-start-shift-without-active-users': 'maximum_scheduled_jobs_start_shift_without_active_users'
+    };
+    return fieldMapping[paramKey] || paramKey.replace(/-/g, '_');
+}
+
+/**
+ * Генерирует HTML для поля параметра информационной базы
+ */
+function generateInfobaseParamField(paramKey, paramValue) {
+    const displayName = getInfobaseParamDisplayName(paramKey);
+    const fieldName = getInfobaseFormFieldName(paramKey);
+    
+    // Пропускаем служебные поля, которые уже обработаны
+    if (['infobase', 'name', 'descr', 'dbms', 'db-server', 'db-name', 'db-user'].includes(paramKey)) {
+        return '';
+    }
+    
+    // Определяем тип поля
+    if (paramKey === 'license-distribution') {
+        // Select для управления выдачей лицензий
+        return `
+            <div class="form-row">
+                <label>${escapeHtml(displayName)}:</label>
+                <select id="${fieldName}" name="${fieldName}">
+                    <option value="allow" ${paramValue === 'allow' ? 'selected' : ''}>Разрешена</option>
+                    <option value="deny" ${paramValue === 'deny' ? 'selected' : ''}>Запрещена</option>
+                </select>
+            </div>
+        `;
+    } else if (paramKey === 'scheduled-jobs-deny' || paramKey === 'sessions-deny') {
+        // Checkbox для блокировки (on/off)
+        const isChecked = paramValue === 'on' || paramValue === 'yes' || paramValue === '1' || paramValue === 1 || paramValue === true;
+        return `
+            <div class="form-row" style="display: flex !important; flex-direction: row !important; align-items: center !important; gap: 0.5rem;">
+                <label style="margin: 0 !important; white-space: nowrap; flex: 1 1 auto; text-align: left;">${escapeHtml(displayName)}:</label>
+                <input type="checkbox" id="${fieldName}" name="${fieldName}" value="on" ${isChecked ? 'checked' : ''} style="width: 20px; height: 20px; cursor: pointer; margin: 0 !important; flex-shrink: 0; padding: 0 !important;">
+            </div>
+        `;
+    } else if (paramKey === 'external-session-manager-required' || paramKey === 'reserve-working-processes' || 
+               paramKey === 'disable-local-speech-to-text') {
+        // Select для yes/no
+        const boolValue = paramValue === 'yes' || paramValue === '1' || paramValue === 1 || paramValue === true;
+        return `
+            <div class="form-row">
+                <label>${escapeHtml(displayName)}:</label>
+                <select id="${fieldName}" name="${fieldName}">
+                    <option value="yes" ${boolValue ? 'selected' : ''}>Да</option>
+                    <option value="no" ${!boolValue ? 'selected' : ''}>Нет</option>
+                </select>
+            </div>
+        `;
+    } else if (paramKey === 'denied-from' || paramKey === 'denied-to') {
+        // Datetime-local для полей даты/времени
+        // Преобразуем формат из YYYY-MM-DDTHH:mm:ss в YYYY-MM-DDTHH:mm для datetime-local
+        let datetimeValue = '';
+        if (paramValue && paramValue.trim()) {
+            // Если значение в формате YYYY-MM-DDTHH:mm:ss, убираем секунды
+            const trimmedValue = paramValue.trim();
+            if (trimmedValue.includes('T')) {
+                // Формат может быть YYYY-MM-DDTHH:mm:ss или YYYY-MM-DDTHH:mm
+                if (trimmedValue.length >= 19) {
+                    // YYYY-MM-DDTHH:mm:ss - убираем секунды
+                    datetimeValue = trimmedValue.substring(0, 16); // Берем первые 16 символов (YYYY-MM-DDTHH:mm)
+                } else if (trimmedValue.length >= 16) {
+                    // YYYY-MM-DDTHH:mm - уже правильный формат
+                    datetimeValue = trimmedValue.substring(0, 16);
+                } else {
+                    datetimeValue = trimmedValue;
+                }
+            } else {
+                datetimeValue = trimmedValue;
+            }
+        }
+        return `
+            <div class="form-row">
+                <label>${escapeHtml(displayName)}:</label>
+                <input type="datetime-local" id="${fieldName}" name="${fieldName}" value="${escapeHtml(datetimeValue)}">
+            </div>
+        `;
+    } else if (paramKey === 'security-level' || 
+               paramKey === 'configuration-unload-delay-by-working-process-without-active-users' ||
+               paramKey === 'minimum-scheduled-jobs-start-period-without-active-users' ||
+               paramKey === 'maximum-scheduled-jobs-start-shift-without-active-users') {
+        // Number для числовых значений
+        return `
+            <div class="form-row">
+                <label>${escapeHtml(displayName)}:</label>
+                <input type="number" id="${fieldName}" name="${fieldName}" value="${escapeHtml(paramValue || '0')}" min="0">
+            </div>
+        `;
+    } else {
+        // Text для текстовых значений
+        return `
+            <div class="form-row">
+                <label>${escapeHtml(displayName)}:</label>
+                <input type="text" id="${fieldName}" name="${fieldName}" value="${escapeHtml(paramValue || '')}">
+            </div>
+        `;
+    }
+}
+
+/**
+ * Генерирует HTML для блока "Блокировка начала сеансов"
+ */
+function generateInfobaseSessionDenyFields(infobaseParams) {
+    // Порядок параметров в блоке
+    const paramOrder = ['sessions-deny', 'scheduled-jobs-deny', 'denied-from', 'denied-to', 'denied-message', 'permission-code', 'denied-parameter'];
+    
+    let sessionDenyHtml = '';
+    
+    paramOrder.forEach(paramKey => {
+        if (paramKey in infobaseParams) {
+            sessionDenyHtml += generateInfobaseParamField(paramKey, infobaseParams[paramKey]);
+        }
+    });
+    
+    return sessionDenyHtml;
+}
+
+/**
+ * Генерирует HTML для всех параметров информационной базы
+ */
+function generateInfobaseParamsFields(infobaseParams) {
+    // Параметры, которые уже обработаны в других блоках
+    const excludedParams = ['infobase', 'name', 'descr', 'dbms', 'db-server', 'db-name', 'db-user', 
+                            'sessions-deny', 'scheduled-jobs-deny', 'denied-from', 'denied-to', 
+                            'denied-message', 'permission-code', 'denied-parameter'];
+    
+    // Определяем порядок параметров (сначала основные, затем остальные)
+    const paramOrder = [
+        'security-level',
+        'license-distribution',
+        'external-session-manager-connection-string',
+        'external-session-manager-required',
+        'reserve-working-processes',
+        'security-profile-name',
+        'safe-mode-security-profile-name',
+        'disable-local-speech-to-text',
+        'configuration-unload-delay-by-working-process-without-active-users',
+        'minimum-scheduled-jobs-start-period-without-active-users',
+        'maximum-scheduled-jobs-start-shift-without-active-users'
+    ];
+    
+    let paramsHtml = '';
+    
+    // Сначала добавляем параметры в нужном порядке
+    paramOrder.forEach(paramKey => {
+        if (paramKey in infobaseParams) {
+            paramsHtml += generateInfobaseParamField(paramKey, infobaseParams[paramKey]);
+        }
+    });
+    
+    // Затем добавляем остальные параметры, которых нет в списке
+    Object.keys(infobaseParams).forEach(paramKey => {
+        if (!excludedParams.includes(paramKey) && !paramOrder.includes(paramKey)) {
+            paramsHtml += generateInfobaseParamField(paramKey, infobaseParams[paramKey]);
+        }
+    });
+    
+    return paramsHtml;
+}
+
+/**
  * Маппинг параметров кластера на русские названия
  */
 function getClusterParamDisplayName(paramKey) {
@@ -2142,6 +2365,15 @@ async function saveCreateInfobase(connectionId, clusterUuid) {
 async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, infobaseUser = null, infobasePwd = null) {
     closeContextMenu();
     
+    // Если учетные данные не переданы, пытаемся загрузить сохраненные
+    if (!infobaseUser) {
+        const savedCredentials = loadInfobaseCredentialsFromStorage(connectionId, infobaseUuid);
+        if (savedCredentials.user) {
+            infobaseUser = savedCredentials.user;
+            infobasePwd = savedCredentials.password || '';
+        }
+    }
+    
     try {
         let url = `/api/clusters/infobases/${connectionId}/${clusterUuid}/info/?infobase=${infobaseUuid}`;
         if (infobaseUser) {
@@ -2194,6 +2426,11 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
             }
             
             if (needsCredentials) {
+                // Если использовались сохраненные данные и они не сработали, очищаем их
+                if (infobaseUser) {
+                    saveInfobaseCredentialsToStorage(connectionId, infobaseUuid, '', '');
+                }
+                
                 // Показываем модальное окно для ввода учетных данных
                 if (typeof showInfobaseCredentialsModal === 'function') {
                     showInfobaseCredentialsModal(connectionId, clusterUuid, infobaseUuid, errorOriginal);
@@ -2201,11 +2438,11 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
                     console.error('showInfobaseCredentialsModal function not found');
                     showNotification('❌ Ошибка загрузки свойств информационной базы: ' + errorOriginal + ' (требуются учетные данные)', true);
                 }
-                return;
+                return false; // Возвращаем false при ошибке
             }
             
             showNotification('❌ Ошибка загрузки свойств информационной базы: ' + errorOriginal, true);
-            return;
+            return false; // Возвращаем false при ошибке
         }
         
         const infobase = data.infobase || {};
@@ -2221,34 +2458,76 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
         }
         const displayName = infobaseNameValue;
         
-        // Получаем значения полей
-        const getValue = (key) => {
-            // Пробуем разные варианты ключей
-            return infobaseData[key] || 
-                   infobaseData[key.replace(/-/g, '_')] || 
-                   infobaseData[key.replace(/_/g, '-')] ||
-                   '';
-        };
+        // Собираем все параметры из данных информационной базы (исключаем служебные поля)
+        const excludedKeys = ['infobase', 'name'];
+        const infobaseParams = {};
+        Object.keys(infobaseData).forEach(key => {
+            if (!excludedKeys.includes(key)) {
+                infobaseParams[key] = infobaseData[key];
+            }
+        });
         
-        // Получаем описание (может быть в разных полях)
-        const getDescr = () => {
-            return getValue('descr') || 
-                   getValue('description') || 
-                   infobaseData['descr'] || 
-                   infobaseData['description'] || 
-                   '';
-        };
+        // Генерируем HTML для основных полей
+        const basicInfoHtml = `
+            <div class="form-row">
+                <label>UUID информационной базы:</label>
+                <input type="text" class="readonly-field" value="${escapeHtml(infobase.uuid || infobaseUuid)}" readonly>
+            </div>
+            <div class="form-row">
+                <label>Имя информационной базы:</label>
+                <input type="text" id="infobaseName" name="name" value="${escapeHtml(infobaseNameValue)}">
+            </div>
+            ${infobaseParams['descr'] !== undefined ? `
+            <div class="form-row">
+                <label>Описание:</label>
+                <input type="text" id="infobaseDescr" name="descr" value="${escapeHtml(infobaseParams['descr'] || '')}">
+            </div>
+            ` : ''}
+        `;
         
-        // Блокировка регламентных заданий
-        const scheduledJobsDeny = getValue('scheduled-jobs-deny') || 'off';
+        // Генерируем HTML для блока "Блокировка начала сеансов"
+        const sessionDenyHtml = generateInfobaseSessionDenyFields(infobaseParams);
         
-        // Блокировка сеансов
-        const sessionsDeny = getValue('sessions-deny') || 'off';
+        // Генерируем HTML для полей СУБД (только для чтения)
+        const dbInfoHtml = `
+            ${infobaseParams['dbms'] !== undefined ? `
+            <div class="form-row">
+                <label>Тип СУБД:</label>
+                <input type="text" class="readonly-field" value="${escapeHtml(infobaseParams['dbms'] || '')}" readonly>
+            </div>
+            ` : ''}
+            ${infobaseParams['db-server'] !== undefined ? `
+            <div class="form-row">
+                <label>Сервер баз данных:</label>
+                <input type="text" class="readonly-field" value="${escapeHtml(infobaseParams['db-server'] || '')}" readonly>
+            </div>
+            ` : ''}
+            ${infobaseParams['db-name'] !== undefined ? `
+            <div class="form-row">
+                <label>Имя базы данных:</label>
+                <input type="text" class="readonly-field" value="${escapeHtml(infobaseParams['db-name'] || '')}" readonly>
+            </div>
+            ` : ''}
+            ${infobaseParams['db-user'] !== undefined ? `
+            <div class="form-row">
+                <label>Пользователь базы данных:</label>
+                <input type="text" class="readonly-field" value="${escapeHtml(infobaseParams['db-user'] || '')}" readonly>
+            </div>
+            ` : ''}
+        `;
+        
+        // Генерируем HTML для остальных параметров
+        const otherParamsHtml = generateInfobaseParamsFields(infobaseParams);
         
         // Удаляем предыдущее модальное окно если есть
         const existingModal = document.getElementById('infobasePropertiesModal');
         if (existingModal) {
             existingModal.remove();
+        }
+        
+        // Сохраняем учетные данные в localStorage при успешной загрузке
+        if (infobaseUser) {
+            saveInfobaseCredentialsToStorage(connectionId, infobaseUuid, infobaseUser, infobasePwd || '');
         }
         
         const modal = document.createElement('div');
@@ -2267,62 +2546,26 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
                     <form id="infobasePropertiesForm">
                         <div class="info-card">
                             <h4>📊 Основная информация 1С</h4>
-                            <div class="form-row">
-                                <label>UUID информационной базы:</label>
-                                <input type="text" class="readonly-field" value="${escapeHtml(infobase.uuid || infobaseUuid)}" readonly>
-                            </div>
-                            <div class="form-row">
-                                <label>Имя информационной базы:</label>
-                                <input type="text" id="infobaseName" name="name" value="${escapeHtml(infobaseNameValue)}">
-                            </div>
-                            <div class="form-row">
-                                <label>Описание:</label>
-                                <input type="text" id="infobaseDescr" name="descr" value="${escapeHtml(getDescr())}">
-                            </div>
+                            ${basicInfoHtml}
                         </div>
+                        ${sessionDenyHtml ? `
+                        <div class="info-card">
+                            <h4>🚫 Блокировка начала сеансов</h4>
+                            ${sessionDenyHtml}
+                        </div>
+                        ` : ''}
+                        ${dbInfoHtml.trim() ? `
                         <div class="info-card">
                             <h4>📊 Основная информация СУБД</h4>
-                            <div class="form-row">
-                                <label>Тип СУБД:</label>
-                                <input type="text" class="readonly-field" value="${escapeHtml(getValue('dbms') || '')}" readonly>
-                            </div>
-                            <div class="form-row">
-                                <label>Сервер баз данных:</label>
-                                <input type="text" class="readonly-field" value="${escapeHtml(getValue('db-server') || '')}" readonly>
-                            </div>
-                            <div class="form-row">
-                                <label>Имя базы данных:</label>
-                                <input type="text" class="readonly-field" value="${escapeHtml(getValue('db-name') || '')}" readonly>
-                            </div>
+                            ${dbInfoHtml}
                         </div>
+                        ` : ''}
+                        ${otherParamsHtml ? `
                         <div class="info-card">
-                            <h4>⚙️ Дополнительные параметры</h4>
-                            <div class="form-row">
-                                <label>Блокировка регламентных заданий:</label>
-                                <select id="infobaseScheduledJobsDeny" name="scheduled_jobs_deny">
-                                    <option value="off" ${scheduledJobsDeny === 'off' ? 'selected' : ''}>Выключена</option>
-                                    <option value="on" ${scheduledJobsDeny === 'on' ? 'selected' : ''}>Включена</option>
-                                </select>
-                            </div>
-                            <div class="form-row">
-                                <label>Блокировка сеансов:</label>
-                                <select id="infobaseSessionsDeny" name="sessions_deny">
-                                    <option value="off" ${sessionsDeny === 'off' ? 'selected' : ''}>Выключена</option>
-                                    <option value="on" ${sessionsDeny === 'on' ? 'selected' : ''}>Включена</option>
-                                </select>
-                            </div>
-                            <div class="form-row">
-                                <label>Выдача лицензий:</label>
-                                <select id="infobaseLicenseDistribution" name="license_distribution">
-                                    <option value="allow" ${getValue('license-distribution') === 'allow' ? 'selected' : ''}>Разрешена</option>
-                                    <option value="deny" ${getValue('license-distribution') === 'deny' ? 'selected' : ''}>Запрещена</option>
-                                </select>
-                            </div>
-                            <div class="form-row">
-                                <label>Уровень безопасности:</label>
-                                <input type="number" id="infobaseSecurityLevel" name="security_level" value="${getValue('security-level') || '0'}" min="0">
-                            </div>
+                            <h4>⚙️ Параметры информационной базы</h4>
+                            ${otherParamsHtml}
                         </div>
+                        ` : ''}
                         <div class="form-actions" style="margin-top: 1.5rem;">
                             <button type="button" class="btn btn-secondary" onclick="closeInfobasePropertiesModal()">Отмена</button>
                             <button type="button" class="btn btn-primary" onclick="saveInfobaseProperties('${connectionId}', '${clusterUuid}', '${infobaseUuid}', '${infobaseUser || ''}', '${infobasePwd || ''}')">Сохранить</button>
@@ -2359,9 +2602,56 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
         infobase_uuid: infobaseUuid
     };
     
+    // Сначала обрабатываем чекбоксы (они могут не попасть в FormData если не отмечены)
+    const scheduledJobsDenyCheckbox = form.querySelector('[name="scheduled_jobs_deny"]');
+    const sessionsDenyCheckbox = form.querySelector('[name="sessions_deny"]');
+    if (scheduledJobsDenyCheckbox) {
+        data.scheduled_jobs_deny = scheduledJobsDenyCheckbox.checked ? 'on' : 'off';
+    }
+    if (sessionsDenyCheckbox) {
+        data.sessions_deny = sessionsDenyCheckbox.checked ? 'on' : 'off';
+    }
+    
     // Собираем данные формы
     for (let [key, value] of formData.entries()) {
-        if (value) {
+        // Пропускаем чекбоксы, они уже обработаны выше
+        if (key === 'scheduled_jobs_deny' || key === 'sessions_deny') {
+            continue;
+        }
+        
+        // Для полей даты обрабатываем отдельно (могут быть пустыми для очистки)
+        if (key === 'denied_from' || key === 'denied_to') {
+            const trimmedValue = value ? value.trim() : '';
+            // Если значение пустое, передаем пустую строку для очистки даты на сервере
+            if (!trimmedValue) {
+                data[key] = ''; // Передаем пустую строку для очистки
+                continue;
+            }
+            // Преобразуем формат даты из YYYY-MM-DDTHH:mm (datetime-local) в YYYY-MM-DDTHH:mm:ss
+            // datetime-local всегда возвращает формат YYYY-MM-DDTHH:mm (16 символов)
+            if (trimmedValue.includes('T')) {
+                if (trimmedValue.length === 16) {
+                    // YYYY-MM-DDTHH:mm - добавляем :00 для секунд
+                    data[key] = trimmedValue + ':00';
+                } else if (trimmedValue.length === 19 && trimmedValue.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)) {
+                    // YYYY-MM-DDTHH:mm:ss - уже правильный формат (19 символов)
+                    data[key] = trimmedValue;
+                } else {
+                    // Другой формат - пытаемся исправить или передаем как есть
+                    // Если есть только один двоеточие, добавляем секунды
+                    if (trimmedValue.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
+                        data[key] = trimmedValue + ':00';
+                    } else {
+                        data[key] = trimmedValue;
+                    }
+                }
+            } else {
+                // Если нет 'T', это не правильный формат datetime
+                // Передаем пустую строку для очистки
+                data[key] = '';
+            }
+        } else if (value) {
+            // Для остальных полей передаем только непустые значения
             data[key] = value;
         }
     }
@@ -2412,6 +2702,11 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
         const result = await response.json();
         
         if (result.success) {
+            // Сохраняем учетные данные в localStorage при успешном сохранении
+            if (infobaseUser) {
+                saveInfobaseCredentialsToStorage(connectionId, infobaseUuid, infobaseUser, infobasePwd || '');
+            }
+            
             showNotification('✅ Параметры информационной базы успешно обновлены', false);
             closeInfobasePropertiesModal();
             // Обновляем дерево
@@ -2463,9 +2758,49 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
  * Закрывает модальное окно свойств информационной базы
  */
 /**
+ * Получить ключ для хранения учетных данных администратора ИБ в localStorage
+ */
+function getInfobaseCredentialsStorageKey(connectionId, infobaseUuid) {
+    return `infobase_credentials_${connectionId}_${infobaseUuid}`;
+}
+
+/**
+ * Сохранить учетные данные администратора ИБ в localStorage
+ */
+function saveInfobaseCredentialsToStorage(connectionId, infobaseUuid, user, password) {
+    const key = getInfobaseCredentialsStorageKey(connectionId, infobaseUuid);
+    const data = {
+        user: user || '',
+        password: password || ''
+    };
+    localStorage.setItem(key, JSON.stringify(data));
+}
+
+/**
+ * Загрузить учетные данные администратора ИБ из localStorage
+ */
+function loadInfobaseCredentialsFromStorage(connectionId, infobaseUuid) {
+    const key = getInfobaseCredentialsStorageKey(connectionId, infobaseUuid);
+    const stored = localStorage.getItem(key);
+    if (stored) {
+        try {
+            return JSON.parse(stored);
+        } catch (e) {
+            console.error('Ошибка парсинга данных из localStorage:', e);
+        }
+    }
+    return { user: '', password: '' };
+}
+
+/**
  * Показать модальное окно для ввода учетных данных администратора ИБ
  */
 function showInfobaseCredentialsModal(connectionId, clusterUuid, infobaseUuid, errorMessage, isUpdate = false) {
+    // Загружаем сохраненные учетные данные
+    const savedCredentials = loadInfobaseCredentialsFromStorage(connectionId, infobaseUuid);
+    const savedUser = savedCredentials.user || '';
+    const savedPwd = savedCredentials.password || '';
+    
     const modalHtml = `
         <div class="modal-overlay optimized" id="infobaseCredentialsModal" style="z-index: 10010;">
             <div class="modal" style="max-width: 500px;">
@@ -2486,11 +2821,12 @@ function showInfobaseCredentialsModal(connectionId, clusterUuid, infobaseUuid, e
                     <div class="edit-form">
                         <div class="form-row">
                             <label for="infobaseUserInput">Имя администратора ИБ</label>
-                            <input type="text" id="infobaseUserInput" placeholder="Администратор" autocomplete="username">
+                            <input type="text" id="infobaseUserInput" placeholder="Администратор" autocomplete="username" value="${escapeHtml(savedUser)}">
                         </div>
                         <div class="form-row">
                             <label for="infobasePwdInput">Пароль администратора ИБ</label>
-                            <input type="password" id="infobasePwdInput" placeholder="Введите пароль" autocomplete="current-password">
+                            <input type="password" id="infobasePwdInput" placeholder="Введите пароль" autocomplete="current-password" ${savedPwd ? 'value="********" data-was-changed="false"' : ''}>
+                            ${savedPwd ? '<small style="color: #666; font-size: 0.85rem; margin-top: 0.25rem;">Используется сохраненный пароль. Введите новый, если нужно изменить.</small>' : ''}
                         </div>
                     </div>
                 </div>
@@ -2519,6 +2855,17 @@ function showInfobaseCredentialsModal(connectionId, clusterUuid, infobaseUuid, e
         const pwdInput = document.getElementById('infobasePwdInput');
         if (userInput) {
             userInput.focus();
+        }
+        
+        // Отслеживаем изменение пароля (если он был предзаполнен звездочками)
+        if (pwdInput && savedPwd) {
+            pwdInput.addEventListener('input', function() {
+                if (this.value !== '********') {
+                    this.dataset.wasChanged = 'true';
+                } else {
+                    this.dataset.wasChanged = 'false';
+                }
+            });
         }
         
         // Обработка Enter для отправки формы
@@ -2558,12 +2905,22 @@ function closeInfobaseCredentialsModal() {
  * Отправить учетные данные и повторить запрос
  */
 async function submitInfobaseCredentials(connectionId, clusterUuid, infobaseUuid, isUpdate = false) {
-    const infobaseUser = document.getElementById('infobaseUserInput').value.trim();
-    const infobasePwd = document.getElementById('infobasePwdInput').value || ''; // Пароль может быть пустым
+    const infobaseUserInput = document.getElementById('infobaseUserInput');
+    const infobasePwdInput = document.getElementById('infobasePwdInput');
+    
+    const infobaseUser = infobaseUserInput ? infobaseUserInput.value.trim() : '';
+    let infobasePwd = infobasePwdInput ? infobasePwdInput.value : '';
     
     if (!infobaseUser) {
         showNotification('❌ Введите имя администратора ИБ', true);
         return;
+    }
+    
+    // Если пароль содержит только звездочки (сохраненный пароль не был изменен),
+    // загружаем сохраненный пароль
+    if (infobasePwd === '********') {
+        const savedCredentials = loadInfobaseCredentialsFromStorage(connectionId, infobaseUuid);
+        infobasePwd = savedCredentials.password || '';
     }
     
     // Пароль может быть пустым, если в базе нет пароля для администраторской УЗ
@@ -2574,9 +2931,13 @@ async function submitInfobaseCredentials(connectionId, clusterUuid, infobaseUuid
     if (isUpdate) {
         // Если это обновление, вызываем сохранение с учетными данными
         await saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid, infobaseUser, infobasePwd);
+        // Сохраняем учетные данные при успешном обновлении
+        // (сохранение произойдет после успешного ответа в saveInfobaseProperties)
     } else {
         // Если это открытие свойств, повторяем запрос с учетными данными
-        await openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, infobaseUser, infobasePwd);
+        const success = await openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, infobaseUser, infobasePwd);
+        // Сохраняем учетные данные только при успешном открытии
+        // (сохранение произойдет внутри openInfobaseProperties после успешного ответа)
     }
 }
 

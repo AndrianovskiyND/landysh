@@ -4898,18 +4898,115 @@ def update_infobase(request, connection_id, cluster_uuid):
         if not infobase_uuid and not infobase_name:
             return JsonResponse({'success': False, 'error': 'infobase_uuid or infobase_name required'})
         
-        # Собираем параметры для обновления
+        # Получаем текущие параметры информационной базы из infobase info
+        infobase_user = data.get('infobase_user')
+        infobase_pwd = data.get('infobase_pwd')
+        
+        infobase_info_result = rac_client.get_infobase_info(
+            cluster_uuid,
+            infobase_uuid,
+            infobase_name,
+            infobase_user=infobase_user,
+            infobase_pwd=infobase_pwd
+        )
+        
+        if not infobase_info_result['success']:
+            return JsonResponse({
+                'success': False,
+                'error': 'Не удалось получить текущие параметры информационной базы: ' + infobase_info_result.get('error', 'Неизвестная ошибка')
+            }, json_dumps_params={'ensure_ascii': False})
+        
+        # Парсим информацию об информационной базе
+        current_infobase = _parse_infobase_info(infobase_info_result['output'])
+        if not current_infobase:
+            return JsonResponse({
+                'success': False,
+                'error': 'Информационная база не найдена'
+            }, json_dumps_params={'ensure_ascii': False})
+        
+        # Получаем список доступных параметров из текущей информационной базы
+        available_params = set(current_infobase.get('data', {}).keys())
+        # Добавляем базовые поля
+        available_params.add('name')
+        available_params.add('descr')
+        
+        # Маппинг полей из формы в параметры RAC (с дефисами)
+        field_mapping = {
+            'name': 'name',
+            'descr': 'descr',
+            'infobase_user': 'infobase_user',
+            'infobase_pwd': 'infobase_pwd',
+            'dbms': 'dbms',
+            'db_server': 'db-server',
+            'db_name': 'db-name',
+            'db_user': 'db-user',
+            'db_pwd': 'db-pwd',
+            'security_level': 'security-level',
+            'license_distribution': 'license-distribution',
+            'scheduled_jobs_deny': 'scheduled-jobs-deny',
+            'sessions_deny': 'sessions-deny',
+            'denied_from': 'denied-from',
+            'denied_message': 'denied-message',
+            'denied_parameter': 'denied-parameter',
+            'denied_to': 'denied-to',
+            'permission_code': 'permission-code',
+            'external_session_manager_connection_string': 'external-session-manager-connection-string',
+            'external_session_manager_required': 'external-session-manager-required',
+            'reserve_working_processes': 'reserve-working-processes',
+            'security_profile_name': 'security-profile-name',
+            'safe_mode_security_profile_name': 'safe-mode-security-profile-name',
+            'disable_local_speech_to_text': 'disable-local-speech-to-text',
+            'configuration_unload_delay_by_working_process_without_active_users': 'configuration-unload-delay-by-working-process-without-active-users',
+            'minimum_scheduled_jobs_start_period_without_active_users': 'minimum-scheduled-jobs-start-period-without-active-users',
+            'maximum_scheduled_jobs_start_shift_without_active_users': 'maximum-scheduled-jobs-start-shift-without-active-users'
+        }
+        
+        # Собираем параметры для обновления (только те, которые есть в доступных параметрах)
         kwargs = {}
-        for key in ['infobase_user', 'infobase_pwd', 'dbms', 'db_server', 'db_name', 'db_user', 'db_pwd',
-                    'descr', 'denied_from', 'denied_message', 'denied_parameter', 'denied_to', 'permission_code',
-                    'sessions_deny', 'scheduled_jobs_deny', 'license_distribution',
-                    'external_session_manager_connection_string', 'external_session_manager_required',
-                    'reserve_working_processes', 'security_profile_name', 'safe_mode_security_profile_name',
-                    'disable_local_speech_to_text', 'configuration_unload_delay_by_working_process_without_active_users',
-                    'minimum_scheduled_jobs_start_period_without_active_users',
-                    'maximum_scheduled_jobs_start_shift_without_active_users']:
-            if key in data:
-                kwargs[key] = data[key]
+        
+        # Учетные данные администратора ИБ всегда передаем, если они есть
+        if infobase_user:
+            kwargs['infobase_user'] = infobase_user
+        if infobase_pwd is not None:
+            kwargs['infobase_pwd'] = infobase_pwd
+        
+        for form_field, rac_param in field_mapping.items():
+            # Пропускаем учетные данные, они уже обработаны выше
+            if form_field in ['infobase_user', 'infobase_pwd']:
+                continue
+            
+            # Поля, которые всегда передаем, если они есть в данных (независимо от available_params)
+            always_send_fields = ['name', 'descr', 'denied_from', 'denied_to']
+            # Поля, для которых пустые строки тоже нужно передавать (для очистки значений)
+            allow_empty_fields = ['denied_from', 'denied_to']
+                
+            # Отправляем только те параметры, которые есть в доступных параметрах информационной базы
+            # Для некоторых полей (name, descr, denied_from, denied_to) всегда отправляем, если они есть в данных
+            # Для denied_from и denied_to пустые строки тоже передаем (для очистки дат)
+            if (rac_param in available_params or form_field in always_send_fields) and form_field in data:
+                # Для полей даты пустые строки тоже передаем (для очистки)
+                if form_field in allow_empty_fields:
+                    value = data[form_field]
+                elif data[form_field] != '':
+                    value = data[form_field]
+                else:
+                    continue  # Пропускаем пустые значения для остальных полей
+                
+                # Преобразуем строковые "yes"/"no" в булевы значения для некоторых полей
+                if form_field in ['external_session_manager_required', 'reserve_working_processes', 'disable_local_speech_to_text']:
+                    if value in ['yes', 'no']:
+                        value = value == 'yes'
+                kwargs[form_field] = value
+        
+        # Если имя изменено, передаем его отдельно
+        if 'name' in kwargs:
+            infobase_name = kwargs.pop('name')
+        
+        # Логируем для отладки (временно)
+        import logging
+        logger = logging.getLogger(__name__)
+        if 'denied_from' in kwargs or 'denied_to' in kwargs:
+            logger.info(f"Updating infobase with dates: denied_from={kwargs.get('denied_from')}, denied_to={kwargs.get('denied_to')}")
         
         result = rac_client.update_infobase(cluster_uuid, infobase_uuid, infobase_name, **kwargs)
         

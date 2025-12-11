@@ -868,10 +868,23 @@ class RACClient:
         elif infobase_name:
             args.append(f'--name={infobase_name}')
         
+        # Учетные данные администратора ИБ должны идти сразу после --cluster и --infobase/--name
+        # (как в get_infobase_info)
+        infobase_user = kwargs.pop('infobase_user', None)
+        infobase_pwd = kwargs.pop('infobase_pwd', None)
+        
+        if infobase_user:
+            # subprocess.run с списком аргументов не требует кавычек
+            args.append(f'--infobase-user={infobase_user}')
+        # Пароль может быть пустой строкой (если в базе нет пароля для администраторской УЗ)
+        # Передаем параметр только если он явно указан (не None)
+        if infobase_pwd is not None:
+            # subprocess.run с списком аргументов не требует кавычек
+            args.append(f'--infobase-pwd={infobase_pwd}')
+        
         # Маппинг параметров
         param_mapping = {
-            'infobase_user': '--infobase-user',
-            'infobase_pwd': '--infobase-pwd',
+            'name': '--name',
             'dbms': '--dbms',
             'db_server': '--db-server',
             'db_name': '--db-name',
@@ -898,14 +911,76 @@ class RACClient:
         }
         
         for key, value in kwargs.items():
-            if key in param_mapping and value is not None:
+            if key in param_mapping:
+                if value is None:
+                    continue
+                
+                # Для полей даты/времени обрабатываем отдельно
+                # Пустые значения нужно передавать для очистки даты на сервере
+                if key in ['denied_from', 'denied_to']:
+                    # Проверяем, что значение передано (может быть пустой строкой для очистки)
+                    if value is None:
+                        continue  # None означает, что параметр не передан
+                    
+                    value_str = str(value).strip()
+                    original_value = value_str
+                    
+                    # Если значение пустое, передаем пустую строку для очистки
+                    if not value_str:
+                        param_name = param_mapping[key]
+                        args.append(f'{param_name}=')
+                        logger.info(f"RAC date param: {key} = '' (clearing date)")
+                        continue
+                    
+                    # Убеждаемся, что формат правильный: YYYY-MM-DDTHH:mm:ss (точно 19 символов)
+                    # Проверяем и нормализуем формат даты
+                    import re
+                    # Проверяем, что значение содержит 'T' (признак datetime формата)
+                    if 'T' in value_str:
+                        # Проверяем формат через регулярное выражение
+                        # Паттерн: YYYY-MM-DDTHH:mm или YYYY-MM-DDTHH:mm:ss
+                        match = re.match(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(:\d{2})?$', value_str)
+                        if match:
+                            # Если есть секунды (match.group(2)), используем как есть
+                            if match.group(2):
+                                value_str = match.group(0)  # Полное совпадение с секундами
+                            else:
+                                # Если секунд нет, добавляем :00
+                                value_str = match.group(1) + ':00'
+                        else:
+                            # Если формат не соответствует паттерну, пытаемся исправить
+                            # Простая проверка длины и добавление секунд, если нужно
+                            if len(value_str) == 16 and value_str.count(':') == 1:
+                                value_str = value_str + ':00'
+                    
+                    # Финальная проверка: формат должен быть YYYY-MM-DDTHH:mm:ss (19 символов)
+                    if not re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$', value_str):
+                        logger.warning(f"Invalid date format for {key}: '{original_value}' -> '{value_str}', skipping")
+                        continue
+                    
+                    # Логируем для отладки (временно)
+                    logger.info(f"RAC date param: {key} = '{original_value}' -> '{value_str}'")
+                    
+                    param_name = param_mapping[key]
+                    # ВАЖНО: subprocess.run получает список аргументов, кавычки не нужны для shell
+                    # Но 1C RAC ожидает значения в кавычках в командной строке
+                    # Когда subprocess передает аргументы, кавычки становятся частью значения
+                    # Поэтому передаем БЕЗ кавычек - subprocess сам правильно обработает
+                    args.append(f'{param_name}={value_str}')
+                    continue
+                    
                 param_name = param_mapping[key]
                 if isinstance(value, bool):
                     if 'deny' in key or 'required' in key:
                         value = 'yes' if value else 'no'
                     else:
                         value = 'on' if value else 'off'
-                args.append(f'{param_name}={value}')
+                
+                # Для паролей и пользователей также добавляем кавычки для безопасности
+                if key in ['db_user', 'db_pwd']:
+                    args.append(f'{param_name}="{value}"')
+                else:
+                    args.append(f'{param_name}={value}')
         
         return self._execute_command(args)
     

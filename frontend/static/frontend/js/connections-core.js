@@ -788,7 +788,7 @@ async function openClusterAdminModal(connectionId, clusterUuid, clusterName) {
     const hasPassword = originalPassword.length > 0;
     
     const modalHtml = `
-        <div class="modal-overlay" id="clusterAdminModal" data-original-password="${escapeHtml(originalPassword)}">
+        <div class="modal-overlay optimized" id="clusterAdminModal" data-original-password="${escapeHtml(originalPassword)}">
             <div class="modal" style="max-width: 500px;">
                 <div class="modal-header">
                     <h3>⚙️ Администратор кластера: ${escapeHtml(clusterName)}</h3>

@@ -76,7 +76,7 @@ async function openRulesModal(connectionId, clusterUuid, serverUuid, serverName 
     currentRulesServerName = serverName || 'Сервер';
     
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay modal-full-screen';
+    modal.className = 'modal-overlay optimized modal-full-screen';
     modal.id = 'rulesModal';
     modal.style.zIndex = '10003';
     modal.innerHTML = `
@@ -351,7 +351,7 @@ function showRuleContextMenu(event, ruleUuid, index) {
  */
 function openCreateRuleModal() {
     const modalHtml = `
-        <div class="modal-overlay" id="createRuleModal" style="z-index: 10005;">
+        <div class="modal-overlay optimized" id="createRuleModal" style="z-index: 10005;">
             <div class="modal" style="max-width: 600px;">
                 <div class="modal-header">
                     <h3>Создание требования назначения</h3>
@@ -514,7 +514,7 @@ async function openEditRuleModal(ruleUuid, index) {
         const objectTypeEnglish = ruleData['object-type'] || '';
         
         const modalHtml = `
-        <div class="modal-overlay" id="editRuleModal" style="z-index: 10005;">
+        <div class="modal-overlay optimized" id="editRuleModal" style="z-index: 10005;">
             <div class="modal" style="max-width: 600px;">
                 <div class="modal-header">
                     <h3>Изменение требования назначения</h3>
@@ -706,7 +706,7 @@ async function deleteRule(ruleUuid) {
  */
 function openApplyRulesModal() {
     const modalHtml = `
-        <div class="modal-overlay" id="applyRulesModal" style="z-index: 10005;">
+        <div class="modal-overlay optimized" id="applyRulesModal" style="z-index: 10005;">
             <div class="modal" style="max-width: 500px;">
                 <div class="modal-header">
                     <h3>Применение требований назначения</h3>

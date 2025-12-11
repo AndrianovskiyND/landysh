@@ -144,7 +144,7 @@ function renderUserPropertiesModal(user, allGroups = []) {
     const statusClass = user.is_active ? 'active' : 'blocked';
     
     const modalHtml = `
-        <div class="modal-overlay" id="userPropertiesModal">
+        <div class="modal-overlay optimized" id="userPropertiesModal">
             <div class="modal" style="max-width: 620px;">
                 <div class="modal-header">
                     <h3>👤 ${user.username}</h3>
@@ -459,7 +459,7 @@ function closeUserProperties() {
  */
 function openAdminChangePasswordModal(userId, username) {
     const modalHtml = `
-        <div class="modal-overlay" id="passwordModal">
+        <div class="modal-overlay optimized" id="passwordModal">
             <div class="modal" style="max-width: 400px;">
                 <div class="modal-header">
                     <h3>Смена пароля: ${username}</h3>

@@ -85,7 +85,7 @@ async function openSessionsModal(connectionId, clusterUuid, infobaseUuid = null,
     }
     
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay optimized';
     modal.id = 'sessionsModal';
     modal.style.zIndex = '10001';
     modal.innerHTML = `
@@ -740,7 +740,7 @@ async function openSessionInfoModal(connectionId, clusterUuid, sessionUuid) {
     }
     
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay optimized';
     modal.id = 'sessionInfoModal';
     modal.style.zIndex = '10002';
     modal.innerHTML = `
@@ -1370,7 +1370,7 @@ async function openClusterProperties(connectionId, clusterUuid, clusterName) {
         
         // Создаём модальное окно в стилистике системы
         const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
+        modal.className = 'modal-overlay optimized';
         modal.id = 'clusterPropertiesModal';
         modal.innerHTML = `
             <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
@@ -1545,7 +1545,7 @@ async function saveClusterProperties(connectionId, clusterUuid) {
  */
 function openRegisterClusterModal(connectionId) {
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay optimized';
     modal.id = 'registerClusterModal';
     modal.innerHTML = `
         <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
@@ -1822,7 +1822,7 @@ function openCreateInfobaseModal(connectionId, clusterUuid) {
     }
     
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay optimized';
     modal.id = 'createInfobaseModal';
     modal.innerHTML = `
         <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
@@ -2143,7 +2143,7 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
         }
         
         const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
+        modal.className = 'modal-overlay optimized';
         modal.id = 'infobasePropertiesModal';
         // Сохраняем учетные данные в data-атрибутах для использования при сохранении
         modal.setAttribute('data-infobase-user', infobaseUser || '');
@@ -2358,7 +2358,7 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
  */
 function showInfobaseCredentialsModal(connectionId, clusterUuid, infobaseUuid, errorMessage, isUpdate = false) {
     const modalHtml = `
-        <div class="modal-overlay" id="infobaseCredentialsModal" style="z-index: 10010;">
+        <div class="modal-overlay optimized" id="infobaseCredentialsModal" style="z-index: 10010;">
             <div class="modal" style="max-width: 500px;">
                 <div class="modal-header">
                     <h3>🔐 Учетные данные администратора ИБ</h3>
@@ -2491,7 +2491,7 @@ function showDeleteInfobaseModal(connectionId, clusterUuid, infobaseUuid, infoba
     }
     
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay optimized';
     modal.id = 'deleteInfobaseModal';
     modal.innerHTML = `
         <div class="modal" style="max-width: 600px;">
@@ -2646,7 +2646,7 @@ function openCreateServerModal(connectionId, clusterUuid) {
     }
     
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay optimized';
     modal.id = 'createServerModal';
     modal.innerHTML = `
         <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
@@ -2835,7 +2835,7 @@ async function openServerProperties(connectionId, clusterUuid, serverUuid) {
         }
         
         const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
+        modal.className = 'modal-overlay optimized';
         modal.id = 'serverPropertiesModal';
         modal.innerHTML = `
             <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
@@ -3068,7 +3068,7 @@ async function openProcessesModal(connectionId, clusterUuid, serverUuid = null) 
     }
     
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay optimized';
     modal.id = 'processesModal';
     modal.style.zIndex = '10001';
     modal.innerHTML = `
@@ -3592,7 +3592,7 @@ async function openProcessInfoModal(connectionId, clusterUuid, processUuid) {
     }
     
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay optimized';
     modal.id = 'processInfoModal';
     modal.style.zIndex = '10002';
     modal.innerHTML = `
@@ -3766,7 +3766,7 @@ async function openManagersModal(connectionId, clusterUuid) {
     window._currentManagersClusterUuid = clusterUuid;
     
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay modal-full-screen';
+    modal.className = 'modal-overlay optimized modal-full-screen';
     modal.id = 'managersModal';
     modal.style.zIndex = '10002';
     modal.innerHTML = `
@@ -4241,7 +4241,7 @@ async function openManagerInfoModal(connectionId, clusterUuid, managerUuid) {
     }
     
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay optimized';
     modal.id = 'managerInfoModal';
     modal.style.zIndex = '10002';
     modal.innerHTML = `
@@ -4505,7 +4505,7 @@ function renderAgentsTable(agents, connectionId) {
  */
 function openCreateAgentModal(connectionId) {
     const modalHtml = `
-        <div class="modal-overlay" id="createAgentModal">
+        <div class="modal-overlay optimized" id="createAgentModal">
             <div class="modal" style="max-width: 500px;">
                 <div class="modal-header">
                     <h3>➕ Создать администратора агента</h3>
@@ -4817,7 +4817,7 @@ async function openCreateClusterAdminModal(connectionId, clusterUuid) {
     const hasClusterAuth = !!(storedCredentials.admin);
     
     const modalHtml = `
-        <div class="modal-overlay" id="createClusterAdminModal">
+        <div class="modal-overlay optimized" id="createClusterAdminModal">
             <div class="modal" style="max-width: 500px;">
                 <div class="modal-header">
                     <h3>➕ Создать администратора кластера</h3>
@@ -4994,7 +4994,7 @@ async function deleteClusterAdmin(connectionId, clusterUuid, adminName) {
  */
 function openSaveClusterAdminModal(connectionId, clusterUuid, adminName, adminPassword, clusterName = 'кластера') {
     const modalHtml = `
-        <div class="modal-overlay" id="saveClusterAdminModal">
+        <div class="modal-overlay optimized" id="saveClusterAdminModal">
             <div class="modal" style="max-width: 500px;">
                 <div class="modal-header">
                     <h3>💾 Сохранить данные администратора?</h3>
@@ -5043,7 +5043,7 @@ function saveClusterAdminToSettings(connectionId, clusterUuid, adminName, adminP
  */
 function openClearClusterAdminModal(connectionId, clusterUuid, clusterName = 'кластера') {
     const modalHtml = `
-        <div class="modal-overlay" id="clearClusterAdminModal">
+        <div class="modal-overlay optimized" id="clearClusterAdminModal">
             <div class="modal" style="max-width: 500px;">
                 <div class="modal-header">
                     <h3>🧹 Очистить данные администратора?</h3>

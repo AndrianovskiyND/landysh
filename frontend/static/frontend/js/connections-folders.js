@@ -48,7 +48,7 @@ async function createFolder() {
  */
 function openEditFolderModal(folderId, currentName) {
     const modalHtml = `
-        <div class="modal-overlay" id="editFolderModal">
+        <div class="modal-overlay optimized" id="editFolderModal">
             <div class="modal" style="max-width: 400px;">
                 <div class="modal-header">
                     <h3>Редактировать папку</h3>

@@ -23,7 +23,7 @@ function showConfirmModal(message, title = 'Подтверждение') {
         
         // Создаем модальное окно
         const modalHtml = `
-            <div class="modal-overlay" id="confirmModal" style="z-index: 10002;">
+            <div class="modal-overlay optimized" id="confirmModal" style="z-index: 10002;">
                 <div class="modal" style="max-width: 500px;">
                     <div class="modal-header">
                         <h3>${escapeHtmlForConfirm(title)}</h3>

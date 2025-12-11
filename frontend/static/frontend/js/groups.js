@@ -186,7 +186,7 @@ function updateMergeButtonState() {
 
 function showCreateGroupForm() {
     const modalHtml = `
-        <div class="modal-overlay" id="createGroupModal">
+        <div class="modal-overlay optimized" id="createGroupModal">
             <div class="modal" style="max-width: 400px;">
                 <div class="modal-header">
                     <h3>Создание группы</h3>
@@ -262,7 +262,7 @@ function editGroupName(groupId, currentName) {
     const escapedName = escapeHtml(currentName);
     
     const modalHtml = `
-        <div class="modal-overlay" id="editGroupModal">
+        <div class="modal-overlay optimized" id="editGroupModal">
             <div class="modal" style="max-width: 400px;">
                 <div class="modal-header">
                     <h3>Изменение группы</h3>
@@ -467,7 +467,7 @@ function openMergeGroupsModal() {
     const groupsList = selectedGroupsForMerge.map(g => `• ${g.name}`).join('\n');
     
     const modalHtml = `
-        <div class="modal-overlay" id="mergeGroupsModal">
+        <div class="modal-overlay optimized" id="mergeGroupsModal">
             <div class="modal" style="max-width: 500px;">
                 <div class="modal-header">
                     <h3>Объединение групп</h3>

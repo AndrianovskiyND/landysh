@@ -69,7 +69,7 @@ function openChangePasswordModal() {
  */
 function showChangePasswordModal(userId, username) {
     const modalHtml = `
-        <div class="modal-overlay" id="changePasswordModal">
+        <div class="modal-overlay optimized" id="changePasswordModal">
             <div class="modal" style="max-width: 500px;">
                 <div class="modal-header">
                     <h3>🔑 Смена пароля</h3>

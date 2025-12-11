@@ -4,11 +4,64 @@
  */
 
 /**
- * Создать новую папку
+ * Открыть модальное окно для создания новой папки
  */
-async function createFolder() {
-    const name = prompt('Введите название папки:');
-    if (!name || !name.trim()) {
+function openCreateFolderModal() {
+    const modalHtml = `
+        <div class="modal-overlay optimized" id="createFolderModal">
+            <div class="modal" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h3>Создать папку</h3>
+                    <button class="modal-close-btn" onclick="closeCreateFolderModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="edit-form">
+                        <div class="form-row">
+                            <label for="newFolderName">Название папки *</label>
+                            <input type="text" id="newFolderName" value="" placeholder="Введите название папки">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeCreateFolderModal()">Отмена</button>
+                    <button class="btn btn-primary" onclick="saveNewFolder()">Создать</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const existingModal = document.getElementById('createFolderModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    document.getElementById('newFolderName').focus();
+}
+
+/**
+ * Закрыть модальное окно создания папки
+ */
+function closeCreateFolderModal() {
+    const modal = document.getElementById('createFolderModal');
+    if (modal) {
+        modal.classList.add('modal-closing');
+        setTimeout(() => modal.remove(), 200);
+    }
+}
+
+/**
+ * Сохранить новую папку
+ */
+async function saveNewFolder() {
+    const nameInput = document.getElementById('newFolderName');
+    if (!nameInput) {
+        return;
+    }
+    
+    const name = nameInput.value.trim();
+    if (!name) {
+        showNotification('❌ Название папки обязательно', true);
         return;
     }
     
@@ -26,7 +79,7 @@ async function createFolder() {
                 'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({
-                name: name.trim()
+                name: name
             })
         });
         
@@ -34,6 +87,7 @@ async function createFolder() {
         
         if (result.success) {
             showNotification('✅ Папка создана');
+            closeCreateFolderModal();
             loadConnections();
         } else {
             showNotification('❌ Ошибка создания папки: ' + (result.error || 'Неизвестная ошибка'), true);
@@ -41,6 +95,13 @@ async function createFolder() {
     } catch (error) {
         showNotification('❌ Ошибка создания папки: ' + error.message, true);
     }
+}
+
+/**
+ * Создать новую папку (старая функция для обратной совместимости)
+ */
+async function createFolder() {
+    openCreateFolderModal();
 }
 
 /**

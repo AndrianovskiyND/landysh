@@ -404,7 +404,7 @@ async function openConnectionEditModal(connectionId) {
     }
     
     const modalHtml = `
-        <div class="modal-overlay" id="connectionModal">
+        <div class="modal-overlay optimized" id="connectionModal">
             <div class="modal" style="max-width: 600px;">
                 <div class="modal-header">
                     <h3>${connectionId ? '⚙️ Редактирование подключения' : '➕ Добавить подключение'}</h3>

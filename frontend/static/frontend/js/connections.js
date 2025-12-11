@@ -1421,7 +1421,7 @@ function generateInfobaseParamField(paramKey, paramValue) {
     if (paramKey === 'license-distribution') {
         // Select для управления выдачей лицензий
         return `
-            <div class="form-row">
+            <div class="form-row" style="margin-bottom: 0.75rem;">
                 <label>${escapeHtml(displayName)}:</label>
                 <select id="${fieldName}" name="${fieldName}">
                     <option value="allow" ${paramValue === 'allow' ? 'selected' : ''}>Разрешена</option>
@@ -1433,7 +1433,7 @@ function generateInfobaseParamField(paramKey, paramValue) {
         // Checkbox для блокировки (on/off)
         const isChecked = paramValue === 'on' || paramValue === 'yes' || paramValue === '1' || paramValue === 1 || paramValue === true;
         return `
-            <div class="form-row" style="display: flex !important; flex-direction: row !important; align-items: center !important; gap: 0.5rem;">
+            <div class="form-row" style="display: flex !important; flex-direction: row !important; align-items: center !important; gap: 0.5rem; margin-bottom: 0.75rem;">
                 <label style="margin: 0 !important; white-space: nowrap; flex: 1 1 auto; text-align: left;">${escapeHtml(displayName)}:</label>
                 <input type="checkbox" id="${fieldName}" name="${fieldName}" value="on" ${isChecked ? 'checked' : ''} style="width: 20px; height: 20px; cursor: pointer; margin: 0 !important; flex-shrink: 0; padding: 0 !important;">
             </div>
@@ -1443,7 +1443,7 @@ function generateInfobaseParamField(paramKey, paramValue) {
         // Select для yes/no
         const boolValue = paramValue === 'yes' || paramValue === '1' || paramValue === 1 || paramValue === true;
         return `
-            <div class="form-row">
+            <div class="form-row" style="margin-bottom: 0.75rem;">
                 <label>${escapeHtml(displayName)}:</label>
                 <select id="${fieldName}" name="${fieldName}">
                     <option value="yes" ${boolValue ? 'selected' : ''}>Да</option>
@@ -1474,7 +1474,7 @@ function generateInfobaseParamField(paramKey, paramValue) {
             }
         }
         return `
-            <div class="form-row">
+            <div class="form-row" style="margin-bottom: 0.75rem;">
                 <label>${escapeHtml(displayName)}:</label>
                 <input type="datetime-local" id="${fieldName}" name="${fieldName}" value="${escapeHtml(datetimeValue)}">
             </div>
@@ -1485,7 +1485,7 @@ function generateInfobaseParamField(paramKey, paramValue) {
                paramKey === 'maximum-scheduled-jobs-start-shift-without-active-users') {
         // Number для числовых значений
         return `
-            <div class="form-row">
+            <div class="form-row" style="margin-bottom: 0.75rem;">
                 <label>${escapeHtml(displayName)}:</label>
                 <input type="number" id="${fieldName}" name="${fieldName}" value="${escapeHtml(paramValue || '0')}" min="0">
             </div>
@@ -1493,7 +1493,7 @@ function generateInfobaseParamField(paramKey, paramValue) {
     } else {
         // Text для текстовых значений
         return `
-            <div class="form-row">
+            <div class="form-row" style="margin-bottom: 0.75rem;">
                 <label>${escapeHtml(displayName)}:</label>
                 <input type="text" id="${fieldName}" name="${fieldName}" value="${escapeHtml(paramValue || '')}">
             </div>

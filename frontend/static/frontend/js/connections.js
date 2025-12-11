@@ -2536,6 +2536,39 @@ async function openInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
         // Сохраняем учетные данные в data-атрибутах для использования при сохранении
         modal.setAttribute('data-infobase-user', infobaseUser || '');
         modal.setAttribute('data-infobase-pwd', infobasePwd || '');
+        
+        // Сохраняем исходные значения всех полей для отслеживания изменений
+        const originalValues = {
+            name: infobaseNameValue || '',
+            descr: infobaseParams['descr'] || '',
+            sessions_deny: infobaseParams['sessions-deny'] || 'off',
+            scheduled_jobs_deny: infobaseParams['scheduled-jobs-deny'] || 'off',
+            denied_from: infobaseParams['denied-from'] || '',
+            denied_to: infobaseParams['denied-to'] || '',
+            denied_message: infobaseParams['denied-message'] || '',
+            denied_parameter: infobaseParams['denied-parameter'] || '',
+            permission_code: infobaseParams['permission-code'] || ''
+        };
+        
+        // Добавляем остальные параметры из infobaseParams
+        // Исключаем служебные поля и поля, которые уже добавлены
+        const excludedOriginalKeys = ['infobase', 'name', 'descr', 'sessions-deny', 'scheduled-jobs-deny', 
+                                     'denied-from', 'denied-to', 'denied-message', 'denied-parameter', 'permission-code',
+                                     'dbms', 'db-server', 'db-name', 'db-user']; // СУБД поля только для чтения
+        
+        Object.keys(infobaseParams).forEach(key => {
+            if (!excludedOriginalKeys.includes(key)) {
+                // Преобразуем ключи с дефисами в подчеркивания для соответствия именам полей формы
+                const formKey = key.replace(/-/g, '_');
+                // Сохраняем только если еще не добавлено
+                if (!originalValues.hasOwnProperty(formKey)) {
+                    originalValues[formKey] = infobaseParams[key] || '';
+                }
+            }
+        });
+        
+        // Сохраняем исходные значения в data-атрибуте модального окна
+        modal.setAttribute('data-original-values', JSON.stringify(originalValues));
         modal.innerHTML = `
             <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
                 <div class="modal-header">
@@ -2589,13 +2622,15 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
     if (!form) return;
     
     // Если учетные данные не переданы, пытаемся получить их из модального окна
-    if (!infobaseUser) {
-        const modal = document.getElementById('infobasePropertiesModal');
-        if (modal) {
-            infobaseUser = modal.getAttribute('data-infobase-user') || null;
-            infobasePwd = modal.getAttribute('data-infobase-pwd') || null;
-        }
+    const modal = document.getElementById('infobasePropertiesModal');
+    if (!infobaseUser && modal) {
+        infobaseUser = modal.getAttribute('data-infobase-user') || null;
+        infobasePwd = modal.getAttribute('data-infobase-pwd') || null;
     }
+    
+    // Получаем исходные значения из data-атрибута модального окна
+    const originalValuesStr = modal ? modal.getAttribute('data-original-values') : null;
+    const originalValues = originalValuesStr ? JSON.parse(originalValuesStr) : {};
     
     const formData = new FormData(form);
     const data = {
@@ -2606,53 +2641,85 @@ async function saveInfobaseProperties(connectionId, clusterUuid, infobaseUuid, i
     const scheduledJobsDenyCheckbox = form.querySelector('[name="scheduled_jobs_deny"]');
     const sessionsDenyCheckbox = form.querySelector('[name="sessions_deny"]');
     if (scheduledJobsDenyCheckbox) {
-        data.scheduled_jobs_deny = scheduledJobsDenyCheckbox.checked ? 'on' : 'off';
+        const currentValue = scheduledJobsDenyCheckbox.checked ? 'on' : 'off';
+        const originalValue = originalValues['scheduled_jobs_deny'] || 'off';
+        // Передаем только если значение изменилось
+        if (currentValue !== originalValue) {
+            data.scheduled_jobs_deny = currentValue;
+        }
     }
     if (sessionsDenyCheckbox) {
-        data.sessions_deny = sessionsDenyCheckbox.checked ? 'on' : 'off';
+        const currentValue = sessionsDenyCheckbox.checked ? 'on' : 'off';
+        const originalValue = originalValues['sessions_deny'] || 'off';
+        // Передаем только если значение изменилось
+        if (currentValue !== originalValue) {
+            data.sessions_deny = currentValue;
+        }
     }
     
-    // Собираем данные формы
+    // Собираем данные формы и сравниваем с исходными значениями
     for (let [key, value] of formData.entries()) {
         // Пропускаем чекбоксы, они уже обработаны выше
         if (key === 'scheduled_jobs_deny' || key === 'sessions_deny') {
             continue;
         }
         
+        // Получаем исходное значение для этого поля
+        const originalValue = originalValues[key] || '';
+        let currentValue = value;
+        
         // Для полей даты обрабатываем отдельно (могут быть пустыми для очистки)
         if (key === 'denied_from' || key === 'denied_to') {
             const trimmedValue = value ? value.trim() : '';
             // Если значение пустое, передаем пустую строку для очистки даты на сервере
             if (!trimmedValue) {
-                data[key] = ''; // Передаем пустую строку для очистки
-                continue;
-            }
-            // Преобразуем формат даты из YYYY-MM-DDTHH:mm (datetime-local) в YYYY-MM-DDTHH:mm:ss
-            // datetime-local всегда возвращает формат YYYY-MM-DDTHH:mm (16 символов)
-            if (trimmedValue.includes('T')) {
-                if (trimmedValue.length === 16) {
-                    // YYYY-MM-DDTHH:mm - добавляем :00 для секунд
-                    data[key] = trimmedValue + ':00';
-                } else if (trimmedValue.length === 19 && trimmedValue.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)) {
-                    // YYYY-MM-DDTHH:mm:ss - уже правильный формат (19 символов)
-                    data[key] = trimmedValue;
-                } else {
-                    // Другой формат - пытаемся исправить или передаем как есть
-                    // Если есть только один двоеточие, добавляем секунды
-                    if (trimmedValue.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
-                        data[key] = trimmedValue + ':00';
-                    } else {
-                        data[key] = trimmedValue;
-                    }
-                }
+                currentValue = ''; // Пустая строка для очистки
             } else {
-                // Если нет 'T', это не правильный формат datetime
-                // Передаем пустую строку для очистки
-                data[key] = '';
+                // Преобразуем формат даты из YYYY-MM-DDTHH:mm (datetime-local) в YYYY-MM-DDTHH:mm:ss
+                // datetime-local всегда возвращает формат YYYY-MM-DDTHH:mm (16 символов)
+                if (trimmedValue.includes('T')) {
+                    if (trimmedValue.length === 16) {
+                        // YYYY-MM-DDTHH:mm - добавляем :00 для секунд
+                        currentValue = trimmedValue + ':00';
+                    } else if (trimmedValue.length === 19 && trimmedValue.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)) {
+                        // YYYY-MM-DDTHH:mm:ss - уже правильный формат (19 символов)
+                        currentValue = trimmedValue;
+                    } else {
+                        // Другой формат - пытаемся исправить или передаем как есть
+                        // Если есть только один двоеточие, добавляем секунды
+                        if (trimmedValue.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
+                            currentValue = trimmedValue + ':00';
+                        } else {
+                            currentValue = trimmedValue;
+                        }
+                    }
+                } else {
+                    // Если нет 'T', это не правильный формат datetime
+                    // Передаем пустую строку для очистки
+                    currentValue = '';
+                }
+            }
+            
+            // Сравниваем с исходным значением (нормализуем исходное значение для сравнения)
+            const normalizedOriginal = originalValue ? (originalValue.length === 16 ? originalValue + ':00' : originalValue) : '';
+            if (currentValue !== normalizedOriginal) {
+                data[key] = currentValue; // Передаем только если изменилось
+            }
+        } else if (key === 'permission_code' || key === 'denied_message' || key === 'denied_parameter' || key === 'descr') {
+            // Для полей, которые могут быть очищены (пустая строка = очистка)
+            // Передаем значение даже если оно пустое, но только если оно изменилось
+            const trimmedValue = value ? value.trim() : '';
+            if (trimmedValue !== originalValue) {
+                data[key] = trimmedValue; // Передаем только если изменилось
             }
         } else if (value) {
-            // Для остальных полей передаем только непустые значения
-            data[key] = value;
+            // Для остальных полей передаем только непустые значения, если они изменились
+            if (value !== originalValue) {
+                data[key] = value;
+            }
+        } else if (originalValue && !value) {
+            // Если поле было заполнено, а теперь пустое - передаем пустую строку для очистки
+            data[key] = '';
         }
     }
     

@@ -915,6 +915,24 @@ class RACClient:
                 if value is None:
                     continue
                 
+                # Для полей, которые могут быть очищены (пустая строка = очистка)
+                # Это текстовые поля, которые можно очистить передав пустую строку
+                clearable_fields = ['permission_code', 'denied_message', 'denied_parameter', 'descr']
+                if key in clearable_fields:
+                    value_str = str(value).strip() if value else ''
+                    param_name = param_mapping[key]
+                    # Если значение пустое, передаем пустую строку в кавычках для очистки
+                    # subprocess.run с списком аргументов: кавычки становятся частью значения
+                    # Но RAC ожидает пустую строку, поэтому передаем --param="" 
+                    # (кавычки будут частью значения, но RAC их обработает)
+                    if not value_str:
+                        args.append(f'{param_name}=""')
+                        logger.info(f"RAC clearable param: {key} = '' (clearing value)")
+                        continue
+                    # Если значение не пустое, передаем как обычно (без кавычек, subprocess обработает)
+                    args.append(f'{param_name}={value_str}')
+                    continue
+                
                 # Для полей даты/времени обрабатываем отдельно
                 # Пустые значения нужно передавать для очистки даты на сервере
                 if key in ['denied_from', 'denied_to']:

@@ -4978,13 +4978,14 @@ def update_infobase(request, connection_id, cluster_uuid):
             # Поля, которые всегда передаем, если они есть в данных (независимо от available_params)
             always_send_fields = ['name', 'descr', 'denied_from', 'denied_to']
             # Поля, для которых пустые строки тоже нужно передавать (для очистки значений)
-            allow_empty_fields = ['denied_from', 'denied_to']
+            allow_empty_fields = ['denied_from', 'denied_to', 'permission_code', 'denied_message', 'denied_parameter', 'descr']
                 
             # Отправляем только те параметры, которые есть в доступных параметрах информационной базы
             # Для некоторых полей (name, descr, denied_from, denied_to) всегда отправляем, если они есть в данных
             # Для denied_from и denied_to пустые строки тоже передаем (для очистки дат)
+            # Для permission_code, denied_message, denied_parameter, descr пустые строки тоже передаем (для очистки)
             if (rac_param in available_params or form_field in always_send_fields) and form_field in data:
-                # Для полей даты пустые строки тоже передаем (для очистки)
+                # Для полей, которые можно очистить, пустые строки тоже передаем
                 if form_field in allow_empty_fields:
                     value = data[form_field]
                 elif data[form_field] != '':

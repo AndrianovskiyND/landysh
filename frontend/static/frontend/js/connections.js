@@ -3224,6 +3224,24 @@ async function refreshProcessesTable(connectionId, clusterUuid, serverUuid) {
 /**
  * Отрисовывает таблицу процессов
  */
+/**
+ * Получить отображаемое имя столбца процесса
+ */
+function getProcessColumnDisplayName(key) {
+    const columnNames = {
+        'host': 'Компьютер',
+        'port': 'Порт',
+        'use': 'Использование',
+        'turned-on': 'Включён',
+        'running': 'Активен',
+        'reserve': 'Резервный',
+        'pid': 'PID',
+        'available-perfomance': 'Дост.произв.',
+        'process': 'UUID процесса'
+    };
+    return columnNames[key] || key;
+}
+
 function renderProcessesTable(processes, connectionId, clusterUuid) {
     const container = document.getElementById('processesTableContainer');
     if (!container) return;
@@ -3241,10 +3259,15 @@ function renderProcessesTable(processes, connectionId, clusterUuid) {
     allKeys.add('process');
     const sortedKeys = Array.from(allKeys).sort();
     
+    // Определяем столбцы по умолчанию (в нужном порядке)
+    const defaultColumns = ['host', 'port', 'use', 'turned-on', 'running', 'reserve', 'pid', 'available-perfomance'];
+    
     // Получаем сохраненное состояние видимости столбцов
-    // По умолчанию UUID выключен, остальные включены
+    // По умолчанию показываем только нужные столбцы
     if (!window._processesVisibleColumns) {
-        window._processesVisibleColumns = new Set(sortedKeys.filter(k => k !== 'process'));
+        // Фильтруем только те столбцы, которые существуют в данных
+        const availableDefaultColumns = defaultColumns.filter(col => sortedKeys.includes(col));
+        window._processesVisibleColumns = new Set(availableDefaultColumns);
     }
     const visibleColumns = window._processesVisibleColumns;
     
@@ -3255,7 +3278,15 @@ function renderProcessesTable(processes, connectionId, clusterUuid) {
     const columnOrderKey = `processes_column_order_${connectionId}_${clusterUuid}`;
     let columnOrder = JSON.parse(localStorage.getItem(columnOrderKey) || 'null');
     if (!columnOrder || !Array.isArray(columnOrder)) {
-        columnOrder = sortedKeys.filter(k => visibleColumns.has(k));
+        // Используем порядок по умолчанию, фильтруя только видимые столбцы
+        const defaultOrder = defaultColumns.filter(col => visibleColumns.has(col) && sortedKeys.includes(col));
+        // Добавляем остальные видимые столбцы в конец
+        sortedKeys.forEach(k => {
+            if (visibleColumns.has(k) && !defaultOrder.includes(k)) {
+                defaultOrder.push(k);
+            }
+        });
+        columnOrder = defaultOrder;
     } else {
         // Фильтруем порядок, оставляя только видимые столбцы
         columnOrder = columnOrder.filter(k => visibleColumns.has(k));
@@ -3291,7 +3322,7 @@ function renderProcessesTable(processes, connectionId, clusterUuid) {
                         <div style="display: flex; align-items: center; gap: 0.25rem;">
                             <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterProcessesColumn('${key}', this.value)" data-column="${key}">
                         </div>
-                        <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'process' ? 'UUID процесса' : key)}</div>
+                        <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(getProcessColumnDisplayName(key))}</div>
                     </div>
                     <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
                 </th>`;
@@ -3695,14 +3726,14 @@ function exportProcessesToExcel() {
     // Создаем CSV данные
     let csv = '\uFEFF'; // BOM для правильной кодировки UTF-8 в Excel
     
-    // Заголовки (включаем UUID если он видим)
+    // Заголовки (используем маппинг имен столбцов)
     const headers = [];
-    if (visibleColumns.has('process')) {
-        headers.push('UUID процесса');
-    }
-    sortedKeys.forEach(key => {
-        if (key !== 'process' && visibleColumns.has(key)) {
-            headers.push(key);
+    const columnOrder = window._processesColumnOrder || sortedKeys;
+    
+    // Используем сохраненный порядок столбцов
+    columnOrder.forEach(key => {
+        if (visibleColumns.has(key)) {
+            headers.push(getProcessColumnDisplayName(key));
         }
     });
     
@@ -3711,15 +3742,17 @@ function exportProcessesToExcel() {
     
     csv += headers.map(h => h.replace(/"/g, '""')).join(separator) + '\n';
     
-    // Данные
+    // Данные (используем тот же порядок что и в заголовках)
     processes.forEach(process => {
         const row = [];
-        if (visibleColumns.has('process')) {
-            row.push(String(process.uuid || ''));
-        }
-        sortedKeys.forEach(key => {
-            if (key !== 'process' && visibleColumns.has(key)) {
-                const value = process.data[key] || '';
+        columnOrder.forEach(key => {
+            if (visibleColumns.has(key)) {
+                let value = '';
+                if (key === 'process') {
+                    value = process.uuid || '';
+                } else {
+                    value = process.data[key] || '';
+                }
                 // Заменяем переносы строк на пробелы
                 const cleanValue = String(value).replace(/\n/g, ' ').replace(/\r/g, '');
                 row.push(cleanValue);
@@ -3864,6 +3897,20 @@ async function refreshManagersTable(connectionId, clusterUuid) {
 /**
  * Рендерит таблицу менеджеров
  */
+/**
+ * Получить отображаемое имя столбца менеджера
+ */
+function getManagerColumnDisplayName(key) {
+    const columnNames = {
+        'host': 'Компьютер',
+        'descr': 'Описание',
+        'pid': 'PID',
+        'port': 'IP Порт',
+        'manager': 'UUID менеджера'
+    };
+    return columnNames[key] || key;
+}
+
 function renderManagersTable(managers, connectionId, clusterUuid) {
     const container = document.getElementById('managersTableContainer');
     if (!container) return;
@@ -3887,10 +3934,15 @@ function renderManagersTable(managers, connectionId, clusterUuid) {
     allKeys.add('manager');
     const sortedKeys = Array.from(allKeys).sort();
     
+    // Определяем столбцы по умолчанию (в нужном порядке)
+    const defaultColumns = ['host', 'descr', 'pid', 'port'];
+    
     // Получаем сохраненное состояние видимости столбцов
-    // По умолчанию UUID выключен, остальные включены
+    // По умолчанию показываем только нужные столбцы
     if (!window._managersVisibleColumns) {
-        window._managersVisibleColumns = new Set(sortedKeys.filter(k => k !== 'manager'));
+        // Фильтруем только те столбцы, которые существуют в данных
+        const availableDefaultColumns = defaultColumns.filter(col => sortedKeys.includes(col));
+        window._managersVisibleColumns = new Set(availableDefaultColumns);
     }
     const visibleColumns = window._managersVisibleColumns;
     
@@ -3901,7 +3953,15 @@ function renderManagersTable(managers, connectionId, clusterUuid) {
     const columnOrderKey = `managers_column_order_${connectionId}_${clusterUuid}`;
     let columnOrder = JSON.parse(localStorage.getItem(columnOrderKey) || 'null');
     if (!columnOrder || !Array.isArray(columnOrder)) {
-        columnOrder = sortedKeys.filter(k => visibleColumns.has(k));
+        // Используем порядок по умолчанию, фильтруя только видимые столбцы
+        const defaultOrder = defaultColumns.filter(col => visibleColumns.has(col) && sortedKeys.includes(col));
+        // Добавляем остальные видимые столбцы в конец
+        sortedKeys.forEach(k => {
+            if (visibleColumns.has(k) && !defaultOrder.includes(k)) {
+                defaultOrder.push(k);
+            }
+        });
+        columnOrder = defaultOrder;
     } else {
         // Фильтруем порядок, оставляя только видимые столбцы
         columnOrder = columnOrder.filter(k => visibleColumns.has(k));
@@ -3937,7 +3997,7 @@ function renderManagersTable(managers, connectionId, clusterUuid) {
                         <div style="display: flex; align-items: center; gap: 0.25rem;">
                             <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterManagersColumn('${key}', this.value)" data-column="${key}">
                         </div>
-                        <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'manager' ? 'UUID менеджера' : key)}</div>
+                        <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(getManagerColumnDisplayName(key))}</div>
                     </div>
                     <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
                 </th>`;
@@ -4351,14 +4411,14 @@ function exportManagersToExcel() {
     // Создаем CSV данные
     let csv = '\uFEFF'; // BOM для правильной кодировки UTF-8 в Excel
     
-    // Заголовки (включаем UUID если он видим)
+    // Заголовки (используем маппинг имен столбцов)
     const headers = [];
-    if (visibleColumns.has('manager')) {
-        headers.push('UUID менеджера');
-    }
-    sortedKeys.forEach(key => {
-        if (key !== 'manager' && visibleColumns.has(key)) {
-            headers.push(key);
+    const columnOrder = window._managersColumnOrder || sortedKeys;
+    
+    // Используем сохраненный порядок столбцов
+    columnOrder.forEach(key => {
+        if (visibleColumns.has(key)) {
+            headers.push(getManagerColumnDisplayName(key));
         }
     });
     // Используем точку с запятой как разделитель для лучшей совместимости с Excel
@@ -4366,15 +4426,17 @@ function exportManagersToExcel() {
     
     csv += headers.map(h => h.replace(/"/g, '""')).join(separator) + '\n';
     
-    // Данные
+    // Данные (используем тот же порядок что и в заголовках)
     managers.forEach(manager => {
         const row = [];
-        if (visibleColumns.has('manager')) {
-            row.push(String(manager.uuid || ''));
-        }
-        sortedKeys.forEach(key => {
-            if (key !== 'manager' && visibleColumns.has(key)) {
-                const value = manager.data[key] || '';
+        columnOrder.forEach(key => {
+            if (visibleColumns.has(key)) {
+                let value = '';
+                if (key === 'manager') {
+                    value = manager.uuid || '';
+                } else {
+                    value = manager.data[key] || '';
+                }
                 // Заменяем переносы строк на пробелы
                 const cleanValue = String(value).replace(/\n/g, ' ').replace(/\r/g, '');
                 row.push(cleanValue);

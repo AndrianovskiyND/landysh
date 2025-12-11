@@ -383,6 +383,7 @@ class RACClient:
         Args:
             cluster_uuid: UUID кластера
             **kwargs: Параметры для обновления (name, expiration-timeout, и т.д.)
+                     Могут быть с подчеркиваниями (expiration_timeout) или дефисами (expiration-timeout)
         """
         args = ['cluster', 'update', f'--cluster={cluster_uuid}']
         
@@ -402,11 +403,23 @@ class RACClient:
             'allow_access_right_audit_events_recording': '--allow-access-right-audit-events-recording',
             'ping_period': '--ping-period',
             'ping_timeout': '--ping-timeout',
+            'restart_schedule': '--restart-schedule',
         }
         
         for key, value in kwargs.items():
-            if key in param_mapping and value is not None:
-                param_name = param_mapping[key]
+            if value is not None:
+                # Если ключ уже с дефисами (из cluster list), используем его напрямую
+                if key.startswith('--'):
+                    param_name = key
+                elif key in param_mapping:
+                    param_name = param_mapping[key]
+                elif '-' in key:
+                    # Если ключ содержит дефисы, добавляем префикс --
+                    param_name = f'--{key}'
+                else:
+                    # Иначе пропускаем неизвестный параметр
+                    continue
+                
                 # Для булевых значений используем yes/no
                 if isinstance(value, bool):
                     value = 'yes' if value else 'no'

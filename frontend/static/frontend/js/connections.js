@@ -1339,10 +1339,114 @@ function showClusterContextMenu(event, connectionId, clusterUuid, clusterName) {
 /**
  * Открывает модальное окно свойств кластера
  */
+/**
+ * Маппинг параметров кластера на русские названия
+ */
+function getClusterParamDisplayName(paramKey) {
+    const paramNames = {
+        'name': 'Имя кластера',
+        'expiration-timeout': 'Период принудительного завершения (секунды)',
+        'lifetime-limit': 'Период перезапуска рабочих процессов (секунды)',
+        'max-memory-size': 'Максимальный объем памяти (КБ)',
+        'max-memory-time-limit': 'Максимальный период превышения памяти (секунды)',
+        'security-level': 'Уровень безопасности',
+        'session-fault-tolerance-level': 'Уровень отказоустойчивости',
+        'load-balancing-mode': 'Режим распределения нагрузки',
+        'errors-count-threshold': 'Допустимое отклонение ошибок (%)',
+        'kill-problem-processes': 'Принудительно завершать проблемные процессы',
+        'kill-by-memory-with-dump': 'Формировать дамп при превышении памяти',
+        'allow-access-right-audit-events-recording': 'Разрешать запись событий аудита',
+        'ping-period': 'Период отправки ping (миллисекунды)',
+        'ping-timeout': 'Таймаут ping (миллисекунды)',
+        'restart-schedule': 'Расписание перезапуска'
+    };
+    return paramNames[paramKey] || paramKey;
+}
+
+/**
+ * Маппинг имени поля формы на имя параметра RAC
+ */
+function getClusterFormFieldName(paramKey) {
+    const fieldMapping = {
+        'name': 'name',
+        'expiration-timeout': 'expiration_timeout',
+        'lifetime-limit': 'lifetime_limit',
+        'max-memory-size': 'max_memory_size',
+        'max-memory-time-limit': 'max_memory_time_limit',
+        'security-level': 'security_level',
+        'session-fault-tolerance-level': 'session_fault_tolerance_level',
+        'load-balancing-mode': 'load_balancing_mode',
+        'errors-count-threshold': 'errors_count_threshold',
+        'kill-problem-processes': 'kill_problem_processes',
+        'kill-by-memory-with-dump': 'kill_by_memory_with_dump',
+        'allow-access-right-audit-events-recording': 'allow_access_right_audit_events_recording',
+        'ping-period': 'ping_period',
+        'ping-timeout': 'ping_timeout',
+        'restart-schedule': 'restart_schedule'
+    };
+    return fieldMapping[paramKey] || paramKey.replace(/-/g, '_');
+}
+
+/**
+ * Генерирует HTML для поля параметра кластера
+ */
+function generateClusterParamField(paramKey, paramValue, cluster) {
+    const displayName = getClusterParamDisplayName(paramKey);
+    const fieldName = getClusterFormFieldName(paramKey);
+    
+    // Определяем тип поля
+    if (paramKey === 'load-balancing-mode') {
+        // Select для режима распределения нагрузки
+        return `
+            <div class="form-row">
+                <label>${escapeHtml(displayName)}:</label>
+                <select id="${fieldName}" name="${fieldName}">
+                    <option value="performance" ${paramValue === 'performance' ? 'selected' : ''}>Приоритет по производительности</option>
+                    <option value="memory" ${paramValue === 'memory' ? 'selected' : ''}>Приоритет по памяти</option>
+                </select>
+            </div>
+        `;
+    } else if (paramKey === 'kill-problem-processes' || paramKey === 'kill-by-memory-with-dump' || 
+               paramKey === 'allow-access-right-audit-events-recording') {
+        // Select для булевых значений
+        const boolValue = paramValue === '1' || paramValue === 'yes' || paramValue === 1 || paramValue === true;
+        return `
+            <div class="form-row">
+                <label>${escapeHtml(displayName)}:</label>
+                <select id="${fieldName}" name="${fieldName}">
+                    <option value="yes" ${boolValue ? 'selected' : ''}>Да</option>
+                    <option value="no" ${!boolValue ? 'selected' : ''}>Нет</option>
+                </select>
+            </div>
+        `;
+    } else if (paramKey === 'restart-schedule') {
+        // Text для расписания перезапуска
+        return `
+            <div class="form-row">
+                <label>${escapeHtml(displayName)}:</label>
+                <input type="text" id="${fieldName}" name="${fieldName}" value="${escapeHtml(paramValue || '')}">
+            </div>
+        `;
+    } else {
+        // Number для числовых значений
+        return `
+            <div class="form-row">
+                <label>${escapeHtml(displayName)}:</label>
+                <input type="number" id="${fieldName}" name="${fieldName}" value="${escapeHtml(paramValue || '0')}">
+            </div>
+        `;
+    }
+}
+
 async function openClusterProperties(connectionId, clusterUuid, clusterName) {
     // Загружаем детальную информацию о кластере
     try {
-        const response = await fetch(`/api/clusters/clusters/${connectionId}/${clusterUuid}/`);
+        // Получаем учетные данные администратора кластера
+        const clusterAdminParams = addClusterAdminParams('', connectionId, clusterUuid);
+        const urlParams = new URLSearchParams(clusterAdminParams.substring(1));
+        const url = `/api/clusters/clusters/${connectionId}/${clusterUuid}/?${urlParams.toString()}`;
+        
+        const response = await fetch(url);
         const data = await response.json();
         
         if (!data.success) {
@@ -1367,6 +1471,46 @@ async function openClusterProperties(connectionId, clusterUuid, clusterName) {
         }
         
         const displayName = clusterNameValue;
+        
+        // Собираем все параметры из данных кластера (исключаем служебные поля)
+        const excludedKeys = ['cluster', 'name', 'host', 'port'];
+        const clusterParams = {};
+        Object.keys(cluster).forEach(key => {
+            if (!excludedKeys.includes(key)) {
+                clusterParams[key] = cluster[key];
+            }
+        });
+        
+        // Определяем группы параметров
+        const restartProcessesParams = ['restart-schedule', 'kill-problem-processes', 'kill-by-memory-with-dump'];
+        const connectionTrackingParams = ['ping-period', 'ping-timeout'];
+        
+        // Параметры для основного блока (все остальные, кроме тех что в специальных блоках)
+        const allGroupedParams = [...restartProcessesParams, ...connectionTrackingParams];
+        
+        // Генерируем HTML для блока "Перезапускать рабочие процессы"
+        let restartProcessesHtml = '';
+        restartProcessesParams.forEach(paramKey => {
+            if (paramKey in clusterParams) {
+                restartProcessesHtml += generateClusterParamField(paramKey, clusterParams[paramKey], cluster);
+            }
+        });
+        
+        // Генерируем HTML для блока "Отслеживание разрыва соединений"
+        let connectionTrackingHtml = '';
+        connectionTrackingParams.forEach(paramKey => {
+            if (paramKey in clusterParams) {
+                connectionTrackingHtml += generateClusterParamField(paramKey, clusterParams[paramKey], cluster);
+            }
+        });
+        
+        // Генерируем HTML для блока "Параметры кластера" (все остальные)
+        let otherParamsHtml = '';
+        Object.keys(clusterParams).forEach(paramKey => {
+            if (!allGroupedParams.includes(paramKey)) {
+                otherParamsHtml += generateClusterParamField(paramKey, clusterParams[paramKey], cluster);
+            }
+        });
         
         // Создаём модальное окно в стилистике системы
         const modal = document.createElement('div');
@@ -1399,73 +1543,24 @@ async function openClusterProperties(connectionId, clusterUuid, clusterName) {
                                 <input type="text" class="readonly-field" value="${escapeHtml(cluster.port || '')}" readonly>
                             </div>
                         </div>
+                        ${restartProcessesHtml ? `
+                        <div class="info-card">
+                            <h4>🔄 Перезапускать рабочие процессы</h4>
+                            ${restartProcessesHtml}
+                        </div>
+                        ` : ''}
+                        ${connectionTrackingHtml ? `
+                        <div class="info-card">
+                            <h4>🔗 Отслеживание разрыва соединений</h4>
+                            ${connectionTrackingHtml}
+                        </div>
+                        ` : ''}
+                        ${otherParamsHtml ? `
                         <div class="info-card">
                             <h4>⚙️ Параметры кластера</h4>
-                            <div class="form-row">
-                                <label>Период принудительного завершения (секунды):</label>
-                                <input type="number" id="expirationTimeout" name="expiration_timeout" value="${cluster['expiration-timeout'] || cluster.expiration_timeout || '60'}">
-                            </div>
-                            <div class="form-row">
-                                <label>Период перезапуска рабочих процессов (секунды):</label>
-                                <input type="number" id="lifetimeLimit" name="lifetime_limit" value="${cluster['lifetime-limit'] || cluster.lifetime_limit || '0'}">
-                            </div>
-                            <div class="form-row">
-                                <label>Максимальный объем памяти (КБ):</label>
-                                <input type="number" id="maxMemorySize" name="max_memory_size" value="${cluster['max-memory-size'] || cluster.max_memory_size || '0'}">
-                            </div>
-                            <div class="form-row">
-                                <label>Максимальный период превышения памяти (секунды):</label>
-                                <input type="number" id="maxMemoryTimeLimit" name="max_memory_time_limit" value="${cluster['max-memory-time-limit'] || cluster.max_memory_time_limit || '0'}">
-                            </div>
-                            <div class="form-row">
-                                <label>Уровень безопасности:</label>
-                                <input type="number" id="securityLevel" name="security_level" value="${cluster['security-level'] || cluster.security_level || '0'}">
-                            </div>
-                            <div class="form-row">
-                                <label>Уровень отказоустойчивости:</label>
-                                <input type="number" id="sessionFaultToleranceLevel" name="session_fault_tolerance_level" value="${cluster['session-fault-tolerance-level'] || cluster.session_fault_tolerance_level || '0'}">
-                            </div>
-                            <div class="form-row">
-                                <label>Режим распределения нагрузки:</label>
-                                <select id="loadBalancingMode" name="load_balancing_mode">
-                                    <option value="performance" ${(cluster['load-balancing-mode'] || cluster.load_balancing_mode || 'performance') === 'performance' ? 'selected' : ''}>Приоритет по производительности</option>
-                                    <option value="memory" ${(cluster['load-balancing-mode'] || cluster.load_balancing_mode) === 'memory' ? 'selected' : ''}>Приоритет по памяти</option>
-                                </select>
-                            </div>
-                            <div class="form-row">
-                                <label>Допустимое отклонение ошибок (%):</label>
-                                <input type="number" id="errorsCountThreshold" name="errors_count_threshold" value="${cluster['errors-count-threshold'] || cluster.errors_count_threshold || '0'}">
-                            </div>
-                            <div class="form-row">
-                                <label>Принудительно завершать проблемные процессы:</label>
-                                <select id="killProblemProcesses" name="kill_problem_processes">
-                                    <option value="yes" ${(cluster['kill-problem-processes'] || cluster.kill_problem_processes || '1') === '1' || (cluster['kill-problem-processes'] || cluster.kill_problem_processes) === 'yes' ? 'selected' : ''}>Да</option>
-                                    <option value="no" ${(cluster['kill-problem-processes'] || cluster.kill_problem_processes) === '0' || (cluster['kill-problem-processes'] || cluster.kill_problem_processes) === 'no' ? 'selected' : ''}>Нет</option>
-                                </select>
-                            </div>
-                            <div class="form-row">
-                                <label>Формировать дамп при превышении памяти:</label>
-                                <select id="killByMemoryWithDump" name="kill_by_memory_with_dump">
-                                    <option value="yes" ${(cluster['kill-by-memory-with-dump'] || cluster.kill_by_memory_with_dump || '0') === '1' || (cluster['kill-by-memory-with-dump'] || cluster.kill_by_memory_with_dump) === 'yes' ? 'selected' : ''}>Да</option>
-                                    <option value="no" ${(cluster['kill-by-memory-with-dump'] || cluster.kill_by_memory_with_dump || '0') === '0' || (cluster['kill-by-memory-with-dump'] || cluster.kill_by_memory_with_dump) === 'no' ? 'selected' : ''}>Нет</option>
-                                </select>
-                            </div>
-                            <div class="form-row">
-                                <label>Разрешать запись событий аудита:</label>
-                                <select id="allowAccessRightAuditEventsRecording" name="allow_access_right_audit_events_recording">
-                                    <option value="yes" ${(cluster['allow-access-right-audit-events-recording'] || cluster.allow_access_right_audit_events_recording || '0') === '1' || (cluster['allow-access-right-audit-events-recording'] || cluster.allow_access_right_audit_events_recording) === 'yes' ? 'selected' : ''}>Да</option>
-                                    <option value="no" ${(cluster['allow-access-right-audit-events-recording'] || cluster.allow_access_right_audit_events_recording || '0') === '0' || (cluster['allow-access-right-audit-events-recording'] || cluster.allow_access_right_audit_events_recording) === 'no' ? 'selected' : ''}>Нет</option>
-                                </select>
-                            </div>
-                            <div class="form-row">
-                                <label>Период отправки ping (миллисекунды):</label>
-                                <input type="number" id="pingPeriod" name="ping_period" value="${cluster['ping-period'] || cluster.ping_period || '0'}">
-                            </div>
-                            <div class="form-row">
-                                <label>Таймаут ping (миллисекунды):</label>
-                                <input type="number" id="pingTimeout" name="ping_timeout" value="${cluster['ping-timeout'] || cluster.ping_timeout || '0'}">
-                            </div>
+                            ${otherParamsHtml}
                         </div>
+                        ` : ''}
                         <div class="form-actions" style="margin-top: 1.5rem;">
                             <button type="button" class="btn btn-secondary" onclick="closeClusterPropertiesModal()">Отмена</button>
                             <button type="button" class="btn btn-primary" onclick="saveClusterProperties('${connectionId}', '${clusterUuid}')">Сохранить</button>
@@ -1512,6 +1607,20 @@ async function saveClusterProperties(connectionId, clusterUuid) {
         if (!csrfToken) {
             showNotification('❌ Ошибка: CSRF токен не найден', true);
             return;
+        }
+        
+        // Получаем учетные данные администратора кластера
+        const clusterAdminParams = addClusterAdminParams('', connectionId, clusterUuid);
+        const urlParams = new URLSearchParams(clusterAdminParams.substring(1));
+        const clusterAdmin = urlParams.get('cluster_admin');
+        const clusterPassword = urlParams.get('cluster_password');
+        
+        // Добавляем учетные данные администратора кластера в тело запроса
+        if (clusterAdmin) {
+            data.cluster_admin = clusterAdmin;
+        }
+        if (clusterPassword) {
+            data.cluster_password = clusterPassword;
         }
         
         const response = await fetch(`/api/clusters/clusters/${connectionId}/${clusterUuid}/update/`, {

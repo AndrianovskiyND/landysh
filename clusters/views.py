@@ -3167,30 +3167,47 @@ def apply_rules(request, connection_id, cluster_uuid, server_uuid):
 
 @login_required
 def get_cluster_details(request, connection_id, cluster_uuid):
-    """Получает детальную информацию о кластере"""
+    """Получает детальную информацию о кластере из rac cluster list"""
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-        rac_client = RACClient(connection)
-        result = rac_client.get_cluster_info(cluster_uuid)
+        
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
+        
+        # Используем cluster list вместо cluster info, чтобы получить все параметры
+        result = rac_client.get_cluster_list()
         
         if result['success']:
-            # Парсим вывод
-            cluster_data = {}
-            if result['output']:
-                lines = result['output'].strip().split('\n')
-                for line in lines:
-                    line = line.strip()
-                    if ':' in line:
-                        parts = line.split(':', 1)
-                        key = parts[0].strip()
-                        value = parts[1].strip() if len(parts) > 1 else ''
-                        cluster_data[key] = value
+            # Парсим список кластеров
+            clusters = _parse_cluster_list(result['output'])
             
-            return JsonResponse({
-                'success': True,
-                'cluster': cluster_data,
-                'raw_output': result['output']
-            }, json_dumps_params={'ensure_ascii': False})
+            # Находим нужный кластер по UUID
+            cluster_data = None
+            for cluster in clusters:
+                if cluster.get('uuid') == cluster_uuid:
+                    # Объединяем основные поля и data
+                    cluster_data = {
+                        'cluster': cluster_uuid,
+                        'name': cluster.get('name', ''),
+                        'host': cluster.get('host', ''),
+                        'port': cluster.get('port', ''),
+                        **cluster.get('data', {})
+                    }
+                    break
+            
+            if cluster_data:
+                return JsonResponse({
+                    'success': True,
+                    'cluster': cluster_data,
+                    'raw_output': result['output']
+                }, json_dumps_params={'ensure_ascii': False})
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Кластер не найден'
+                }, json_dumps_params={'ensure_ascii': False})
         else:
             return JsonResponse({
                 'success': False,
@@ -3427,34 +3444,67 @@ def update_cluster(request, connection_id, cluster_uuid):
     
     try:
         connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
-        rac_client = RACClient(connection)
+        
+        # Получаем учетные данные администратора кластера из запроса
+        cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+        
+        rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
+        
+        # Получаем текущие параметры кластера из cluster list
+        cluster_list_result = rac_client.get_cluster_list()
+        if not cluster_list_result['success']:
+            return JsonResponse({
+                'success': False,
+                'error': 'Не удалось получить текущие параметры кластера: ' + cluster_list_result.get('error', 'Неизвестная ошибка')
+            }, json_dumps_params={'ensure_ascii': False})
+        
+        # Парсим список кластеров и находим нужный
+        clusters = _parse_cluster_list(cluster_list_result['output'])
+        current_cluster = None
+        for cluster in clusters:
+            if cluster.get('uuid') == cluster_uuid:
+                current_cluster = cluster
+                break
+        
+        if not current_cluster:
+            return JsonResponse({
+                'success': False,
+                'error': 'Кластер не найден'
+            }, json_dumps_params={'ensure_ascii': False})
         
         # Получаем данные из запроса
         data = json.loads(request.body)
         
+        # Получаем список доступных параметров из текущего кластера
+        available_params = set(current_cluster.get('data', {}).keys())
+        # Добавляем базовые поля
+        available_params.add('name')
+        
         # Подготавливаем параметры для обновления
         update_params = {}
         
-        # Маппинг полей из формы в параметры RAC
+        # Маппинг полей из формы в параметры RAC (с дефисами)
         field_mapping = {
             'name': 'name',
-            'expiration_timeout': 'expiration_timeout',
-            'lifetime_limit': 'lifetime_limit',
-            'max_memory_size': 'max_memory_size',
-            'max_memory_time_limit': 'max_memory_time_limit',
-            'security_level': 'security_level',
-            'session_fault_tolerance_level': 'session_fault_tolerance_level',
-            'load_balancing_mode': 'load_balancing_mode',
-            'errors_count_threshold': 'errors_count_threshold',
-            'kill_problem_processes': 'kill_problem_processes',
-            'kill_by_memory_with_dump': 'kill_by_memory_with_dump',
-            'allow_access_right_audit_events_recording': 'allow_access_right_audit_events_recording',
-            'ping_period': 'ping_period',
-            'ping_timeout': 'ping_timeout',
+            'expiration_timeout': 'expiration-timeout',
+            'lifetime_limit': 'lifetime-limit',
+            'max_memory_size': 'max-memory-size',
+            'max_memory_time_limit': 'max-memory-time-limit',
+            'security_level': 'security-level',
+            'session_fault_tolerance_level': 'session-fault-tolerance-level',
+            'load_balancing_mode': 'load-balancing-mode',
+            'errors_count_threshold': 'errors-count-threshold',
+            'kill_problem_processes': 'kill-problem-processes',
+            'kill_by_memory_with_dump': 'kill-by-memory-with-dump',
+            'allow_access_right_audit_events_recording': 'allow-access-right-audit-events-recording',
+            'ping_period': 'ping-period',
+            'ping_timeout': 'ping-timeout',
+            'restart_schedule': 'restart-schedule',
         }
         
         for form_field, rac_param in field_mapping.items():
-            if form_field in data and data[form_field] != '':
+            # Отправляем только те параметры, которые есть в доступных параметрах кластера
+            if rac_param in available_params and form_field in data and data[form_field] != '':
                 value = data[form_field]
                 # Преобразуем строковые "yes"/"no" в булевы значения
                 if value in ['yes', 'no']:

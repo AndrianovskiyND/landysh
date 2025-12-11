@@ -417,11 +417,11 @@ async function openConnectionEditModal(connectionId) {
                         <div class="edit-form">
                             <div class="form-row">
                                 <label for="modalDisplayName">Отображаемое имя *</label>
-                                <input type="text" id="modalDisplayName" value="${connectionData?.display_name || ''}" placeholder="Первый сервер проекта...">
+                                <input type="text" id="modalDisplayName" value="${connectionData?.display_name || ''}" placeholder="Имя для отображения в списке">
                             </div>
                             <div class="form-row">
                                 <label for="modalServerHost">Сервер *</label>
-                                <input type="text" id="modalServerHost" value="${connectionData?.server_host || ''}" placeholder="server_ro01.com">
+                                <input type="text" id="modalServerHost" value="${connectionData?.server_host || ''}" placeholder="app-host.com">
                             </div>
                             <div class="form-row">
                                 <label for="modalRasPort">Порт RAS *</label>

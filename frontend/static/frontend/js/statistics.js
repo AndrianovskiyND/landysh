@@ -8,13 +8,13 @@
  */
 async function loadStatistics() {
     try {
-        const [connResponse, usersResponse, groupsResponse] = await Promise.all([
-            fetch('/api/clusters/connections/'),
+        const [connCountResponse, usersResponse, groupsResponse] = await Promise.all([
+            fetch('/api/clusters/connections/count/'),
             fetch('/api/users/list/'),
             fetch('/api/users/groups/all/')
         ]);
         
-        const connData = await connResponse.json();
+        const connCountData = await connCountResponse.json();
         const usersData = await usersResponse.json();
         const groupsData = await groupsResponse.json();
         
@@ -23,8 +23,8 @@ async function loadStatistics() {
         const usersCount = document.getElementById('usersCount');
         const groupsCount = document.getElementById('groupsCount');
         
-        if (connData.connections && connectionsCount) {
-            connectionsCount.textContent = connData.connections.length;
+        if (connCountData.success && connectionsCount) {
+            connectionsCount.textContent = connCountData.count || 0;
         }
         
         if (usersData.success && usersCount) {

@@ -83,6 +83,23 @@ def server_connections(request):
     })
 
 @login_required
+def connections_count(request):
+    """Возвращает общее количество подключений в системе (только для админов)"""
+    from core.models import Profile
+    try:
+        profile = Profile.objects.get(user=request.user)
+        if not profile.is_admin():
+            return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+    except Profile.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+    
+    total_connections = ServerConnection.objects.count()
+    return JsonResponse({
+        'success': True,
+        'count': total_connections
+    })
+
+@login_required
 @csrf_exempt
 def create_connection(request):
     """Создает новое подключение"""

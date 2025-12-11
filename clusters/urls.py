@@ -4,6 +4,7 @@ from . import views_folders
 
 urlpatterns = [
     path('connections/', views.server_connections, name='server_connections'),
+    path('connections/count/', views.connections_count, name='connections_count'),
     path('connections/create/', views.create_connection, name='create_connection'),
     path('connections/update/<int:connection_id>/', views.update_connection, name='update_connection'),
     path('connections/delete/<int:connection_id>/', views.delete_connection, name='delete_connection'),

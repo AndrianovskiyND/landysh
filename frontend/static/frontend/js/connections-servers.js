@@ -182,7 +182,7 @@ function showServerContextMenu(event, connectionId, clusterUuid, serverUuid, ser
         <div class="context-menu-item" onclick="openRulesModal(${connectionId}, '${clusterUuid}', '${serverUuid}', '${escapeHtml(serverName).replace(/'/g, "\\'")}'); closeContextMenu();">
             📐 ТНФ
         </div>
-        <div class="context-menu-item" onclick="openProcessesModal(${connectionId}, '${clusterUuid}', '${serverUuid}'); closeContextMenu();">
+        <div class="context-menu-item" onclick="openProcessesModal(${connectionId}, '${clusterUuid}', '${serverUuid}', '${escapeHtml(serverName).replace(/'/g, "\\'")}'); closeContextMenu();">
             🔄 Процессы
         </div>
         <div class="context-menu-item" onclick="deleteServer(${connectionId}, '${clusterUuid}', '${serverUuid}', '${escapeHtml(serverName).replace(/'/g, "\\'")}'); closeContextMenu();">

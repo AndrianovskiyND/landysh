@@ -3058,13 +3058,21 @@ async function deleteServer(connectionId, clusterUuid, serverUuid, serverName) {
 /**
  * Открывает модальное окно процессов на весь экран
  */
-async function openProcessesModal(connectionId, clusterUuid, serverUuid = null) {
+async function openProcessesModal(connectionId, clusterUuid, serverUuid = null, serverName = null) {
     closeContextMenu();
     
     // Удаляем предыдущее модальное окно если есть
     const existingModal = document.getElementById('processesModal');
     if (existingModal) {
         existingModal.remove();
+    }
+    
+    // Формируем заголовок
+    let title = '🔄 Рабочие процессы';
+    if (serverUuid && serverName) {
+        title += ` (фильтр по серверу: ${escapeHtml(serverName)})`;
+    } else if (serverUuid) {
+        title += ' (фильтр по серверу)';
     }
     
     const modal = document.createElement('div');
@@ -3074,7 +3082,7 @@ async function openProcessesModal(connectionId, clusterUuid, serverUuid = null) 
     modal.innerHTML = `
         <div class="modal" style="max-width: 95vw; max-height: 95vh; width: 95vw; height: 95vh; display: flex; flex-direction: column;">
             <div class="modal-header" style="flex-shrink: 0;">
-                <h3>🔄 Рабочие процессы${serverUuid ? ' (фильтр по серверу)' : ''}</h3>
+                <h3>${title}</h3>
                 <button class="modal-close-btn" onclick="closeProcessesModal()">×</button>
             </div>
             <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 1rem;">
@@ -3337,7 +3345,7 @@ function renderProcessesTable(processes, connectionId, clusterUuid) {
         
         processes.forEach((process, index) => {
             html += `
-                <tr class="process-row" data-process-uuid="${process.uuid}" data-index="${index}" style="cursor: pointer;">
+                <tr class="process-row" data-process-uuid="${process.uuid}" data-index="${index}" style="cursor: pointer;" oncontextmenu="showProcessContextMenu(event, ${connectionId}, '${clusterUuid}', '${process.uuid}'); return false;">
             `;
             
             // Используем сохраненный порядок столбцов
@@ -3607,6 +3615,114 @@ function toggleProcessesColumn(columnKey, isVisible) {
         const processes = window._processesData || [];
         renderProcessesTable(processes, connectionId, clusterUuid);
         filterProcessesTable(); // Применяем фильтр если есть
+    }
+}
+
+/**
+ * Показать контекстное меню для процесса
+ */
+function showProcessContextMenu(event, connectionId, clusterUuid, processUuid) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const existingMenu = document.getElementById('processContextMenu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    const menu = document.createElement('div');
+    menu.id = 'processContextMenu';
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+    menu.style.zIndex = '10010';
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="openProcessInfoModal(${connectionId}, '${clusterUuid}', '${processUuid}'); closeContextMenu();">
+            📋 Свойства
+        </div>
+        <div class="context-menu-item" onclick="turnOffProcess(${connectionId}, '${clusterUuid}', '${processUuid}'); closeContextMenu();">
+            ⛔ Выключить
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    // Закрытие меню при клике вне его
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+}
+
+/**
+ * Выключить рабочий процесс
+ */
+async function turnOffProcess(connectionId, clusterUuid, processUuid) {
+    // Показываем модальное окно подтверждения
+    const confirmed = await showConfirmModal(
+        'Вы уверены что хотите выключить рабочий процесс?',
+        'Подтверждение выключения процесса'
+    );
+    
+    if (!confirmed) {
+        return;
+    }
+    
+    try {
+        const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            showNotification('❌ Ошибка: CSRF токен не найден. Обновите страницу.', true);
+            return;
+        }
+        
+        // Получаем учетные данные администратора кластера
+        const clusterAdminParams = addClusterAdminParams('', connectionId, clusterUuid);
+        const urlParams = new URLSearchParams(clusterAdminParams.substring(1)); // Убираем первый '?'
+        
+        const requestBody = {
+            process_uuid: processUuid
+        };
+        
+        // Добавляем учетные данные администратора кластера в тело запроса
+        const clusterAdmin = urlParams.get('cluster_admin');
+        const clusterPassword = urlParams.get('cluster_password');
+        if (clusterAdmin) {
+            requestBody.cluster_admin = clusterAdmin;
+        }
+        if (clusterPassword) {
+            requestBody.cluster_password = clusterPassword;
+        }
+        
+        const response = await fetch(`/api/clusters/processes/${connectionId}/${clusterUuid}/turn-off/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Рабочий процесс выключен успешно');
+            // Обновляем таблицу процессов
+            const serverUuid = window._currentProcessesServerUuid || null;
+            await refreshProcessesTable(connectionId, clusterUuid, serverUuid);
+        } else {
+            showNotification('❌ Ошибка выключения процесса: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка: ' + error.message, true);
     }
 }
 

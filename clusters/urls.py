@@ -19,6 +19,7 @@ urlpatterns = [
     path('sessions/interrupt/', views.interrupt_server_calls, name='interrupt_server_calls'),
     path('processes/<int:connection_id>/', views.get_processes, name='get_processes'),
     path('processes/<int:connection_id>/<str:cluster_uuid>/info/', views.get_process_info, name='get_process_info'),
+    path('processes/<int:connection_id>/<str:cluster_uuid>/turn-off/', views.turn_off_process, name='turn_off_process'),
     path('managers/<int:connection_id>/', views.get_managers, name='get_managers'),
     path('managers/<int:connection_id>/<str:cluster_uuid>/info/', views.get_manager_info, name='get_manager_info'),
     path('infobases/<int:connection_id>/', views.get_infobases, name='get_infobases'),

@@ -1798,6 +1798,38 @@ def get_process_info(request, connection_id, cluster_uuid):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
 
+@login_required
+@csrf_exempt
+def turn_off_process(request, connection_id, cluster_uuid):
+    """Выключает рабочий процесс"""
+    if request.method == 'POST':
+        try:
+            connection = ServerConnection.objects.get(id=connection_id, user_group__members=request.user)
+            data = json.loads(request.body)
+            process_uuid = data.get('process_uuid')
+            
+            if not process_uuid:
+                return JsonResponse({'success': False, 'error': 'Process UUID required'}, json_dumps_params={'ensure_ascii': False})
+            
+            # Получаем учетные данные администратора кластера из запроса
+            cluster_admin, cluster_password = _get_cluster_admin_from_request(request)
+            
+            rac_client = RACClient(connection, cluster_admin=cluster_admin, cluster_password=cluster_password)
+            result = rac_client.turn_off_process(cluster_uuid, process_uuid)
+            
+            if result['success']:
+                return JsonResponse({'success': True}, json_dumps_params={'ensure_ascii': False})
+            else:
+                error_msg = fix_broken_encoding(result['error'])
+                return JsonResponse({'success': False, 'error': error_msg}, json_dumps_params={'ensure_ascii': False})
+                
+        except ServerConnection.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Connection not found'}, json_dumps_params={'ensure_ascii': False})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, json_dumps_params={'ensure_ascii': False})
+    
+    return JsonResponse({'success': False, 'error': 'Only POST allowed'}, json_dumps_params={'ensure_ascii': False})
+
 # ============================================
 # Требования назначения функциональности (ТНФ)
 # ============================================

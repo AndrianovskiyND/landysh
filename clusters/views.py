@@ -318,6 +318,11 @@ def _parse_cluster_list(output):
             key = parts[0].strip()
             value = parts[1].strip() if len(parts) > 1 else ''
             
+            # Убираем кавычки из значения, если они есть (для всех полей)
+            # RAC выводит значения в кавычках, если они содержат пробелы или специальные символы
+            if value.startswith('"') and value.endswith('"'):
+                value = value[1:-1]  # Убираем первую и последнюю кавычку
+            
             if key == 'cluster':
                 # Начало нового кластера
                 if current_cluster:
@@ -335,8 +340,7 @@ def _parse_cluster_list(output):
                 
                 # Извлекаем важные поля
                 if key == 'name':
-                    # Убираем кавычки если есть
-                    current_cluster['name'] = value.strip('"')
+                    current_cluster['name'] = value
                 elif key == 'host':
                     current_cluster['host'] = value
                 elif key == 'port':
@@ -3502,10 +3506,20 @@ def update_cluster(request, connection_id, cluster_uuid):
             'restart_schedule': 'restart-schedule',
         }
         
+        # Поля, для которых пустые строки тоже нужно передавать (для очистки значений)
+        allow_empty_fields = ['restart_schedule']
+        
         for form_field, rac_param in field_mapping.items():
             # Отправляем только те параметры, которые есть в доступных параметрах кластера
-            if rac_param in available_params and form_field in data and data[form_field] != '':
-                value = data[form_field]
+            if rac_param in available_params and form_field in data:
+                # Для полей, которые можно очистить, пустые строки тоже передаем
+                if form_field in allow_empty_fields:
+                    value = data[form_field]
+                elif data[form_field] != '':
+                    value = data[form_field]
+                else:
+                    continue  # Пропускаем пустые значения для остальных полей
+                
                 # Преобразуем строковые "yes"/"no" в булевы значения
                 if value in ['yes', 'no']:
                     value = value == 'yes'

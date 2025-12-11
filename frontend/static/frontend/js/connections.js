@@ -1735,10 +1735,31 @@ async function openClusterProperties(connectionId, clusterUuid, clusterName) {
             }
         });
         
+        // Сохраняем исходные значения всех полей для отслеживания изменений
+        const originalValues = {
+            name: clusterNameValue || '',
+            restart_schedule: clusterParams['restart-schedule'] || '',
+            kill_problem_processes: clusterParams['kill-problem-processes'] || false,
+            kill_by_memory_with_dump: clusterParams['kill-by-memory-with-dump'] || false,
+            ping_period: clusterParams['ping-period'] || '',
+            ping_timeout: clusterParams['ping-timeout'] || ''
+        };
+        
+        // Добавляем остальные параметры из clusterParams
+        Object.keys(clusterParams).forEach(key => {
+            if (!originalValues.hasOwnProperty(key)) {
+                // Преобразуем ключи с дефисами в подчеркивания для соответствия именам полей формы
+                const formKey = key.replace(/-/g, '_');
+                originalValues[formKey] = clusterParams[key] || '';
+            }
+        });
+        
         // Создаём модальное окно в стилистике системы
         const modal = document.createElement('div');
         modal.className = 'modal-overlay optimized';
         modal.id = 'clusterPropertiesModal';
+        // Сохраняем исходные значения в data-атрибуте модального окна
+        modal.setAttribute('data-original-values', JSON.stringify(originalValues));
         modal.innerHTML = `
             <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
                 <div class="modal-header">
@@ -1817,12 +1838,33 @@ async function saveClusterProperties(connectionId, clusterUuid) {
     const form = document.getElementById('clusterPropertiesForm');
     if (!form) return;
     
+    // Получаем исходные значения из data-атрибута модального окна
+    const modal = document.getElementById('clusterPropertiesModal');
+    const originalValuesStr = modal ? modal.getAttribute('data-original-values') : null;
+    const originalValues = originalValuesStr ? JSON.parse(originalValuesStr) : {};
+    
     const formData = new FormData(form);
     const data = {};
     
-    // Собираем данные формы
+    // Собираем данные формы и сравниваем с исходными значениями
     for (let [key, value] of formData.entries()) {
-        data[key] = value;
+        // Получаем исходное значение для этого поля
+        const originalValue = originalValues[key];
+        
+        // Для полей, которые могут быть очищены (пустая строка = очистка)
+        const clearableFields = ['restart_schedule'];
+        if (clearableFields.includes(key)) {
+            const trimmedValue = value ? value.trim() : '';
+            // Передаем только если значение изменилось
+            if (trimmedValue !== (originalValue || '')) {
+                data[key] = trimmedValue; // Передаем пустую строку для очистки, если поле пустое
+            }
+        } else {
+            // Для остальных полей передаем только если значение изменилось
+            if (value !== originalValue) {
+                data[key] = value;
+            }
+        }
     }
     
     try {

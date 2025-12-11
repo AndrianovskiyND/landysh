@@ -423,7 +423,22 @@ class RACClient:
                 # Для булевых значений используем yes/no
                 if isinstance(value, bool):
                     value = 'yes' if value else 'no'
-                args.append(f'{param_name}={value}')
+                
+                value_str = str(value)
+                
+                # Для строковых значений с пробелами (например, restart-schedule с cron-выражением)
+                # передаем параметр и значение отдельно, чтобы RAC правильно распознал значение
+                if isinstance(value, str) and ' ' in value_str:
+                    # Для строк с пробелами передаем параметр и значение отдельно
+                    # Это позволяет RAC правильно распознать значение с пробелами
+                    args.append(param_name)
+                    args.append(value_str)
+                elif isinstance(value, str) and value_str == '' and key == 'restart_schedule':
+                    # Для пустого значения restart_schedule передаем параметр с пустым значением для очистки
+                    args.append(f'{param_name}=')
+                else:
+                    # Для остальных значений передаем в формате --param=value
+                    args.append(f'{param_name}={value_str}')
         
         return self._execute_command(args)
     

@@ -239,6 +239,24 @@ async function refreshSessionsTable(connectionId, clusterUuid, infobaseUuid) {
 }
 
 /**
+ * Получить русское название столбца сеанса
+ */
+function getSessionColumnDisplayName(key) {
+    const columnNames = {
+        'infobase': 'Инф. база',
+        'user-name': 'Пользователь',
+        'username': 'Пользователь', // Альтернативное название
+        'app-id': 'Приложение',
+        'host': 'Компьютер',
+        'client-ip': 'IP Клиента',
+        'session-id': 'Номер сеанса',
+        'hibernate': 'Спящий',
+        'session': 'UUID сеанса'
+    };
+    return columnNames[key] || key;
+}
+
+/**
  * Отрисовывает таблицу сеансов
  */
 function renderSessionsTable(sessions, connectionId, clusterUuid) {
@@ -258,10 +276,22 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
     allKeys.add('session');
     const sortedKeys = Array.from(allKeys).sort();
     
+    // Определяем столбцы по умолчанию (в нужном порядке)
+    const defaultColumns = ['infobase', 'user-name', 'app-id', 'host', 'client-ip', 'session-id', 'hibernate'];
+    // Также проверяем альтернативное название username
+    if (!sortedKeys.includes('user-name') && sortedKeys.includes('username')) {
+        const index = defaultColumns.indexOf('user-name');
+        if (index !== -1) {
+            defaultColumns[index] = 'username';
+        }
+    }
+    
     // Получаем сохраненное состояние видимости столбцов
-    // По умолчанию UUID выключен, остальные включены
+    // По умолчанию показываем только нужные столбцы
     if (!window._sessionsVisibleColumns) {
-        window._sessionsVisibleColumns = new Set(sortedKeys.filter(k => k !== 'session'));
+        // Фильтруем только те столбцы, которые существуют в данных
+        const availableDefaultColumns = defaultColumns.filter(col => sortedKeys.includes(col));
+        window._sessionsVisibleColumns = new Set(availableDefaultColumns);
     }
     const visibleColumns = window._sessionsVisibleColumns;
     
@@ -269,7 +299,15 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
     const columnOrderKey = `sessions_column_order_${connectionId}_${clusterUuid}`;
     let columnOrder = JSON.parse(localStorage.getItem(columnOrderKey) || 'null');
     if (!columnOrder || !Array.isArray(columnOrder)) {
-        columnOrder = sortedKeys.filter(k => visibleColumns.has(k));
+        // Используем порядок по умолчанию, фильтруя только видимые столбцы
+        const defaultOrder = defaultColumns.filter(col => visibleColumns.has(col) && sortedKeys.includes(col));
+        // Добавляем остальные видимые столбцы в конец
+        sortedKeys.forEach(k => {
+            if (visibleColumns.has(k) && !defaultOrder.includes(k)) {
+                defaultOrder.push(k);
+            }
+        });
+        columnOrder = defaultOrder;
     } else {
         // Фильтруем порядок, оставляя только видимые столбцы
         columnOrder = columnOrder.filter(k => visibleColumns.has(k));
@@ -310,7 +348,7 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
             <thead>
                 <tr style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
                     <th style="padding: 0.5rem; text-align: left; border: 1px solid #ddd; width: 40px;">
-                        <input type="checkbox" id="selectAllSessionsHeader" onchange="toggleSelectAllSessions()">
+                        <input type="checkbox" id="selectAllSessionsHeader" onchange="toggleSelectAllSessions()" onfocus="this.blur()" style="cursor: pointer;">
                     </th>
     `;
     
@@ -323,7 +361,7 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
                     <div style="display: flex; align-items: center; gap: 0.25rem;">
                         <input type="text" class="column-search-input" placeholder="🔍" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px;" onkeyup="filterSessionsColumn('${key}', this.value)" data-column="${key}">
                     </div>
-                    <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(key === 'session' ? 'UUID сеанса' : key)}</div>
+                    <div style="font-weight: 600; word-wrap: break-word; white-space: normal;">${escapeHtml(getSessionColumnDisplayName(key))}</div>
                 </div>
                 <div class="resize-handle" style="position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 1;"></div>
             </th>`;
@@ -340,8 +378,8 @@ function renderSessionsTable(sessions, connectionId, clusterUuid) {
         const isSelected = selectedSessions.has(session.uuid);
         html += `
             <tr class="session-row" data-session-uuid="${session.uuid}" data-index="${index}" style="cursor: pointer;">
-                <td style="padding: 0.5rem; border: 1px solid #ddd; text-align: center;" onclick="event.stopPropagation();">
-                    <input type="checkbox" class="session-checkbox" value="${session.uuid}" ${isSelected ? 'checked' : ''} onchange="updateSessionSelection('${session.uuid}', this.checked)">
+                <td contenteditable="false" style="padding: 0.5rem; border: 1px solid #ddd; text-align: center; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;" onclick="if(event.target.type !== 'checkbox') { event.stopPropagation(); }" onfocus="if(event.target.type !== 'checkbox') { this.blur(); }">
+                    <input type="checkbox" class="session-checkbox" value="${session.uuid}" ${isSelected ? 'checked' : ''} onchange="updateSessionSelection('${session.uuid}', this.checked)" onfocus="this.blur()" style="cursor: pointer;">
                 </td>
         `;
         
@@ -519,7 +557,12 @@ async function interruptSelectedSessionsFromTable() {
     }
     
     const count = sessionUuids.length;
-    if (!confirm(`Вы уверены, что хотите прервать текущий серверный вызов для ${count} сеанс${count > 1 ? 'ов' : ''}?`)) {
+    const confirmed = await showConfirmModal(
+        `Вы уверены, что хотите прервать текущий серверный вызов для ${count} сеанс${count > 1 ? 'ов' : ''}?`,
+        'Подтверждение прерывания серверных вызовов'
+    );
+    
+    if (!confirmed) {
         return;
     }
     
@@ -964,14 +1007,14 @@ function exportSessionsToExcel() {
     // Создаем CSV данные
     let csv = '\uFEFF'; // BOM для правильной кодировки UTF-8 в Excel
     
-    // Заголовки (включаем UUID если он видим)
+    // Заголовки с русскими названиями (включаем UUID если он видим)
     const headers = [];
     if (visibleColumns.has('session')) {
-        headers.push('UUID сеанса');
+        headers.push(getSessionColumnDisplayName('session'));
     }
     sortedKeys.forEach(key => {
         if (key !== 'session' && visibleColumns.has(key)) {
-            headers.push(key);
+            headers.push(getSessionColumnDisplayName(key));
         }
     });
     // Используем точку с запятой как разделитель для лучшей совместимости с Excel
@@ -1051,10 +1094,22 @@ function updateSessionsColumnFilterList() {
     
     const sortedKeys = Array.from(allKeys).sort();
     
+    // Определяем столбцы по умолчанию (в нужном порядке)
+    const defaultColumns = ['infobase', 'user-name', 'app-id', 'host', 'client-ip', 'session-id', 'hibernate'];
+    // Также проверяем альтернативное название username
+    if (!sortedKeys.includes('user-name') && sortedKeys.includes('username')) {
+        const index = defaultColumns.indexOf('user-name');
+        if (index !== -1) {
+            defaultColumns[index] = 'username';
+        }
+    }
+    
     // Получаем сохраненное состояние видимости столбцов
-    // По умолчанию UUID выключен, остальные включены
+    // По умолчанию показываем только нужные столбцы
     if (!window._sessionsVisibleColumns) {
-        window._sessionsVisibleColumns = new Set(sortedKeys.filter(k => k !== 'session'));
+        // Фильтруем только те столбцы, которые существуют в данных
+        const availableDefaultColumns = defaultColumns.filter(col => sortedKeys.includes(col));
+        window._sessionsVisibleColumns = new Set(availableDefaultColumns);
     }
     const visibleColumns = window._sessionsVisibleColumns;
     
@@ -1070,7 +1125,7 @@ function updateSessionsColumnFilterList() {
     
     sortedKeys.forEach(key => {
         const isVisible = visibleColumns.has(key);
-        const displayName = key === 'session' ? 'UUID сеанса' : key;
+        const displayName = getSessionColumnDisplayName(key);
         html += `
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                 <input type="checkbox" class="session-column-checkbox" data-column="${key}" ${isVisible ? 'checked' : ''} onchange="toggleSessionsColumn('${key}', this.checked)">

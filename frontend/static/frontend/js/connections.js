@@ -584,6 +584,29 @@ function filterSessionsTable() {
 }
 
 /**
+ * Фильтрует столбец сеансов по значению поиска
+ */
+function filterSessionsColumn(columnKey, searchValue) {
+    const table = document.getElementById('sessionsTable');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tbody tr');
+    const searchLower = searchValue.toLowerCase();
+    
+    rows.forEach(row => {
+        const cell = row.querySelector(`td[data-column="${columnKey}"]`);
+        if (cell) {
+            const cellText = cell.textContent.toLowerCase();
+            if (searchValue === '' || cellText.includes(searchLower)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        }
+    });
+}
+
+/**
  * Сортирует таблицу сеансов
  */
 function sortSessionsTable(columnKey) {

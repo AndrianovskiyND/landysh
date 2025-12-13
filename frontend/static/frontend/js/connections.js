@@ -5499,48 +5499,9 @@ async function loadAdminsIntoTree(connectionId, clusterUuid, sectionId) {
 }
 
 /**
- * Показать контекстное меню для администраторов
- */
-function showAdminsContextMenu(event, connectionId, clusterUuid) {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    // Удаляем предыдущее меню если есть
-    const existingMenu = document.getElementById('adminsContextMenu');
-    if (existingMenu) {
-        existingMenu.remove();
-    }
-    
-    const menu = document.createElement('div');
-    menu.id = 'adminsContextMenu';
-    menu.className = 'context-menu';
-    menu.style.position = 'fixed';
-    menu.style.left = event.clientX + 'px';
-    menu.style.top = event.clientY + 'px';
-    menu.style.zIndex = '10000';
-    
-    menu.innerHTML = `
-        <div class="context-menu-item" onclick="openCreateClusterAdminModal(${connectionId}, '${clusterUuid}'); closeContextMenu();">
-            Создать администратора
-        </div>
-    `;
-    
-    document.body.appendChild(menu);
-    
-    const closeMenu = (e) => {
-        if (!menu.contains(e.target)) {
-            closeContextMenu();
-            document.removeEventListener('click', closeMenu);
-        }
-    };
-    
-    setTimeout(() => {
-        document.addEventListener('click', closeMenu);
-    }, 100);
-}
-
-/**
  * Показать контекстное меню для администратора
+ * 
+ * Примечание: Функция showAdminsContextMenu перенесена в connections-admins.js
  */
 function showAdminContextMenu(event, connectionId, clusterUuid, adminName) {
     event.preventDefault();

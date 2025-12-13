@@ -6708,7 +6708,7 @@ def get_cluster_admins(request, connection_id, cluster_uuid):
                     if ':' in line:
                         key, value = line.split(':', 1)
                         key = key.strip()
-                        value = value.strip()
+                        value = value.strip().strip('"')
                         if key == 'name':
                             current_admin['name'] = value
                         elif key == 'auth':

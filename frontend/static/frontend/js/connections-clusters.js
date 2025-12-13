@@ -56,9 +56,6 @@ async function loadConnectionData(connectionId, connectionName = null) {
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h4 style="margin: 0;">📊 Кластеры: ${escapeHtml(displayConnectionName)}</h4>
                         <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn btn-secondary" onclick="showAgentsTable(${connectionId})">
-                                Агенты
-                            </button>
                             <button class="btn btn-primary" onclick="openRegisterClusterModal(${connectionId})">
                                 + Регистрация нового кластера
                             </button>
@@ -169,6 +166,24 @@ async function loadConnectionData(connectionId, connectionName = null) {
                 clustersHTML += `</div>`;
             }
             
+            // Добавляем "Администраторы агента кластера" всегда внизу
+            const agentsSectionId = `agents-${connectionId}`;
+            clustersHTML += `
+                <div class="cluster-tree-node" data-agents-section-id="${agentsSectionId}" style="margin-top: 0.75rem;">
+                    <div class="cluster-header" 
+                         data-connection-id="${connectionId}"
+                         data-agents-section="true"
+                         oncontextmenu="showAgentsContextMenu(event, ${connectionId}); return false;"
+                         style="background: linear-gradient(135deg, #6c757d 0%, #545b62 100%); color: white; border-color: #545b62; cursor: pointer;">
+                        <span class="tree-toggle" onclick="event.stopPropagation(); toggleAgentsNode('${agentsSectionId}')">▶</span>
+                        <span class="cluster-name" style="color: white;">🤖 Администраторы агента кластера</span>
+                    </div>
+                    <div class="cluster-children" id="${agentsSectionId}-children" style="display: none;">
+                        <div style="padding: 0.5rem; color: #666; font-style: italic;">Загрузка...</div>
+                    </div>
+                </div>
+            `;
+            
             clustersHTML += '</div>';
             contentArea.innerHTML = clustersHTML;
             
@@ -221,6 +236,14 @@ function setupClusterEventHandlers() {
     window._clusterContextMenuHandler = (e) => {
         const clusterHeader = e.target.closest('.cluster-header');
         if (clusterHeader) {
+            // Проверяем, это ли "Администраторы агента кластера"
+            if (clusterHeader.dataset.agentsSection === 'true') {
+                e.preventDefault();
+                const connectionId = clusterHeader.dataset.connectionId;
+                showAgentsContextMenu(e, parseInt(connectionId));
+                return;
+            }
+            
             e.preventDefault();
             const connectionId = clusterHeader.dataset.connectionId;
             const clusterUuid = clusterHeader.dataset.clusterUuid;
@@ -250,6 +273,43 @@ function setupClusterEventHandlers() {
     window._clusterClickHandler = (e) => {
         // Игнорируем клики внутри модальных окон
         if (e.target.closest('.modal-overlay')) {
+            return;
+        }
+        
+        // Обработчик клика на заголовок кластера (раскрытие/сворачивание)
+        const clusterHeader = e.target.closest('.cluster-header');
+        if (clusterHeader) {
+            // Игнорируем клики на кнопки внутри заголовка (они уже используют stopPropagation)
+            if (e.target.closest('button') || e.target.closest('.tree-toggle')) {
+                return;
+            }
+            
+            // Проверяем, это ли "Администраторы агента кластера"
+            if (clusterHeader.dataset.agentsSection === 'true') {
+                const agentsSectionId = clusterHeader.closest('.cluster-tree-node')?.dataset.agentsSectionId;
+                if (agentsSectionId) {
+                    toggleAgentsNode(agentsSectionId);
+                }
+                return;
+            }
+            
+            // Обычный кластер
+            const connectionId = clusterHeader.dataset.connectionId;
+            const clusterUuid = clusterHeader.dataset.clusterUuid;
+            if (connectionId && clusterUuid) {
+                const clusterId = `cluster-${connectionId}-${clusterUuid}`;
+                toggleClusterNode(clusterId);
+            }
+            return;
+        }
+        
+        // Обработчик клика на треугольник агентов (если клик не обработан выше)
+        if (e.target.matches('[onclick*="toggleAgentsNode"]')) {
+            const onclickAttr = e.target.getAttribute('onclick');
+            const match = onclickAttr.match(/toggleAgentsNode\('([^']+)'\)/);
+            if (match) {
+                toggleAgentsNode(match[1]);
+            }
             return;
         }
         
@@ -343,6 +403,252 @@ function toggleSectionNode(sectionId) {
             children.style.display = 'none';
             if (toggle) toggle.textContent = '▶';
         }
+    }
+}
+
+/**
+ * Переключает раскрытие/сворачивание узла "Администраторы агента кластера"
+ */
+function toggleAgentsNode(agentsSectionId) {
+    const children = document.getElementById(`${agentsSectionId}-children`);
+    const toggle = document.querySelector(`[onclick="toggleAgentsNode('${agentsSectionId}')"]`);
+    
+    if (children) {
+        const isCurrentlyOpen = children.style.display !== 'none';
+        
+        if (!isCurrentlyOpen) {
+            // Раскрываем и загружаем агентов
+            children.style.display = 'block';
+            if (toggle) toggle.textContent = '▼';
+            
+            // Получаем connectionId из родительского элемента
+            const clusterNode = document.querySelector(`[data-agents-section-id="${agentsSectionId}"]`);
+            const connectionId = clusterNode?.querySelector('.cluster-header')?.dataset.connectionId;
+            if (connectionId) {
+                loadAgentsIntoTree(parseInt(connectionId), agentsSectionId);
+            }
+        } else {
+            // Сворачиваем
+            children.style.display = 'none';
+            if (toggle) toggle.textContent = '▶';
+        }
+    }
+}
+
+/**
+ * Загружает список агентов и отображает их в дереве
+ */
+async function loadAgentsIntoTree(connectionId, agentsSectionId) {
+    const childrenContainer = document.getElementById(`${agentsSectionId}-children`);
+    if (!childrenContainer) return;
+    
+    childrenContainer.innerHTML = '<div style="padding: 0.5rem; color: #666; font-style: italic;">Загрузка...</div>';
+    
+    try {
+        const response = await fetch(`/api/clusters/agents/${connectionId}/`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const agents = data.agents || [];
+            let html = '';
+            
+            if (agents.length === 0) {
+                html = '<div style="padding: 0.5rem; color: #666; font-style: italic; margin-left: 1.5rem;">Агентов не найдено</div>';
+            } else {
+                agents.forEach(agent => {
+                    const agentName = escapeHtml(agent.name || '');
+                    html += `
+                        <div class="tree-item" 
+                             data-connection-id="${connectionId}"
+                             data-agent-name="${agentName.replace(/'/g, "\\'")}"
+                             oncontextmenu="showAgentContextMenu(event, ${connectionId}, '${agentName.replace(/'/g, "\\'")}'); return false;"
+                             style="margin-left: 1.5rem; padding: 0.5rem; cursor: pointer;">
+                            <span class="tree-icon">👤</span>
+                            <span>${agentName}</span>
+                        </div>
+                    `;
+                });
+            }
+            
+            childrenContainer.innerHTML = html;
+        } else {
+            childrenContainer.innerHTML = `<div style="padding: 0.5rem; color: #dc3545; margin-left: 1.5rem;">Ошибка: ${data.error || 'Неизвестная ошибка'}</div>`;
+        }
+    } catch (error) {
+        childrenContainer.innerHTML = `<div style="padding: 0.5rem; color: #dc3545; margin-left: 1.5rem;">Ошибка загрузки: ${error.message}</div>`;
+    }
+}
+
+/**
+ * Показать контекстное меню для "Администраторы агента кластера"
+ */
+function showAgentsContextMenu(event, connectionId) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const contextMenu = document.getElementById('contextMenu');
+    if (contextMenu) {
+        contextMenu.remove();
+    }
+    
+    const menu = document.createElement('div');
+    menu.id = 'contextMenu';
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.pageX + 'px';
+    menu.style.top = event.pageY + 'px';
+    menu.style.zIndex = '10000';
+    
+    menu.innerHTML = `
+        <div class="context-menu-item" onclick="openCreateAgentModal(${connectionId}); closeContextMenu();">
+            Создать
+        </div>
+        <div class="context-menu-item" onclick="openAgentsListModal(${connectionId}); closeContextMenu();">
+            Получить список
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    // Закрываем меню при клике вне его
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu() {
+            closeContextMenu();
+            document.removeEventListener('click', closeMenu);
+        });
+    }, 0);
+}
+
+/**
+ * Открыть модальное окно со списком администраторов агента кластера
+ */
+async function openAgentsListModal(connectionId) {
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('agentsListModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Создаём модальное окно в стилистике системы
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay optimized';
+    modal.id = 'agentsListModal';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>🤖 Список администраторов агента кластера</h3>
+                <button class="modal-close-btn" onclick="closeAgentsListModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="agentsListContent" style="padding: 1rem;">
+                    <p style="text-align: center;">⏳ Загрузка администраторов агента...</p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Закрытие при клике на overlay
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeAgentsListModal();
+        }
+    });
+    
+    // Загружаем список администраторов агента
+    await loadAgentsList(connectionId);
+}
+
+/**
+ * Загрузить список администраторов агента кластера
+ */
+async function loadAgentsList(connectionId) {
+    const contentContainer = document.getElementById('agentsListContent');
+    if (!contentContainer) return;
+    
+    try {
+        const response = await fetch(`/api/clusters/agents/${connectionId}/`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            contentContainer.innerHTML = `
+                <div style="color: #d52b1e; padding: 1rem;">
+                    ❌ Ошибка загрузки: ${escapeHtml(data.error || 'Неизвестная ошибка')}
+                </div>
+            `;
+            return;
+        }
+        
+        const agents = data.agents || [];
+        
+        if (agents.length === 0) {
+            contentContainer.innerHTML = `
+                <div style="padding: 1rem; color: #666; font-style: italic; text-align: center;">
+                    Администраторы агента не найдены
+                </div>
+            `;
+            return;
+        }
+        
+        // Отображаем список администраторов агента
+        renderAgentsList(agents);
+    } catch (error) {
+        if (contentContainer) {
+            contentContainer.innerHTML = `
+                <div style="color: #d52b1e; padding: 1rem;">
+                    ❌ Ошибка загрузки: ${escapeHtml(error.message)}
+                </div>
+            `;
+        }
+    }
+}
+
+/**
+ * Отрисовать список администраторов агента в модальном окне
+ */
+function renderAgentsList(agents) {
+    const contentContainer = document.getElementById('agentsListContent');
+    if (!contentContainer) return;
+    
+    let html = '';
+    
+    agents.forEach((agent) => {
+        const agentName = agent.name || '';
+        const auth = agent.auth || '';
+        const osUser = agent.os_user || '';
+        const descr = agent.descr || '';
+        
+        html += `
+            <div class="info-card" style="margin-bottom: 0.75rem;">
+                <h4>👤 Имя: ${escapeHtml(agentName)}</h4>
+                <div class="info-row">
+                    <span class="info-label" style="font-weight: 600; min-width: 120px;">Аутентификация:</span>
+                    <span class="info-value">${escapeHtml(auth)}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label" style="font-weight: 600; min-width: 120px;">Пользователь ОС:</span>
+                    <span class="info-value">${escapeHtml(osUser)}</span>
+                </div>
+                <div class="info-row" style="padding-top: 0.5rem; padding-bottom: 0 !important;">
+                    <span class="info-label" style="font-weight: 600; min-width: 120px;">Описание:</span>
+                    <span class="info-value">${escapeHtml(descr)}</span>
+                </div>
+            </div>
+        `;
+    });
+    
+    contentContainer.innerHTML = html;
+}
+
+/**
+ * Закрыть модальное окно списка администраторов агента
+ */
+function closeAgentsListModal() {
+    const modal = document.getElementById('agentsListModal');
+    if (modal) {
+        modal.classList.add('modal-closing');
+        setTimeout(() => modal.remove(), 200);
     }
 }
 

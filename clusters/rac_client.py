@@ -132,8 +132,16 @@ class RACClient:
                     cmd_args.insert(2, f'--cluster-pwd={self.cluster_password}')
         
         # Добавляем аутентификацию агента для команд, которые её поддерживают
-        # Команда 'cluster list' поддерживает параметры --agent-user и --agent-pwd
-        if self.server_connection.agent_user:
+        # Параметры --agent-user и --agent-pwd поддерживаются только для команд уровня агента
+        # (команды БЕЗ --cluster=), а НЕ для команд уровня кластера (команды С --cluster=)
+        # Команда 'cluster list' также НЕ поддерживает эти параметры
+        # Проверяем, есть ли в команде параметр --cluster= (команды уровня кластера)
+        has_cluster_param = any(arg.startswith('--cluster=') for arg in cmd_args)
+        
+        # Добавляем --agent-user и --agent-pwd только если:
+        # 1. Это НЕ команда 'cluster list'
+        # 2. В команде НЕТ параметра --cluster= (т.е. это команда уровня агента)
+        if not is_cluster_list and not has_cluster_param and self.server_connection.agent_user:
             # Параметры --agent-user и --agent-pwd можно добавлять в любом месте команды
             # Добавляем их перед connection_str (в конец аргументов, но перед connection_str)
             insert_pos = len(cmd_args) - 1  # Позиция перед connection_str
@@ -442,62 +450,42 @@ class RACClient:
         
         return self._execute_command(args)
     
-    def insert_cluster(self, host, port, **kwargs):
+    def insert_cluster(self, host, port, name=None):
         """Регистрирует новый кластер
         
         Args:
             host: Имя или IP-адрес компьютера нового кластера (параметр --host)
             port: Основной порт основного менеджера нового кластера (параметр --port)
-            **kwargs: Дополнительные параметры (name, expiration-timeout, и т.д.)
+            name: Имя кластера (параметр --name, опционально)
         """
         # Получаем host:port из настроек подключения (ServerConnection)
         # Это то, что идёт после 'rac' в команде: rac <host>[:<port>] cluster insert ...
         connection_str = self.server_connection.get_connection_string()
         
-        # Аргументы команды cluster insert
+        # Аргументы команды cluster insert (только минимум)
         args = ['cluster', 'insert', f'--host={host}', f'--port={port}']
         
-        # Маппинг параметров Python на параметры RAC
-        param_mapping = {
-            'name': '--name',
-            'expiration_timeout': '--expiration-timeout',
-            'lifetime_limit': '--lifetime-limit',
-            'max_memory_size': '--max-memory-size',
-            'max_memory_time_limit': '--max-memory-time-limit',
-            'security_level': '--security-level',
-            'session_fault_tolerance_level': '--session-fault-tolerance-level',
-            'load_balancing_mode': '--load-balancing-mode',
-            'errors_count_threshold': '--errors-count-threshold',
-            'kill_problem_processes': '--kill-problem-processes',
-            'kill_by_memory_with_dump': '--kill-by-memory-with-dump',
-            'allow_access_right_audit_events_recording': '--allow-access-right-audit-events-recording',
-            'ping_period': '--ping-period',
-            'ping_timeout': '--ping-timeout',
-        }
+        # Добавляем имя кластера, если указано
+        if name:
+            args.append(f'--name={name}')
         
-        for key, value in kwargs.items():
-            if key in param_mapping and value is not None:
-                param_name = param_mapping[key]
-                # Для булевых значений используем yes/no
-                if isinstance(value, bool):
-                    value = 'yes' if value else 'no'
-                args.append(f'{param_name}={value}')
-        
-        # Формируем команду: rac [auth] cluster insert ... <connection_str>
+        # Формируем команду: rac cluster insert ... <connection_str> [--agent-user=...] [--agent-pwd=...]
         # где connection_str - это host:port из настроек подключения
+        # При регистрации нового кластера --cluster-user и --cluster-pwd НЕ нужны,
+        # так как кластер еще не создан и администратора кластера еще нет
         cmd_args = [self.rac_path]
-        
-        # Добавляем аутентификацию если есть (после rac, перед аргументами команды)
-        if self.cluster_admin:
-            cmd_args.append(f'--cluster-user={self.cluster_admin}')
-            if self.cluster_password:
-                cmd_args.append(f'--cluster-pwd={self.cluster_password}')
         
         # Добавляем аргументы команды
         cmd_args.extend(args)
         
         # Добавляем connection_str в конец (host:port из настроек подключения)
         cmd_args.append(connection_str)
+        
+        # Добавляем аутентификацию агента в конец (команда cluster insert требует --agent-user и --agent-pwd)
+        if self.server_connection.agent_user:
+            cmd_args.append(f'--agent-user={self.server_connection.agent_user}')
+            if self.server_connection.agent_password:
+                cmd_args.append(f'--agent-pwd={self.server_connection.agent_password}')
         
         # Логируем маскированную команду
         masked_cmd = self._mask_sensitive_data(' '.join(cmd_args))

@@ -432,12 +432,11 @@ async function openConnectionEditModal(connectionId) {
                     
                     <!-- Учетные данные агента кластера -->
                     <div class="info-card" style="margin-bottom: 1rem;">
-                        <h4 style="border-bottom-color: var(--primary-color);">🤖 Агент кластера</h4>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem;">
+                            <h4 style="border-bottom: none; margin: 0; padding: 0;">🤖 Агент кластера</h4>
+                            <input type="checkbox" id="modalUseAgentAuth" ${connectionData?.agent_user ? 'checked' : ''} onchange="toggleAgentAuthFields()" style="margin: 0;">
+                        </div>
                         <div class="edit-form">
-                            <div class="form-row checkbox-row" style="margin-top: 0.5rem;">
-                                <input type="checkbox" id="modalUseAgentAuth" ${connectionData?.agent_user ? 'checked' : ''} onchange="toggleAgentAuthFields()">
-                                <label for="modalUseAgentAuth" style="font-weight: normal; text-transform: none; letter-spacing: normal;">Использовать УЗ агента кластера</label>
-                            </div>
                             <div id="agentAuthFields" style="display: ${connectionData?.agent_user ? 'block' : 'none'};">
                                 <div class="form-row">
                                     <label for="modalAgentUser">Логин агента</label>

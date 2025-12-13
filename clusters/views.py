@@ -179,16 +179,21 @@ def update_connection(request, connection_id):
             data = json.loads(request.body)
             
             # Обновляем поля
-            connection.display_name = data.get('display_name', connection.display_name)
-            connection.server_host = data.get('server_host', connection.server_host)
-            connection.ras_port = data.get('ras_port', connection.ras_port)
-            connection.cluster_admin = data.get('cluster_admin', connection.cluster_admin)
-            connection.agent_user = data.get('agent_user', connection.agent_user)
+            if 'display_name' in data:
+                connection.display_name = data.get('display_name')
+            if 'server_host' in data:
+                connection.server_host = data.get('server_host')
+            if 'ras_port' in data:
+                connection.ras_port = data.get('ras_port')
+            if 'cluster_admin' in data:
+                connection.cluster_admin = data.get('cluster_admin')
+            if 'agent_user' in data:
+                connection.agent_user = data.get('agent_user')
             
-            # Пароли обновляем только если указаны новые
-            if data.get('cluster_password'):
+            # Пароли обновляем только если указаны новые (включая пустые строки для очистки)
+            if 'cluster_password' in data:
                 connection.cluster_password = data.get('cluster_password')
-            if data.get('agent_password'):
+            if 'agent_password' in data:
                 connection.agent_password = data.get('agent_password')
             
             connection.save()
@@ -3784,40 +3789,11 @@ def insert_cluster(request, connection_id):
         if not host or not port:
             return JsonResponse({'success': False, 'error': 'Host и Port обязательны'})
         
-        # Подготавливаем параметры для регистрации
-        insert_params = {}
+        # Опциональное имя кластера
+        name = data.get('name', '').strip()
         
-        # Маппинг полей из формы в параметры RAC
-        field_mapping = {
-            'name': 'name',
-            'expiration_timeout': 'expiration_timeout',
-            'lifetime_limit': 'lifetime_limit',
-            'max_memory_size': 'max_memory_size',
-            'max_memory_time_limit': 'max_memory_time_limit',
-            'security_level': 'security_level',
-            'session_fault_tolerance_level': 'session_fault_tolerance_level',
-            'load_balancing_mode': 'load_balancing_mode',
-            'errors_count_threshold': 'errors_count_threshold',
-            'kill_problem_processes': 'kill_problem_processes',
-            'kill_by_memory_with_dump': 'kill_by_memory_with_dump',
-            'allow_access_right_audit_events_recording': 'allow_access_right_audit_events_recording',
-            'ping_period': 'ping_period',
-            'ping_timeout': 'ping_timeout',
-        }
-        
-        for form_field, rac_param in field_mapping.items():
-            if form_field in data and data[form_field] != '':
-                value = data[form_field]
-                # Преобразуем строковые "yes"/"no" в булевы значения
-                if value in ['yes', 'no']:
-                    value = value == 'yes'
-                # Преобразуем числовые строки в числа
-                elif isinstance(value, str) and value.isdigit():
-                    value = int(value)
-                insert_params[rac_param] = value
-        
-        # Выполняем регистрацию
-        result = rac_client.insert_cluster(host, port, **insert_params)
+        # Выполняем регистрацию (передаем только минимум: host, port, name)
+        result = rac_client.insert_cluster(host, port, name=name if name else None)
         
         if result['success']:
             return JsonResponse({

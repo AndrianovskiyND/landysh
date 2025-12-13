@@ -1945,7 +1945,7 @@ function openRegisterClusterModal(connectionId) {
     modal.className = 'modal-overlay optimized';
     modal.id = 'registerClusterModal';
     modal.innerHTML = `
-        <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal" style="max-width: 500px;">
             <div class="modal-header">
                 <h3>➕ Регистрация нового кластера</h3>
                 <button class="modal-close-btn" onclick="closeRegisterClusterModal()">×</button>
@@ -1955,83 +1955,16 @@ function openRegisterClusterModal(connectionId) {
                     <div class="info-card">
                         <h4>📊 Основная информация</h4>
                         <div class="form-row">
+                            <label>Имя кластера:</label>
+                            <input type="text" id="registerName" name="name" placeholder="Локальный кластер">
+                        </div>
+                        <div class="form-row">
                             <label>Хост (обязательно):</label>
                             <input type="text" id="registerHost" name="host" required placeholder="localhost или IP-адрес">
                         </div>
                         <div class="form-row">
                             <label>Порт (обязательно):</label>
                             <input type="number" id="registerPort" name="port" value="1541" required>
-                        </div>
-                        <div class="form-row">
-                            <label>Имя кластера:</label>
-                            <input type="text" id="registerName" name="name" placeholder="Локальный кластер">
-                        </div>
-                    </div>
-                    <div class="info-card">
-                        <h4>⚙️ Параметры кластера</h4>
-                        <div class="form-row">
-                            <label>Период принудительного завершения (секунды):</label>
-                            <input type="number" id="registerExpirationTimeout" name="expiration_timeout" value="60">
-                        </div>
-                        <div class="form-row">
-                            <label>Период перезапуска рабочих процессов (секунды):</label>
-                            <input type="number" id="registerLifetimeLimit" name="lifetime_limit" value="0">
-                        </div>
-                        <div class="form-row">
-                            <label>Максимальный объем памяти (КБ):</label>
-                            <input type="number" id="registerMaxMemorySize" name="max_memory_size" value="0">
-                        </div>
-                        <div class="form-row">
-                            <label>Максимальный период превышения памяти (секунды):</label>
-                            <input type="number" id="registerMaxMemoryTimeLimit" name="max_memory_time_limit" value="0">
-                        </div>
-                        <div class="form-row">
-                            <label>Уровень безопасности:</label>
-                            <input type="number" id="registerSecurityLevel" name="security_level" value="0">
-                        </div>
-                        <div class="form-row">
-                            <label>Уровень отказоустойчивости:</label>
-                            <input type="number" id="registerSessionFaultToleranceLevel" name="session_fault_tolerance_level" value="0">
-                        </div>
-                        <div class="form-row">
-                            <label>Режим распределения нагрузки:</label>
-                            <select id="registerLoadBalancingMode" name="load_balancing_mode">
-                                <option value="performance" selected>Приоритет по производительности</option>
-                                <option value="memory">Приоритет по памяти</option>
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>Допустимое отклонение ошибок (%):</label>
-                            <input type="number" id="registerErrorsCountThreshold" name="errors_count_threshold" value="0">
-                        </div>
-                        <div class="form-row">
-                            <label>Принудительно завершать проблемные процессы:</label>
-                            <select id="registerKillProblemProcesses" name="kill_problem_processes">
-                                <option value="yes" selected>Да</option>
-                                <option value="no">Нет</option>
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>Формировать дамп при превышении памяти:</label>
-                            <select id="registerKillByMemoryWithDump" name="kill_by_memory_with_dump">
-                                <option value="yes">Да</option>
-                                <option value="no" selected>Нет</option>
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>Разрешать запись событий аудита:</label>
-                            <select id="registerAllowAccessRightAuditEventsRecording" name="allow_access_right_audit_events_recording">
-                                <option value="yes">Да</option>
-                                <option value="no" selected>Нет</option>
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <label>Период отправки ping (миллисекунды):</label>
-                            <input type="number" id="registerPingPeriod" name="ping_period" value="0">
-                        </div>
-                        <div class="form-row">
-                            <label>Таймаут ping (миллисекунды):</label>
-                            <input type="number" id="registerPingTimeout" name="ping_timeout" value="0">
                         </div>
                     </div>
                     <div class="form-actions" style="margin-top: 1.5rem;">
@@ -2113,10 +2046,130 @@ async function saveRegisterCluster(connectionId) {
 /**
  * Удаляет кластер
  */
-async function deleteCluster(connectionId, clusterUuid, clusterName) {
-    if (!confirm(`Вы уверены, что хотите удалить кластер "${clusterName}"?`)) {
+/**
+ * Открыть модальное окно подтверждения удаления кластера
+ */
+function openDeleteClusterModal(connectionId, clusterUuid, clusterName) {
+    // Удаляем предыдущее модальное окно если есть
+    const existingModal = document.getElementById('deleteClusterModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modalHtml = `
+        <div class="modal-overlay optimized" id="deleteClusterModal">
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>🗑️ Удаление кластера</h3>
+                    <button class="modal-close-btn" onclick="closeDeleteClusterModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card">
+                        <p style="margin: 0; font-size: 1rem; line-height: 1.5;">
+                            Вы уверены, что хотите удалить кластер <strong>${escapeHtml(clusterName)}</strong>?
+                        </p>
+                        <p style="margin: 1rem 0 0 0; font-size: 0.9rem; color: #666;">
+                            Это действие нельзя отменить. Для подтверждения введите <strong>УДАЛИТЬ</strong> в поле ниже.
+                        </p>
+                    </div>
+                    <div class="edit-form" style="margin-top: 1rem;">
+                        <div class="form-row">
+                            <label for="deleteClusterConfirm">Подтверждение</label>
+                            <input type="text" id="deleteClusterConfirm" placeholder="Введите УДАЛИТЬ" autocomplete="off" oninput="checkDeleteClusterConfirm()">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeDeleteClusterModal()">Отмена</button>
+                    <button class="btn btn-danger" id="deleteClusterButton" onclick="confirmDeleteCluster(${connectionId}, '${clusterUuid}', '${escapeHtml(clusterName).replace(/'/g, "\\'")}')" disabled style="opacity: 0.5; cursor: not-allowed;">
+                        Удалить кластер
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const container = document.getElementById('modal-container');
+    container.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Фокус на поле ввода
+    setTimeout(() => {
+        const input = document.getElementById('deleteClusterConfirm');
+        if (input) {
+            input.focus();
+        }
+    }, 100);
+    
+    // Закрытие по Escape
+    const escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeDeleteClusterModal();
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+    window._deleteClusterEscapeHandler = escapeHandler;
+    
+    // Закрытие при клике на overlay
+    const modal = document.getElementById('deleteClusterModal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeDeleteClusterModal();
+            }
+        });
+    }
+}
+
+/**
+ * Проверить ввод подтверждения удаления кластера
+ */
+function checkDeleteClusterConfirm() {
+    const input = document.getElementById('deleteClusterConfirm');
+    const button = document.getElementById('deleteClusterButton');
+    
+    if (!input || !button) return;
+    
+    const value = input.value.trim();
+    if (value === 'УДАЛИТЬ') {
+        button.disabled = false;
+        button.style.opacity = '1';
+        button.style.cursor = 'pointer';
+    } else {
+        button.disabled = true;
+        button.style.opacity = '0.5';
+        button.style.cursor = 'not-allowed';
+    }
+}
+
+/**
+ * Закрыть модальное окно удаления кластера
+ */
+function closeDeleteClusterModal() {
+    const modal = document.getElementById('deleteClusterModal');
+    if (modal) {
+        modal.classList.add('modal-closing');
+        setTimeout(() => modal.remove(), 200);
+    }
+    
+    // Удаляем обработчик Escape
+    if (window._deleteClusterEscapeHandler) {
+        document.removeEventListener('keydown', window._deleteClusterEscapeHandler);
+        window._deleteClusterEscapeHandler = null;
+    }
+}
+
+/**
+ * Подтвердить удаление кластера
+ */
+async function confirmDeleteCluster(connectionId, clusterUuid, clusterName) {
+    const input = document.getElementById('deleteClusterConfirm');
+    if (!input || input.value.trim() !== 'УДАЛИТЬ') {
+        showNotification('❌ Введите "УДАЛИТЬ" для подтверждения', true);
         return;
     }
+    
+    closeDeleteClusterModal();
     
     try {
         const csrfToken = getCSRFToken();
@@ -2147,6 +2200,10 @@ async function deleteCluster(connectionId, clusterUuid, clusterName) {
     } catch (error) {
         showNotification('❌ Ошибка удаления: ' + error.message, true);
     }
+}
+
+async function deleteCluster(connectionId, clusterUuid, clusterName) {
+    openDeleteClusterModal(connectionId, clusterUuid, clusterName);
 }
 
 // ============================================
@@ -5283,49 +5340,108 @@ function renderAgentsTable(agents, connectionId) {
 /**
  * Открыть модальное окно создания агента
  */
-function openCreateAgentModal(connectionId) {
-    const modalHtml = `
-        <div class="modal-overlay optimized" id="createAgentModal">
-            <div class="modal" style="max-width: 500px;">
-                <div class="modal-header">
-                    <h3>➕ Создать администратора агента</h3>
-                    <button class="modal-close-btn" onclick="closeModal('createAgentModal')">×</button>
-                </div>
-                <div class="modal-body">
-                    <div class="info-card">
-                        <h4 style="border-bottom-color: var(--primary-color);">📝 Данные администратора</h4>
-                        <div class="edit-form">
-                            <div class="form-row">
-                                <label for="agentName">Имя *</label>
-                                <input type="text" id="agentName" placeholder="admin">
-                            </div>
-                            <div class="form-row">
-                                <label for="agentPwd">Пароль</label>
-                                <input type="password" id="agentPwd" placeholder="••••••••">
-                            </div>
-                            <div class="form-row">
-                                <label for="agentDescr">Описание</label>
-                                <input type="text" id="agentDescr" placeholder="Описание администратора">
+async function openCreateAgentModal(connectionId) {
+    // Проверяем, есть ли уже администраторы агента
+    let isFirstAgent = false;
+    try {
+        const response = await fetch(`/api/clusters/agents/${connectionId}/`);
+        const data = await response.json();
+        if (data.success && (!data.agents || data.agents.length === 0)) {
+            isFirstAgent = true;
+        }
+    } catch (error) {
+        console.error('Error checking agents:', error);
+    }
+    
+    // Проверяем, есть ли уже сохраненные данные агента в подключении
+    try {
+        const connResponse = await fetch('/api/clusters/connections/');
+        const connData = await connResponse.json();
+        const connection = connData.connections?.find(c => c.id === connectionId);
+        const hasAgentAuth = !!(connection?.agent_user);
+        
+        const modalHtml = `
+            <div class="modal-overlay optimized" id="createAgentModal">
+                <div class="modal" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3>➕ Создать администратора агента</h3>
+                        <button class="modal-close-btn" onclick="closeModal('createAgentModal')">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="info-card">
+                            <h4 style="border-bottom-color: var(--primary-color);">📝 Данные администратора</h4>
+                            <div class="edit-form">
+                                <div class="form-row">
+                                    <label for="agentName">Имя *</label>
+                                    <input type="text" id="agentName" placeholder="admin">
+                                </div>
+                                <div class="form-row">
+                                    <label for="agentPwd">Пароль</label>
+                                    <input type="password" id="agentPwd" placeholder="••••••••">
+                                </div>
+                                <div class="form-row">
+                                    <label for="agentDescr">Описание</label>
+                                    <input type="text" id="agentDescr" placeholder="Описание администратора">
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="closeModal('createAgentModal')">Отмена</button>
-                    <button class="btn btn-primary" onclick="saveAgent(${connectionId})">Создать</button>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="closeModal('createAgentModal')">Отмена</button>
+                        <button class="btn btn-primary" onclick="saveAgent(${connectionId}, ${isFirstAgent}, ${hasAgentAuth})">Создать</button>
+                    </div>
                 </div>
             </div>
-        </div>
-    `;
-    
-    const container = document.getElementById('modal-container');
-    container.insertAdjacentHTML('beforeend', modalHtml);
+        `;
+        
+        const container = document.getElementById('modal-container');
+        container.insertAdjacentHTML('beforeend', modalHtml);
+    } catch (error) {
+        console.error('Error loading connection data:', error);
+        // Если не удалось загрузить данные подключения, используем старую версию
+        const modalHtml = `
+            <div class="modal-overlay optimized" id="createAgentModal">
+                <div class="modal" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3>➕ Создать администратора агента</h3>
+                        <button class="modal-close-btn" onclick="closeModal('createAgentModal')">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="info-card">
+                            <h4 style="border-bottom-color: var(--primary-color);">📝 Данные администратора</h4>
+                            <div class="edit-form">
+                                <div class="form-row">
+                                    <label for="agentName">Имя *</label>
+                                    <input type="text" id="agentName" placeholder="admin">
+                                </div>
+                                <div class="form-row">
+                                    <label for="agentPwd">Пароль</label>
+                                    <input type="password" id="agentPwd" placeholder="••••••••">
+                                </div>
+                                <div class="form-row">
+                                    <label for="agentDescr">Описание</label>
+                                    <input type="text" id="agentDescr" placeholder="Описание администратора">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="closeModal('createAgentModal')">Отмена</button>
+                        <button class="btn btn-primary" onclick="saveAgent(${connectionId}, ${isFirstAgent}, false)">Создать</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const container = document.getElementById('modal-container');
+        container.insertAdjacentHTML('beforeend', modalHtml);
+    }
 }
 
 /**
  * Сохранить агента
  */
-async function saveAgent(connectionId) {
+async function saveAgent(connectionId, isFirstAgent = false, hasAgentAuth = false) {
     const name = document.getElementById('agentName')?.value;
     const pwd = document.getElementById('agentPwd')?.value || '';
     const descr = document.getElementById('agentDescr')?.value || '';
@@ -5335,6 +5451,8 @@ async function saveAgent(connectionId) {
         return;
     }
     
+    const shouldSaveToConnection = document.getElementById('createAgentModal')?.getAttribute('data-save-to-connection') === 'true';
+    
     try {
         const response = await fetch(`/api/clusters/agents/${connectionId}/create/`, {
             method: 'POST',
@@ -5342,7 +5460,13 @@ async function saveAgent(connectionId) {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRFToken()
             },
-            body: JSON.stringify({ name, pwd, descr })
+            body: JSON.stringify({ 
+                name, 
+                pwd, 
+                descr,
+                is_first_agent: isFirstAgent,
+                should_save_to_connection: shouldSaveToConnection
+            })
         });
         
         const result = await response.json();
@@ -5350,7 +5474,39 @@ async function saveAgent(connectionId) {
         if (result.success) {
             showNotification('✅ Администратор агента создан');
             closeModal('createAgentModal');
-            showAgentsTable(connectionId);
+            
+            // Если это первый администратор агента и пользователь ранее не сохранял данные - предлагаем сохранить
+            if (isFirstAgent && !shouldSaveToConnection) {
+                // Проверяем, есть ли уже сохраненные данные агента в подключении
+                try {
+                    const connResponse = await fetch('/api/clusters/connections/');
+                    const connData = await connResponse.json();
+                    const connection = connData.connections?.find(c => c.id === connectionId);
+                    if (!connection?.agent_user) {
+                        // Получаем имя подключения
+                        const connectionName = connection?.display_name || 'подключения';
+                        // Открываем модальное окно с предложением сохранить данные
+                        setTimeout(() => {
+                            openSaveAgentModal(connectionId, name, pwd, connectionName);
+                        }, 300);
+                    }
+                } catch (error) {
+                    console.error('Error checking connection data:', error);
+                }
+            } else if (shouldSaveToConnection) {
+                // Если пользователь выбрал сохранить - сохраняем в настройки подключения
+                await saveAgentToSettings(connectionId, name, pwd);
+            }
+            
+            // Обновляем список агентов в дереве, если он раскрыт
+            const agentsSectionId = `agents-${connectionId}`;
+            const agentsChildren = document.getElementById(`${agentsSectionId}-children`);
+            if (agentsChildren && agentsChildren.style.display !== 'none') {
+                loadAgentsIntoTree(connectionId, agentsSectionId);
+            } else {
+                // Если дерево не раскрыто, используем старый способ
+                showAgentsTable(connectionId);
+            }
         } else {
             showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), true);
         }
@@ -5404,6 +5560,31 @@ async function deleteAgent(connectionId, agentName) {
         return;
     }
     
+    // Проверяем данные ДО удаления, чтобы знать, нужно ли предлагать очистку
+    let hasStoredCredentials = false;
+    try {
+        const connResponse = await fetch('/api/clusters/connections/');
+        const connData = await connResponse.json();
+        const connection = connData.connections?.find(c => c.id === connectionId);
+        hasStoredCredentials = !!(connection?.agent_user);
+    } catch (error) {
+        console.error('Ошибка проверки данных подключения:', error);
+    }
+    
+    // Проверяем, сколько администраторов останется после удаления
+    let wasLastAgent = false;
+    try {
+        const checkResponse = await fetch(`/api/clusters/agents/${connectionId}/`);
+        const checkData = await checkResponse.json();
+        
+        if (checkData.success && checkData.agents && checkData.agents.length === 1) {
+            // Если остался только один администратор - это будет последний
+            wasLastAgent = true;
+        }
+    } catch (error) {
+        console.error('Ошибка проверки администраторов агента:', error);
+    }
+    
     try {
         const response = await fetch(`/api/clusters/agents/${connectionId}/delete/`, {
             method: 'POST',
@@ -5418,7 +5599,32 @@ async function deleteAgent(connectionId, agentName) {
         
         if (result.success) {
             showNotification('✅ Администратор агента удален');
-            showAgentsTable(connectionId);
+            
+            // Если это был последний администратор и есть сохраненные данные - предлагаем очистить
+            if (wasLastAgent && hasStoredCredentials) {
+                // Получаем имя подключения
+                try {
+                    const connResponse = await fetch('/api/clusters/connections/');
+                    const connData = await connResponse.json();
+                    const connection = connData.connections?.find(c => c.id === connectionId);
+                    const connectionName = connection?.display_name || 'подключения';
+                    setTimeout(() => {
+                        openClearAgentModal(connectionId, connectionName);
+                    }, 300);
+                } catch (error) {
+                    console.error('Ошибка загрузки данных подключения:', error);
+                }
+            }
+            
+            // Обновляем список агентов в дереве, если он раскрыт
+            const agentsSectionId = `agents-${connectionId}`;
+            const agentsChildren = document.getElementById(`${agentsSectionId}-children`);
+            if (agentsChildren && agentsChildren.style.display !== 'none') {
+                loadAgentsIntoTree(connectionId, agentsSectionId);
+            } else {
+                // Если дерево не раскрыто, используем старый способ
+                showAgentsTable(connectionId);
+            }
         } else {
             showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), true);
         }
@@ -5773,10 +5979,17 @@ function saveClusterAdminToSettings(connectionId, clusterUuid, adminName, adminP
     showNotification('✅ Данные администратора сохранены в настройках кластера', false);
     closeModal('saveClusterAdminModal');
     
-    // Перезагружаем данные кластера
-    if (window._currentConnectionId == connectionId) {
-        loadConnectionData(connectionId);
+    // Обновляем список администраторов, если секция раскрыта
+    const clusterId = `cluster-${connectionId}-${clusterUuid}`;
+    const sectionId = `admins-${clusterId}`;
+    const adminsContainer = document.getElementById(`${sectionId}-children`);
+    if (adminsContainer && adminsContainer.style.display !== 'none') {
+        // Секция раскрыта - обновляем список
+        if (typeof loadAdminsIntoTree === 'function') {
+            loadAdminsIntoTree(connectionId, clusterUuid, sectionId);
+        }
     }
+    // Если секция не раскрыта - ничего не делаем, пользователь увидит ошибку при следующем раскрытии
 }
 
 /**
@@ -5822,8 +6035,167 @@ function clearClusterAdminFromSettings(connectionId, clusterUuid) {
     showNotification('✅ Данные администратора очищены из настроек кластера', false);
     closeModal('clearClusterAdminModal');
     
-    // Перезагружаем данные кластера
-    if (window._currentConnectionId == connectionId) {
-        loadConnectionData(connectionId);
+    // Обновляем список администраторов, если секция раскрыта
+    const clusterId = `cluster-${connectionId}-${clusterUuid}`;
+    const sectionId = `admins-${clusterId}`;
+    const adminsContainer = document.getElementById(`${sectionId}-children`);
+    if (adminsContainer && adminsContainer.style.display !== 'none') {
+        // Секция раскрыта - обновляем список
+        if (typeof loadAdminsIntoTree === 'function') {
+            loadAdminsIntoTree(connectionId, clusterUuid, sectionId);
+        }
+    }
+    // Если секция не раскрыта - ничего не делаем, пользователь увидит ошибку при следующем раскрытии
+}
+
+/**
+ * Открыть модальное окно с предложением сохранить данные администратора агента
+ */
+function openSaveAgentModal(connectionId, agentName, agentPassword, connectionName = 'подключения') {
+    const modalHtml = `
+        <div class="modal-overlay optimized" id="saveAgentModal">
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>💾 Сохранить данные администратора?</h3>
+                    <button class="modal-close-btn" onclick="closeModal('saveAgentModal')">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card">
+                        <p style="margin: 0; font-size: 1rem;">
+                            Вы создали первого администратора агента. Хотите ли вы сохранить указанные данные (логин: <strong>${escapeHtml(agentName)}</strong>) в настройках подключения (<strong>${escapeHtml(connectionName)}</strong>)?
+                        </p>
+                        <p style="margin: 1rem 0 0 0; font-size: 0.9rem; color: #666;">
+                            Это позволит автоматически использовать эти данные при выполнении команд RAC для этого подключения.
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('saveAgentModal')">Нет, не сохранять</button>
+                    <button class="btn btn-primary" onclick="saveAgentToSettings(${connectionId}, '${escapeHtml(agentName).replace(/'/g, "\\'")}', '${escapeHtml(agentPassword).replace(/'/g, "\\'")}')">
+                        Да, сохранить
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const container = document.getElementById('modal-container');
+    container.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+/**
+ * Сохранить данные администратора агента в настройки подключения
+ */
+async function saveAgentToSettings(connectionId, agentName, agentPassword) {
+    try {
+        const response = await fetch(`/api/clusters/connections/update/${connectionId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                agent_user: agentName,
+                agent_password: agentPassword
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Данные администратора агента сохранены в настройках подключения', false);
+            closeModal('saveAgentModal');
+            
+            // Обновляем список агентов, если секция раскрыта
+            const agentsSectionId = `agents-${connectionId}`;
+            const agentsContainer = document.getElementById(`${agentsSectionId}-children`);
+            if (agentsContainer && agentsContainer.style.display !== 'none') {
+                // Секция раскрыта - обновляем список
+                if (typeof loadAgentsIntoTree === 'function') {
+                    loadAgentsIntoTree(connectionId, agentsSectionId);
+                }
+            }
+            // Если секция не раскрыта - ничего не делаем, пользователь увидит ошибку при следующем раскрытии
+        } else {
+            showNotification('❌ Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка сохранения: ' + error.message, true);
+    }
+}
+
+/**
+ * Открыть модальное окно с предложением очистить данные администратора агента
+ */
+function openClearAgentModal(connectionId, connectionName = 'подключения') {
+    const modalHtml = `
+        <div class="modal-overlay optimized" id="clearAgentModal">
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3>🧹 Очистить данные администратора?</h3>
+                    <button class="modal-close-btn" onclick="closeModal('clearAgentModal')">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="info-card">
+                        <p style="margin: 0; font-size: 1rem;">
+                            Вы удалили последнего администратора агента. Хотите ли вы очистить сохраненные данные администратора агента в настройках подключения (<strong>${escapeHtml(connectionName)}</strong>)?
+                        </p>
+                        <p style="margin: 1rem 0 0 0; font-size: 0.9rem; color: #666;">
+                            Это очистит логин и пароль администратора агента из настроек подключения и снимет чекбокс.
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('clearAgentModal')">Нет, оставить</button>
+                    <button class="btn btn-primary" onclick="clearAgentFromSettings(${connectionId})">
+                        Да, очистить
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const container = document.getElementById('modal-container');
+    container.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+/**
+ * Очистить данные администратора агента из настроек подключения
+ */
+async function clearAgentFromSettings(connectionId) {
+    try {
+        const response = await fetch(`/api/clusters/connections/update/${connectionId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                agent_user: '',
+                agent_password: ''
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('✅ Данные администратора агента очищены из настроек подключения', false);
+            closeModal('clearAgentModal');
+            
+            // Обновляем список агентов, если секция раскрыта
+            const agentsSectionId = `agents-${connectionId}`;
+            const agentsContainer = document.getElementById(`${agentsSectionId}-children`);
+            if (agentsContainer && agentsContainer.style.display !== 'none') {
+                // Секция раскрыта - обновляем список
+                if (typeof loadAgentsIntoTree === 'function') {
+                    loadAgentsIntoTree(connectionId, agentsSectionId);
+                }
+            }
+            // Если секция не раскрыта - ничего не делаем, пользователь увидит ошибку при следующем раскрытии
+        } else {
+            showNotification('❌ Ошибка очистки: ' + (result.error || 'Неизвестная ошибка'), true);
+        }
+    } catch (error) {
+        showNotification('❌ Ошибка очистки: ' + error.message, true);
     }
 }

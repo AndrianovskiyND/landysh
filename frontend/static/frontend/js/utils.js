@@ -50,24 +50,49 @@ function showNotification(message, isError = false) {
         notification.style.position = 'fixed';
         notification.style.bottom = '20px';
         notification.style.right = '20px';
-        notification.style.padding = '1rem';
-        notification.style.background = 'white';
-        notification.style.border = '1px solid var(--border-color)';
-        notification.style.borderRadius = '4px';
-        notification.style.boxShadow = '0 4px 16px rgba(0,0,0,0.3)';
-        notification.style.maxWidth = '400px';
+        notification.style.padding = '1.25rem 1.5rem';
+        notification.style.background = '#fff';
+        notification.style.border = 'none';
+        notification.style.borderRadius = '12px';
+        notification.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.2)';
+        notification.style.maxWidth = '420px';
+        notification.style.minWidth = '320px';
         notification.style.zIndex = '99999';
         notification.style.userSelect = 'text';
         notification.style.cursor = 'text';
         
         content = document.createElement('div');
         content.id = 'notificationContent';
+        content.style.color = '#1d1d1f';
+        content.style.fontSize = '0.95rem';
+        content.style.lineHeight = '1.5';
         notification.appendChild(content);
         
         const closeBtn = document.createElement('button');
-        closeBtn.textContent = 'Закрыть';
-        closeBtn.style.marginTop = '0.5rem';
+        closeBtn.innerHTML = '×';
+        closeBtn.style.width = '28px';
+        closeBtn.style.height = '28px';
+        closeBtn.style.marginTop = '0.75rem';
+        closeBtn.style.marginLeft = 'auto';
+        closeBtn.style.border = 'none';
+        closeBtn.style.background = '#e5e5e7';
+        closeBtn.style.fontSize = '1.5rem';
+        closeBtn.style.color = '#666';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.display = 'flex';
+        closeBtn.style.alignItems = 'center';
+        closeBtn.style.justifyContent = 'center';
+        closeBtn.style.borderRadius = '50%';
+        closeBtn.style.transition = 'background-color 0.15s, color 0.15s';
         closeBtn.onclick = hideNotification;
+        closeBtn.onmouseenter = function() {
+            this.style.background = '#dc3545';
+            this.style.color = 'white';
+        };
+        closeBtn.onmouseleave = function() {
+            this.style.background = '#e5e5e7';
+            this.style.color = '#666';
+        };
         notification.appendChild(closeBtn);
     } else {
         content = document.getElementById('notificationContent');
@@ -87,13 +112,17 @@ function showNotification(message, isError = false) {
     notification.style.position = 'fixed';
     
     if (isError) {
+        // Ошибка - красная левая граница с градиентом
         notification.style.borderLeft = '4px solid var(--primary-color)';
+        notification.style.background = 'linear-gradient(135deg, #fff 0%, #fff5f5 100%)';
         // Для ошибок увеличиваем время отображения
         setTimeout(() => {
             hideNotification();
         }, 8000);
     } else {
+        // Успех - зеленая левая граница с градиентом
         notification.style.borderLeft = '4px solid #28a745';
+        notification.style.background = 'linear-gradient(135deg, #fff 0%, #f5fff5 100%)';
         setTimeout(() => {
             hideNotification();
         }, 5000);
